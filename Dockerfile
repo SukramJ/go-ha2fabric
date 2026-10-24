@@ -6,9 +6,9 @@ WORKDIR /src
 COPY go.mod ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/habridge ./cmd/habridge
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/ha2fabric ./cmd/ha2fabric
 
 FROM gcr.io/distroless/static-debian12:nonroot
-COPY --from=build /out/habridge /habridge
+COPY --from=build /out/ha2fabric /ha2fabric
 USER nonroot:nonroot
-ENTRYPOINT ["/habridge"]
+ENTRYPOINT ["/ha2fabric"]
