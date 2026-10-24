@@ -1,7 +1,7 @@
 # AI Contribution Policy
 
 This policy governs the use of AI tools (LLMs, coding assistants, agents) when contributing to
-go-habridge. It is modeled on the
+go-ha2fabric. It is modeled on the
 [Open Home Foundation AI policy](https://developers.home-assistant.io/docs/ai_policy) and adapted
 for this project.
 
@@ -70,7 +70,7 @@ CI on every pull request. AI assistance does not lower the bar.
 
 ## How this project itself uses AI
 
-In the interest of transparency: go-habridge is partly developed with AI assistance
+In the interest of transparency: go-ha2fabric is partly developed with AI assistance
 (Claude Code), under full review and responsibility of the maintainers — see
 [`CLAUDE.md`](CLAUDE.md) for the guardrails that apply. The maintainers may also use AI-assisted
 tooling for code review and issue triage; treat such comments like any other review feedback and

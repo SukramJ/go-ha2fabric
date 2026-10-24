@@ -1,16 +1,16 @@
-# go-habridge
+# go-ha2fabric
 
-[![ci](https://github.com/SukramJ/go-habridge/actions/workflows/ci.yml/badge.svg)](https://github.com/SukramJ/go-habridge/actions/workflows/ci.yml)
-[![codeql](https://github.com/SukramJ/go-habridge/actions/workflows/codeql.yml/badge.svg)](https://github.com/SukramJ/go-habridge/actions/workflows/codeql.yml)
+[![ci](https://github.com/SukramJ/go-ha2fabric/actions/workflows/ci.yml/badge.svg)](https://github.com/SukramJ/go-ha2fabric/actions/workflows/ci.yml)
+[![codeql](https://github.com/SukramJ/go-ha2fabric/actions/workflows/codeql.yml/badge.svg)](https://github.com/SukramJ/go-ha2fabric/actions/workflows/codeql.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
 A Home Assistant installation seen by Apple Home, Google Home and Amazon
 Alexa as one bridge: the entities Home Assistant exposes become endpoints
-of a bridged node. The daemon is a thin client between two WebSockets. On
-one side the Home Assistant WebSocket API (entity and device registry,
-`state_changed`, `call_service`); on the other side `go-fabric-server`,
-the stand-alone node of [go-fabric](https://github.com/SukramJ/go-fabric)
-with a remote protocol, which speaks Matter to the controllers. Which
+of a bridged node. The daemon embeds [go-fabric](https://github.com/SukramJ/go-fabric) in
+process: the Home Assistant WebSocket API (entity and device registry,
+`state_changed`, `call_service`) on one side, go-fabric's device kit and
+`node` facade speaking Matter to the controllers on the other, one
+process and one store. Which
 Home Assistant component becomes which device type and cluster is the
 table of [`go-hafabric`](https://github.com/SukramJ/go-hafabric).
 
@@ -74,9 +74,8 @@ workflow with a comment that says when it is switched on.
 Built on [go-fabric](https://github.com/SukramJ/go-fabric), a semantic
 port of [matter.js](https://github.com/matter-js/matter.js) (Apache-2.0),
 and on the [Home Assistant](https://www.home-assistant.io/) APIs. The
-pattern of a thin client between Home Assistant and a Matter process is
-the one Home Assistant uses for its own Matter support
-([matterjs-server](https://github.com/matter-js/matterjs-server)).
+embedding follows go-fabric's cookbook "Embed in a daemon", written
+against go-zendure2mqtt.
 
 ## License
 

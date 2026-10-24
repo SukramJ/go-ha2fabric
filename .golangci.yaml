@@ -105,7 +105,7 @@ formatters:
         group-params: true
     goimports:
       local-prefixes:
-        - github.com/SukramJ/go-habridge
+        - github.com/SukramJ/go-ha2fabric
   exclusions:
     generated: lax
     paths:

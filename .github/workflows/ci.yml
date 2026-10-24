@@ -1,4 +1,4 @@
-# GitHub Actions CI for go-habridge, the form of the sibling repositories
+# GitHub Actions CI for go-ha2fabric, the form of the sibling repositories
 # (go-zendure2mqtt and go-fabric): lint (go vet + gofumpt + golangci-lint +
 # go.mod tidiness), security (govulncheck + go-licenses; the secrets scan
 # joins with the first code that handles a credential), test (the OS
@@ -123,5 +123,5 @@ jobs:
         run: make build
       - name: placeholder banner
         run: |
-          go build -o /tmp/habridge ./cmd/habridge
-          /tmp/habridge && exit 1 || test $? -eq 2
+          go build -o /tmp/ha2fabric ./cmd/ha2fabric
+          /tmp/ha2fabric && exit 1 || test $? -eq 2

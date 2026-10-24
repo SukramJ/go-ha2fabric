@@ -1,4 +1,4 @@
-# go-habridge — make targets. `make help` lists them.
+# go-ha2fabric — make targets. `make help` lists them.
 GO ?= go
 GOFUMPT_VERSION ?= v0.12.0
 GOLANGCI_LINT_VERSION ?= v2.14.0
