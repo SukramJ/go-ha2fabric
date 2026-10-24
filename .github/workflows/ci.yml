@@ -1,0 +1,127 @@
+# GitHub Actions CI for go-habridge, the form of the sibling repositories
+# (go-zendure2mqtt and go-fabric): lint (go vet + gofumpt + golangci-lint +
+# go.mod tidiness), security (govulncheck + go-licenses; the secrets scan
+# joins with the first code that handles a credential), test (the OS
+# triplet, race detector on, so CGo for that single step), coverage and
+# fuzz-smoke (disabled until there is code to measure — the `if: false`
+# below is removed with the first package that has a floor), build.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CGO_ENABLED: "0"
+  GO_VERSION: "1.27.2"
+  # Pinned, not @latest: a tool release must not turn an unrelated pull
+  # request red. Keep in step with `make setup`.
+  GOFUMPT_VERSION: "v0.12.0"
+  GOLANGCI_LINT_VERSION: "v2.14.0"
+  GOVULNCHECK_VERSION: "v1.8.0"
+  GOLICENSES_VERSION: "v1.6.0"
+
+jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: go vet
+        run: go vet ./...
+      - name: gofumpt
+        run: |
+          go install mvdan.cc/gofumpt@${{ env.GOFUMPT_VERSION }}
+          make fmt-check
+      - name: golangci-lint
+        run: |
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${{ env.GOLANGCI_LINT_VERSION }}
+          golangci-lint config verify
+          golangci-lint run --timeout=5m ./...
+      - name: go.mod tidiness
+        run: make tidy-check
+
+  security:
+    name: security (vuln + licenses + secrets)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@${{ env.GOVULNCHECK_VERSION }}
+          make vuln
+      - name: go-licenses
+        run: |
+          go install github.com/google/go-licenses@${{ env.GOLICENSES_VERSION }}
+          make licenses
+      # The gitleaks history scan of the sibling repositories joins with
+      # the first code that handles a credential (a Home Assistant token).
+
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: go test
+        env:
+          CGO_ENABLED: "1"
+        run: go test -race -count=1 -timeout=120s ./...
+
+  coverage:
+    name: coverage
+    if: false # switched on with the first package that has a coverage floor
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: echo "no coverage floor yet"
+
+  fuzz-smoke:
+    name: fuzz-smoke
+    if: false # switched on with the first Fuzz target
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: echo "no fuzz target yet"
+
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: build
+        run: make build
+      - name: placeholder banner
+        run: |
+          go build -o /tmp/habridge ./cmd/habridge
+          /tmp/habridge && exit 1 || test $? -eq 2

@@ -1,0 +1,19 @@
+name: docker-build-push
+
+# Disabled until the first release (concept repository). The sibling
+# repositories' workflow (buildx, multi-arch, ghcr.io) is the template.
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  image:
+    if: false
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "image pipeline arrives with the first release"

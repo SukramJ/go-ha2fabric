@@ -1,0 +1,20 @@
+name: addon-image
+
+# Disabled until the first release (concept repository). The sibling
+# repositories' workflow (Home Assistant add-on image per architecture) is
+# the template.
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  addon:
+    if: false
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "add-on image pipeline arrives with the first release"

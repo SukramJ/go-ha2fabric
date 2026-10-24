@@ -1,0 +1,30 @@
+name: "Release: Create from Tag"
+# yamllint disable-line rule:truthy
+on:
+  push:
+    tags:
+      - '**'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: "1.27.2"
+
+jobs:
+  create_release:
+    # Disabled until the first release: there is no `make release` yet.
+    # The sibling repositories' job (cross-compile, SHA256SUMS, notes from
+    # changelog.md, softprops/action-gh-release) is the template.
+    if: false && github.repository_owner == 'SukramJ'
+    name: Create GitHub Release (${{ github.ref_name }})
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - run: echo "release pipeline arrives with the first release"
