@@ -12,9 +12,9 @@ process: the Home Assistant WebSocket API (entity and device registry,
 `node` facade speaking Matter to the controllers on the other, one
 process and one store. Which
 Home Assistant component becomes which device type and cluster is the
-table of [`go-hafabric`](https://github.com/SukramJ/go-hafabric).
+table of [`go-hamapping`](https://github.com/SukramJ/go-hamapping).
 
-Twin of [`go-hafabric`](https://github.com/SukramJ/go-hafabric); both are built on
+Twin of [`go-hamapping`](https://github.com/SukramJ/go-hamapping); both are built on
 [go-fabric](https://github.com/SukramJ/go-fabric) and share its project
 setup (pure Go, `CGO_ENABLED=0`, Apache-2.0 with a contributor licence
 agreement, the same guards in CI).

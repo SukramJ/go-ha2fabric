@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Home Assistant entities as a bridge for Matter controllers, in pure Go on go-fabric. Twin of `go-hafabric`; both are built on
+Home Assistant entities as a bridge for Matter controllers, in pure Go on go-fabric. Twin of `go-hamapping`; both are built on
 [go-fabric](https://github.com/SukramJ/go-fabric) and share its project
 setup. **State: concept, not started.** `CONCEPT.md` is the design; the
 go-fabric roadmap names the milestone in which work starts. Nothing runs
