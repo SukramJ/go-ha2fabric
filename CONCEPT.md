@@ -30,7 +30,7 @@ one add-on, no protocol between two Go programs.
   and mDNS are the library's.
 - **The mapping.** Which component with which attributes becomes which
   device type and cluster, and which Matter command becomes which service
-  call, is the table of `go-hafabric` (a Go module on go-hamqtt's
+  call, is the table of `go-hamapping` (a Go module on go-hamqtt's
   vocabulary); this daemon maps a registry entity onto that vocabulary
   with a small adapter and applies the table.
 
@@ -65,7 +65,7 @@ renamed the same day; GitHub redirects the old name.
 
 1. go-fabric closes milestone 4 (`v0.11.0`); its cookbook wave has shown
    one device type end to end on the kit from a `go-*2mqtt` daemon.
-2. `go-hafabric` publishes the table's Go form with its first rows.
+2. `go-hamapping` publishes the table's Go form with its first rows.
 3. This repository starts: the Home Assistant client, the registry
    adapter onto go-hamqtt's vocabulary, the embedding, the add-on.
 
