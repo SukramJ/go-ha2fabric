@@ -48,6 +48,12 @@ const (
 	DefaultStoreFile     = "ha2fabric.db"
 	// AddonStorePath is the store in the add-on's persistent /data.
 	AddonStorePath = "/data/" + DefaultStoreFile
+	// SelectionFile is the web UI's overrides file, beside the store.
+	SelectionFile = "selection.json"
+	// IngressProxy is the Supervisor's Ingress proxy address, the only
+	// client an add-on's Ingress port may serve
+	// (developers.home-assistant.io docs/apps/presentation.md "Ingress").
+	IngressProxy = "172.30.32.2"
 )
 
 // Config is the daemon's configuration.
@@ -71,7 +77,14 @@ type Config struct {
 	StorePath     string
 
 	Include, Exclude []string
-	ExposeAssist     bool
+	// IncludeLabels and ExcludeLabels are Home Assistant labels, by name
+	// (case-insensitive) or label_id; a device's label counts for each of
+	// its entities.
+	IncludeLabels, ExcludeLabels []string
+	ExposeAssist                 bool
+	// SelectionPath is the web UI's overrides file: selection.json beside
+	// the store (/data/selection.json in the add-on).
+	SelectionPath string
 
 	LogLevel slog.Level
 	// WebListen is the web UI's address; empty disables it.
@@ -79,6 +92,12 @@ type Config struct {
 	// WebAllow restricts the web UI to these client addresses (the
 	// Ingress proxy's 172.30.32.2 in the add-on); empty allows every one.
 	WebAllow []string
+	// WebAdmin lets a stand-alone web UI write (change the selection,
+	// open the window, remove a fabric) and show the pairing code, with
+	// the UI's per-process token against cross-site requests. Default
+	// false: the stand-alone UI is read-only. The add-on ignores it: the
+	// Ingress proxy is the administrator there.
+	WebAdmin bool
 
 	// DumpPlan prints every candidate entity's verdict and exits.
 	DumpPlan bool
@@ -88,7 +107,7 @@ type Config struct {
 
 // Exposure is the configured exposure rule.
 func (c *Config) Exposure() expose.Rule {
-	return expose.Rule{Assist: c.ExposeAssist, Include: c.Include, Exclude: c.Exclude}
+	return expose.Rule{Assist: c.ExposeAssist, Include: c.Include, Exclude: c.Exclude, IncludeLabels: c.IncludeLabels, ExcludeLabels: c.ExcludeLabels}
 }
 
 // ValidationError aggregates every problem [Load] found.
@@ -145,10 +164,13 @@ func Load(args []string, env Env, out io.Writer) (*Config, error) {
 	store := str("store-path", "STORE_PATH", "", "the node's SQLite store file")
 	include := str("include", "INCLUDE", "", "entity ids or globs always exposed (comma-separated)")
 	exclude := str("exclude", "EXCLUDE", "", "entity ids or globs never exposed (comma-separated)")
+	includeLabels := str("include-labels", "INCLUDE_LABELS", "", "Home Assistant labels (name or id) whose entities are exposed (comma-separated)")
+	excludeLabels := str("exclude-labels", "EXCLUDE_LABELS", "", "Home Assistant labels (name or id) whose entities are never exposed (comma-separated)")
 	assist := str("expose-assist", "EXPOSE_ASSIST", "true", "follow Home Assistant's expose-to-Assist setting")
 	level := str("log-level", "LOG_LEVEL", "info", "debug, info, warn or error")
 	web := str("web-listen", "WEB_LISTEN", DefaultWebListen, "web UI address; empty disables it")
 	allow := str("web-allow", "WEB_ALLOW", "", "client addresses allowed on the web UI (comma-separated); empty allows all")
+	webAdmin := str("web-admin", "WEB_ADMIN", "false", "stand-alone: let the web UI write and show the pairing code")
 	dump := fs.Bool("dump-plan", false, "print every candidate entity's verdict and exit")
 	ver := fs.Bool("version", false, "print the version and exit")
 	if err := fs.Parse(args); err != nil {
@@ -179,6 +201,8 @@ func Load(args []string, env Env, out io.Writer) (*Config, error) {
 		}
 	}
 	c.Include, c.Exclude = expose.Split(*include), expose.Split(*exclude)
+	c.IncludeLabels, c.ExcludeLabels = SplitLabels(*includeLabels), SplitLabels(*excludeLabels)
+	c.SelectionPath = filepath.Join(filepath.Dir(c.StorePath), SelectionFile)
 	c.WebListen = strings.TrimSpace(*web)
 	c.WebAllow = expose.Split(*allow)
 
@@ -230,6 +254,11 @@ func Load(args []string, env Env, out io.Writer) (*Config, error) {
 	} else {
 		c.ExposeAssist = b
 	}
+	if b, err := strconv.ParseBool(*webAdmin); err != nil {
+		add("WEB_ADMIN must be true or false, got %q", *webAdmin)
+	} else {
+		c.WebAdmin = b
+	}
 	if err := c.LogLevel.UnmarshalText([]byte(*level)); err != nil {
 		add("LOG_LEVEL must be debug, info, warn or error, got %q", *level)
 	}
@@ -268,6 +297,18 @@ func hostPort(s string) error {
 		return fmt.Errorf("port must be 1..65535, got %q", port)
 	}
 	return nil
+}
+
+// SplitLabels reads a label list: comma- or newline-separated, since a
+// label name may hold spaces ("Living room"); empty items dropped.
+func SplitLabels(s string) []string {
+	var out []string
+	for _, f := range strings.FieldsFunc(s, func(r rune) bool { return r == ',' || r == '\n' }) {
+		if f = strings.TrimSpace(f); f != "" {
+			out = append(out, f)
+		}
+	}
+	return out
 }
 
 // ErrHelp is flag.ErrHelp: -h was given.

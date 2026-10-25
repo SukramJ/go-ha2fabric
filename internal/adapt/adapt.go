@@ -96,6 +96,10 @@ type Input struct {
 	// (get_config unit_system.temperature), the unit of a climate's
 	// temperatures.
 	TemperatureUnit string
+	// Name, when set, is the entity's name over the registry's (the web
+	// UI's override); go-hamapping composes it with the device's name as
+	// any entity name.
+	Name string
 }
 
 // Entity is the model.Basic of one entity: EntityKey the entity id,
@@ -118,6 +122,9 @@ func Entity(in Input) *model.Basic {
 		StateClass:  hacatalog.StateClass(str(attrs["state_class"])),
 		Unit:        model.Unit(str(attrs["unit_of_measurement"])),
 		Extra:       description(domain, attrs),
+	}
+	if in.Name != "" {
+		d.Name = model.Localized{Default: in.Name}
 	}
 	if domain == "climate" {
 		// climate/__init__.py:296-316: the temperatures are shown in the

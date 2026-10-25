@@ -27,15 +27,24 @@ attestation chain, and a controller may warn when you pair it.
 An entity is served when it is
 
 - exposed to Assist in Home Assistant (`expose_assist: true`, the
-  default), **or** named in `include`,
-- **and** not named in `exclude`,
+  default), **or** named in `include`, **or** carries a label of
+  `include_labels`,
+- **and** not named in `exclude` and carries no label of `exclude_labels`,
 - **and** not disabled or hidden in Home Assistant,
 - **and** go-hamapping maps it to a Matter device.
 
+A label is named by its name (upper or lower case does not matter) or its
+id; a label on a device counts for every entity of the device. Example:
+give the device "Living room climate sensor" the label **Matter** and set
+`include_labels: [Matter]` — its temperature and battery are served. The
+web UI can also turn single entities on or off (and rename them); those
+choices win over the lists, never over disabled or hidden, and live in
+`/data/selection.json`.
+
 `include` and `exclude` take entity ids or globs: `light.*`,
 `sensor.*_temperature`. The add-on never changes Home Assistant's exposure
-settings. The web UI's entity table (and `GET api/plan`) lists every
-candidate with both answers.
+settings. The web UI's selection page lists every candidate with its
+labels, what decided and go-hamapping's verdict.
 
 Mapped today: lights (on/off, dimmable, colour temperature, colour),
 switches, sensors (temperature, humidity, pressure, illuminance, power,
@@ -58,6 +67,8 @@ modes are not mapped.
 | `expose_assist` | bool | `true` | Serve the entities exposed to Assist. |
 | `include` | list | `[]` | Entity ids or globs always served. |
 | `exclude` | list | `[]` | Entity ids or globs never served. |
+| `include_labels` | list | `[]` | Home Assistant labels (name or id) whose entities are served. |
+| `exclude_labels` | list | `[]` | Home Assistant labels (name or id) whose entities are never served. |
 | `log_level` | list | `info` | `debug`, `info`, `warn` or `error`. |
 
 ## Network
@@ -69,8 +80,9 @@ Ingress.
 
 ## Data and backups
 
-The add-on keeps one file, `/data/ha2fabric.db`: the paired controllers,
-their keys and the endpoint numbers. Losing it unpairs the bridge
+The add-on keeps two files: `/data/ha2fabric.db`, the paired controllers,
+their keys and the endpoint numbers, and `/data/selection.json`, the web
+UI's per-entity choices. Losing it unpairs the bridge
 everywhere. A Home Assistant backup stops the add-on briefly to copy it
 consistently. The add-on stores no token and no copy of your
 configuration; it reads Home Assistant again on every start.
@@ -79,8 +91,8 @@ configuration; it reads Home Assistant again on every start.
 
 The add-on talks to Home Assistant through the Supervisor's proxy as an
 administrator (its token is the Supervisor's, never logged or stored). It
-reads the entity, device and area registries, the states and the exposure
-list, and calls the services of the entities it serves, nothing else.
+reads the entity, device, area and label registries, the states and the
+exposure list, and calls the services of the entities it serves, nothing else.
 
 ## More
 

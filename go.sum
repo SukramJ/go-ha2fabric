@@ -1,11 +1,13 @@
 filippo.io/nistec v0.0.4 h1:F14ZHT5htWlMnQVPndX9ro9arf56cBhQxq4LnDI491s=
 filippo.io/nistec v0.0.4/go.mod h1:PK/lw8I1gQT4hUML4QGaqljwdDaFcMyFKSXN7kjrtKI=
-github.com/SukramJ/go-fabric v0.11.0 h1:mZ07HWHTkDEyxUkkzfq5ezELZqWLiK49UJ1o/Jbk7ik=
-github.com/SukramJ/go-fabric v0.11.0/go.mod h1:u05z8cUjXxgNjqaVn+kMb4S99/hjHdg8WH/8h+oq2rs=
+github.com/SukramJ/go-fabric v0.12.0 h1:d9oBxSqrn0anVwWwtrtBqKrl/GnTprr4y0W8Pr6thS0=
+github.com/SukramJ/go-fabric v0.12.0/go.mod h1:u05z8cUjXxgNjqaVn+kMb4S99/hjHdg8WH/8h+oq2rs=
+github.com/SukramJ/go-fabric-ui v0.1.0 h1:6qWyI1bny2CeaUZGo5NTxj0peTZuvXwzJFFUZwWCP0w=
+github.com/SukramJ/go-fabric-ui v0.1.0/go.mod h1:YRch0a0KB+akqD99xMz3Vf2H9TOixbGcEWFNHIKB8Qs=
 github.com/SukramJ/go-ha-catalog v0.3.2-0.20261024093528-d9582e022b8f h1:Y0N1A6rojgi1e4GeNuA3twBQbwkTcfalTYfMOK9qPDU=
 github.com/SukramJ/go-ha-catalog v0.3.2-0.20261024093528-d9582e022b8f/go.mod h1:qonkN9S2mQc8Hs4fH8XfVqlORR/yrbmgx6n0ImFlsbc=
-github.com/SukramJ/go-hamapping v0.1.0 h1:9rVFOVinqR6wxObqJEBCod4/F458WEm4ve/jcDptOno=
-github.com/SukramJ/go-hamapping v0.1.0/go.mod h1:Sf+mmAuXnyp+kbGk8Ubnru89mxWSqnS+DWHgXjZhvLQ=
+github.com/SukramJ/go-hamapping v0.2.0 h1:T/Hvp6nZbk8WgxwjY9621X9u0BmSSvgbqG7Col+SUxo=
+github.com/SukramJ/go-hamapping v0.2.0/go.mod h1:F1hiOQ9/Kga60//Pu7OVxBhvmX69+Z0LFQOxR0J1wE8=
 github.com/SukramJ/go-hamqtt v0.38.0 h1:iWP2ncZVCVxQN07aUKV3tQh4H3SGd4dZiyFHVBUjrFE=
 github.com/SukramJ/go-hamqtt v0.38.0/go.mod h1:Uo3do9IfzH/lJnUovxLN0kTbLr1ky9gRyEmNu3/KW00=
 github.com/cenkalti/backoff v2.2.1+incompatible h1:tNowT99t7UNflLxfYYSlKYsBpXdEet03Pg2g16Swow4=

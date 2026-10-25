@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -86,7 +87,7 @@ func TestClientReadsTheRegistries(t *testing.T) {
 	srv := hatest.New(t)
 	var logs bytes.Buffer
 	c, r, _ := start(t, ha.Options{
-		URL: srv.URL(), Token: hatest.Token, Events: []string{ha.EventStateChanged, ha.EventEntityRegistryUpdated},
+		URL: srv.URL(), Token: hatest.Token, Events: []string{ha.EventStateChanged, ha.EventEntityRegistryUpdated, ha.EventLabelRegistryUpdated},
 		Logger: slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug})),
 	})
 	r.wait(t, "connected")
@@ -117,6 +118,20 @@ func TestClientReadsTheRegistries(t *testing.T) {
 	if err != nil || len(areas) != 2 || areas[0].Name != "Kitchen" {
 		t.Fatalf("areas %+v %v", areas, err)
 	}
+	labels, err := c.ListLabels(ctx)
+	if err != nil || len(labels) != 2 || labels[0].LabelID != "matter" || labels[0].Name != "Matter" || labels[0].Icon != "mdi:bridge" {
+		t.Fatalf("labels %+v %v", labels, err)
+	}
+	for _, e := range ents {
+		if e.EntityID == "sensor.outdoor" && !slices.Equal(e.Labels, []string{"matter"}) {
+			t.Fatalf("sensor.outdoor labels %q", e.Labels)
+		}
+	}
+	for _, d := range devs {
+		if d.ID == "dev-zha-1" && !slices.Equal(d.Labels, []string{"matter"}) {
+			t.Fatalf("dev-zha-1 labels %q", d.Labels)
+		}
+	}
 	states, err := c.GetStates(ctx)
 	if err != nil || len(states) == 0 || states[0].Attributes["supported_color_modes"] == nil {
 		t.Fatalf("states %v", err)
@@ -145,6 +160,18 @@ func TestClientReadsTheRegistries(t *testing.T) {
 	}
 	srv.UpdateEntity("light.kitchen", map[string]any{"disabled_by": "user"})
 	r.wait(t, "event:"+ha.EventEntityRegistryUpdated)
+	srv.UpdateLabel("matter", "Bridge")
+	r.wait(t, "event:"+ha.EventLabelRegistryUpdated)
+	r.mu.Lock()
+	ev = r.events[len(r.events)-1]
+	r.mu.Unlock()
+	var lu ha.LabelRegistryUpdated
+	if err := json.Unmarshal(ev.Data, &lu); err != nil || lu.Action != "update" || lu.LabelID != "matter" {
+		t.Fatalf("label_registry_updated %+v %v", lu, err)
+	}
+	if labels, _ := c.ListLabels(ctx); labels[0].Name != "Bridge" {
+		t.Fatalf("renamed label %+v", labels[0])
+	}
 
 	// call_service with target.entity_id.
 	if err := c.CallService(ctx, ha.ServiceCall{Domain: "light", Service: "turn_on", EntityID: "light.kitchen", Data: map[string]any{"brightness": 128}}); err != nil {

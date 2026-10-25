@@ -24,7 +24,7 @@ func snapshot(t *testing.T) *bridge.Snapshot {
 	t.Helper()
 	var s bridge.Snapshot
 	for name, v := range map[string]any{
-		"entity_registry_list.json": &s.Entities, "device_registry_list.json": &s.Devices, "area_registry_list.json": &s.Areas,
+		"entity_registry_list.json": &s.Entities, "device_registry_list.json": &s.Devices, "area_registry_list.json": &s.Areas, "label_registry_list.json": &s.Labels,
 		"get_states.json": &s.States, "get_config.json": &s.Config, "expose_entity_list.json": &s.Exposed,
 	} {
 		if err := json.Unmarshal(hatest.Fixture(t, name), v); err != nil {
@@ -45,7 +45,7 @@ func byID(vs []bridge.Verdict) map[string]bridge.Verdict {
 // TestDryPlan is --dump-plan on the fixtures: every candidate with the
 // rule's word and go-hamapping's.
 func TestDryPlan(t *testing.T) {
-	v := byID(bridge.Dry(snapshot(t), expose.Rule{Assist: true, Include: []string{"sensor.outdoor"}, Exclude: []string{"fan.*"}}))
+	v := byID(bridge.Dry(snapshot(t), expose.Rule{Assist: true, Include: []string{"sensor.outdoor"}, Exclude: []string{"fan.*"}}, nil))
 	for id, want := range map[string]struct {
 		exposed bool
 		why     string
@@ -85,7 +85,7 @@ func TestDryPlan(t *testing.T) {
 	// An entity with a registry entry and no state is no endpoint yet.
 	s := snapshot(t)
 	s.States = s.States[1:] // light.kitchen
-	if got := byID(bridge.Dry(s, expose.Rule{Assist: true}))["light.kitchen"]; got.Exposed || !strings.HasSuffix(got.ExposeReason, "no state yet") {
+	if got := byID(bridge.Dry(s, expose.Rule{Assist: true}, nil))["light.kitchen"]; got.Exposed || !strings.HasSuffix(got.ExposeReason, "no state yet") {
 		t.Errorf("stateless light %+v", got)
 	}
 }

@@ -56,11 +56,12 @@ See go-fabric's README, section "Not certified".
   moves the bridge at run time; the other endpoints keep their numbers.
 - **Reachability.** An `unavailable` or `unknown` entity is unreachable;
   while Home Assistant is away, every endpoint is.
-- **A read-only web UI** (Ingress in the add-on): the pairing QR code and
-  manual code, the commissioned fabrics, every candidate entity with the
-  exposure rule's word and go-hamapping's verdict, the connection and the
-  node's health. `GET /api/health`, `GET /api/plan`; `--dump-plan` prints
-  the same table.
+- **The family's web UI** ([go-fabric-ui](https://github.com/SukramJ/go-fabric-ui)
+  `v0.1.0`, through Ingress in the add-on): health, the pairing code and the
+  commissioning window, the fabrics, the endpoints, diagnostics, and the
+  entity selection — every candidate entity with its labels, the layer of
+  the rule that decided and go-hamapping's verdict, with per-entity
+  overrides. `--dump-plan` prints the same table.
 - **Pure Go**, `CGO_ENABLED=0`: a static binary, a distroless image, a Home
   Assistant add-on for amd64, aarch64 and armv7.
 
@@ -68,11 +69,24 @@ See go-fabric's README, section "Not certified".
 
 An entity is served when it is exposed to Assist in Home Assistant
 (**Settings → Voice assistants → Expose**; `EXPOSE_ASSIST=true`, the
-default) **or** named in `INCLUDE`, **and** not named in `EXCLUDE`, **and**
-neither disabled nor hidden in Home Assistant. `INCLUDE` and `EXCLUDE`
-take entity ids or globs (`light.*`, `sensor.*_temperature`), comma- or
-newline-separated. go-hamapping then maps what is served, or says why it
-cannot. The daemon never writes Home Assistant's exposure settings.
+default) **or** named in `INCLUDE` **or** carries a label of
+`INCLUDE_LABELS`, **and** not named in `EXCLUDE` and carries no label of
+`EXCLUDE_LABELS`, **and** neither disabled nor hidden in Home Assistant.
+`INCLUDE` and `EXCLUDE` take entity ids or globs (`light.*`,
+`sensor.*_temperature`), comma- or newline-separated. A label value is a
+label's name (case-insensitive) or its id; an entity carries its own labels
+and its device's. An override set in the web UI sits above the lists and
+below disabled and hidden. go-hamapping then maps what is served, or says
+why it cannot. The daemon never writes Home Assistant's exposure settings.
+
+Example: put the label **Matter** on the device "Living room climate
+sensor" in Home Assistant (**Settings → Devices → the device → Labels**) and
+set `INCLUDE_LABELS=Matter` (add-on: `include_labels: [Matter]`). Its
+temperature and battery entities are served — the battery on the
+temperature sensor's endpoint — and the plan says "included by label
+'Matter'". Removing the label from the device removes the endpoint within a
+second; a label named in the options that does not exist yet is a warning,
+not an error, and matches once it is created.
 
 ## Quickstart
 
@@ -127,9 +141,11 @@ environment only and never logged or stored.
 | `STORE_PATH` | `ha2fabric.db`; add-on `/data/ha2fabric.db` | The node's SQLite store. |
 | `EXPOSE_ASSIST` | `true` | Follow Home Assistant's expose-to-Assist setting. |
 | `INCLUDE`, `EXCLUDE` | empty | Entity ids or globs. |
+| `INCLUDE_LABELS`, `EXCLUDE_LABELS` | empty | Home Assistant labels, by name or id (comma- or newline-separated). |
 | `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error`. |
 | `WEB_LISTEN` | `127.0.0.1:8099` | The web UI; empty disables it. |
 | `WEB_ALLOW` | empty (all) | Client addresses the web UI serves. |
+| `WEB_ADMIN` | `false` | Stand-alone: let the web UI write (selection, window, fabrics) and show the pairing code, with the UI's per-process token. The add-on ignores it: the Ingress proxy is the administrator. |
 
 [`docs/operations.md`](docs/operations.md) covers the files, ports, mDNS,
 the token's role, logs, health, pairing and a factory reset.

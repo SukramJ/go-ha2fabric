@@ -18,18 +18,22 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"text/tabwriter"
 	"time"
 
+	fabricui "github.com/SukramJ/go-fabric-ui/fabricui"
 	"github.com/SukramJ/go-fabric/node"
 
 	"github.com/SukramJ/go-ha2fabric/internal/bridge"
 	"github.com/SukramJ/go-ha2fabric/internal/config"
 	"github.com/SukramJ/go-ha2fabric/internal/ha"
+	"github.com/SukramJ/go-ha2fabric/internal/selection"
 	"github.com/SukramJ/go-ha2fabric/internal/version"
 	"github.com/SukramJ/go-ha2fabric/internal/web"
 )
@@ -42,7 +46,7 @@ func main() {
 }
 
 // events are the subscriptions the bridge reads.
-var events = []string{ha.EventStateChanged, ha.EventEntityRegistryUpdated, ha.EventDeviceRegistryUpdated}
+var events = []string{ha.EventStateChanged, ha.EventEntityRegistryUpdated, ha.EventDeviceRegistryUpdated, ha.EventLabelRegistryUpdated}
 
 func run(ctx context.Context, args []string, env config.Env, stdout, stderr io.Writer) int {
 	cfg, err := config.Load(args, env, stderr)
@@ -59,14 +63,25 @@ func run(ctx context.Context, args []string, env config.Env, stdout, stderr io.W
 	}
 	logger := slog.New(slog.NewTextHandler(stderr, &slog.HandlerOptions{Level: cfg.LogLevel}))
 	client := ha.New(ha.Options{URL: cfg.HAURL, Token: cfg.HAToken, Events: events, Logger: logger})
+	sel, err := selection.Open(cfg.SelectionPath, logger)
+	if err != nil {
+		logger.Error("ha2fabric.selection", slog.String("error", err.Error()))
+		return 1
+	}
 	if cfg.DumpPlan {
-		return dumpPlan(ctx, client, cfg, stdout, logger)
+		return dumpPlan(ctx, client, cfg, sel, stdout, logger)
 	}
 	logger.Info("ha2fabric.start", slog.String("version", version.String()), slog.String("ha_url", cfg.HAURL), slog.Bool("addon", cfg.Addon))
 
 	// The cookbook's order (docs/guides/embed-in-a-daemon.md §6): the node
 	// starts before the backend runs and stops after it.
-	n, err := node.New(bridge.NodeConfig(cfg, logger)) //nolint:contextcheck // the node's constructor takes no context
+	// The web UI's event stream reports fabrics and windows through the
+	// node's observers, which node.New takes (go-fabric-ui
+	// docs/embedding.md).
+	uiEvents := fabricui.NewEvents()
+	nc := bridge.NodeConfig(cfg, logger)
+	nc.Observers = uiEvents.Observers(nc.Observers)
+	n, err := node.New(nc) //nolint:contextcheck // the node's constructor takes no context
 	if err != nil {
 		logger.Error("ha2fabric.node", slog.String("error", err.Error()))
 		return 1
@@ -77,7 +92,17 @@ func run(ctx context.Context, args []string, env config.Env, stdout, stderr io.W
 		return 1
 	}
 	bridge.LogPairing(n, logger)
-	br := bridge.New(n, client, bridge.Options{Rule: cfg.Exposure(), Logger: logger})
+	br := bridge.New(n, client, bridge.Options{
+		Rule: cfg.Exposure(), Logger: logger, Selection: sel,
+		OnChange: func(exposure []string, endpoints bool) {
+			if len(exposure) > 0 {
+				uiEvents.Publish(fabricui.Event{Type: fabricui.EventExposureChanged, Data: fabricui.ExposureEvent{Keys: exposure}})
+			}
+			if endpoints {
+				uiEvents.Publish(fabricui.Event{Type: fabricui.EventEndpointsChanged, Data: struct{}{}})
+			}
+		},
+	})
 
 	var wg sync.WaitGroup
 	rctx, cancel := context.WithCancel(ctx)
@@ -85,7 +110,9 @@ func run(ctx context.Context, args []string, env config.Env, stdout, stderr io.W
 	wg.Go(func() { _ = client.Run(rctx, br) })
 	webErr := make(chan error, 1)
 	if cfg.WebListen != "" {
-		ws := web.New(br, n, web.Options{Listen: cfg.WebListen, Allow: cfg.WebAllow, Logger: logger})
+		ws := web.New(web.Options{Listen: cfg.WebListen, Allow: cfg.WebAllow, Logger: logger, UI: fabricui.Options{
+			Node: n, Exposure: br.Exposure(), Admin: admin(cfg), Reassemble: br.Resync, Events: uiEvents, Logger: logger,
+		}})
 		wg.Go(func() { webErr <- ws.Run(rctx) })
 	}
 	code := 0
@@ -108,6 +135,20 @@ func run(ctx context.Context, args []string, env config.Env, stdout, stderr io.W
 	return code
 }
 
+// admin is the web UI's administrator check: in the add-on the Ingress
+// proxy, which has authenticated the Home Assistant user; stand-alone
+// read-only unless WEB_ADMIN, which selects the UI's token mode (nil).
+func admin(cfg *config.Config) func(*http.Request) bool {
+	switch {
+	case cfg.Addon:
+		return web.From(config.IngressProxy)
+	case cfg.WebAdmin:
+		return nil
+	default:
+		return web.ReadOnly
+	}
+}
+
 // waiter is the handler of a one-shot connection: --dump-plan.
 type waiter struct {
 	once sync.Once
@@ -126,7 +167,7 @@ func (w *waiter) Disconnected(err error) {
 
 // dumpPlan connects once, reads everything and prints every candidate's
 // verdict.
-func dumpPlan(ctx context.Context, client *ha.Client, cfg *config.Config, out io.Writer, logger *slog.Logger) int {
+func dumpPlan(ctx context.Context, client *ha.Client, cfg *config.Config, sel *selection.Store, out io.Writer, logger *slog.Logger) int {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	w := &waiter{ok: make(chan struct{})}
@@ -158,15 +199,26 @@ func dumpPlan(ctx context.Context, client *ha.Client, cfg *config.Config, out io
 	}
 	var buf bytes.Buffer
 	tw := tabwriter.NewWriter(&buf, 2, 4, 2, ' ', 0)
-	_, _ = fmt.Fprintln(tw, "ENTITY\tDEVICE\tEXPOSED\tWHY\tROW\tVERDICT\tREASON")
-	verdicts := bridge.Dry(snap, cfg.Exposure())
+	_, _ = fmt.Fprintln(tw, "ENTITY\tDEVICE\tLABELS\tEXPOSED\tSOURCE\tWHY\tROW\tVERDICT\tREASON")
+	rule := cfg.Exposure()
+	rule.Overrides = sel.Enabled()
+	names := map[string]string{}
+	for id, e := range sel.Entries() {
+		if e.Name != "" {
+			names[id] = e.Name
+		}
+	}
+	for _, l := range rule.Unresolved(snap.LabelRegistry()) {
+		logger.Warn("ha2fabric.label_unresolved", slog.String("label", l))
+	}
+	verdicts := bridge.Dry(snap, rule, names)
 	for i := range verdicts {
 		v := &verdicts[i]
 		exposed := "no"
 		if v.Exposed {
 			exposed = "yes"
 		}
-		_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", v.EntityID, v.Device, exposed, v.ExposeReason, v.Row, v.State, v.Reason)
+		_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", v.EntityID, v.Device, strings.Join(v.Labels, ","), exposed, v.Source, v.ExposeReason, v.Row, v.State, v.Reason)
 	}
 	_ = tw.Flush()
 	if _, err := out.Write(buf.Bytes()); err != nil && !errors.Is(err, io.ErrClosedPipe) {

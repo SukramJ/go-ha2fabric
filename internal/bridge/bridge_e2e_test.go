@@ -5,6 +5,7 @@ package bridge_test
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"os"
 	"testing"
@@ -49,7 +50,7 @@ type env struct {
 	pair *fabrictest.Pair
 }
 
-func newEnv(t *testing.T, rule expose.Rule) *env {
+func newEnv(t *testing.T, rule expose.Rule, edit ...func(*bridge.Options)) *env {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	t.Cleanup(cancel)
@@ -58,10 +59,14 @@ func newEnv(t *testing.T, rule expose.Rule) *env {
 	dev := site.AddDevice(fabrictest.Topology{})
 	cl := ha.New(ha.Options{
 		URL: srv.URL(), Token: hatest.Token, Logger: logger(),
-		Events:     []string{ha.EventStateChanged, ha.EventEntityRegistryUpdated, ha.EventDeviceRegistryUpdated},
+		Events:     []string{ha.EventStateChanged, ha.EventEntityRegistryUpdated, ha.EventDeviceRegistryUpdated, ha.EventLabelRegistryUpdated},
 		MinBackoff: 20 * time.Millisecond, MaxBackoff: 100 * time.Millisecond,
 	})
-	br := bridge.New(dev.Node(), cl, bridge.Options{Rule: rule, Debounce: 20 * time.Millisecond, Logger: logger()})
+	opts := bridge.Options{Rule: rule, Debounce: 20 * time.Millisecond, Logger: logger()}
+	for _, fn := range edit {
+		fn(&opts)
+	}
+	br := bridge.New(dev.Node(), cl, opts)
 	rctx, stop := context.WithCancel(ctx)
 	done := make(chan struct{}, 2)
 	go func() { _ = br.Run(rctx); done <- struct{}{} }()
@@ -97,6 +102,22 @@ func (e *env) endpoint(entityID string) (uint16, bool) {
 		}
 	}
 	return 0, false
+}
+
+// regID is an entity's registry entry id in the fixtures.
+func (e *env) regID(entityID string) string {
+	e.t.Helper()
+	var entries []ha.EntityEntry
+	if err := json.Unmarshal(hatest.Fixture(e.t, "entity_registry_list.json"), &entries); err != nil {
+		e.t.Fatal(err)
+	}
+	for i := range entries {
+		if entries[i].EntityID == entityID {
+			return entries[i].ID
+		}
+	}
+	e.t.Fatalf("no registry entry %s", entityID)
+	return ""
 }
 
 func (e *env) eventually(what string, cond func() bool) {
@@ -201,7 +222,9 @@ func TestEndToEnd(t *testing.T) {
 	if !ok {
 		t.Fatal("no endpoint for switch.coffee")
 	}
-	if got, ok := e.dev.EndpointOf("ha:dev-shelly-1/switch.coffee"); !ok || got != plug {
+	// The stable key is the device's registry id and the entity's
+	// registry entry id (go-hamapping Options.StableKey).
+	if got, ok := e.dev.EndpointOf("ha:dev-shelly-1/" + e.regID("switch.coffee")); !ok || got != plug {
 		t.Fatalf("the node serves switch.coffee on %d %v, the plan says %d", got, ok, plug)
 	}
 	e.ha.UpdateEntity("switch.coffee", map[string]any{"disabled_by": "user"})
@@ -213,7 +236,7 @@ func TestEndToEnd(t *testing.T) {
 	if values, err := fabrictest.ReadCluster(e.ctx, e.pair, plug, onoffdef.ClusterID); err == nil && len(values) != 0 {
 		t.Fatalf("endpoint %d still answers: %v", plug, values)
 	}
-	if _, ok := e.dev.EndpointOf("ha:dev-shelly-1/switch.coffee"); ok {
+	if _, ok := e.dev.EndpointOf("ha:dev-shelly-1/" + e.regID("switch.coffee")); ok {
 		t.Fatal("the node still serves switch.coffee")
 	}
 	// The other endpoints keep their numbers.

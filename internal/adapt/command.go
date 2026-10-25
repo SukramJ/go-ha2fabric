@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	hacatalog "github.com/SukramJ/go-ha-catalog"
+	hamapping "github.com/SukramJ/go-hamapping"
 	"github.com/SukramJ/go-hamqtt/model"
 
 	"github.com/SukramJ/go-ha2fabric/internal/ha"
@@ -64,27 +65,27 @@ func Service(cmd model.Command, cur *ha.State) (ha.ServiceCall, error) {
 				return call(p.service, nil)
 			}
 		}
-	case domain == "cover" && cmd.Method == "set_position":
+	case domain == "cover" && cmd.Method == hamapping.MethodSetPosition:
 		// cover/services.yaml:43-56 set_cover_position, position 0 to 100.
 		if n, ok := integer(payload, 0, 100); ok {
 			return call("set_cover_position", map[string]any{"position": n})
 		}
-	case domain == "cover" && cmd.Method == "tilt":
+	case domain == "cover" && cmd.Method == hamapping.MethodTilt:
 		// cover/services.yaml:95-108 set_cover_tilt_position, tilt_position.
 		if n, ok := integer(payload, 0, 100); ok {
 			return call("set_cover_tilt_position", map[string]any{"tilt_position": n})
 		}
-	case domain == "climate" && cmd.Method == "mode":
+	case domain == "climate" && cmd.Method == hamapping.MethodMode:
 		// climate/services.yaml:92-102 set_hvac_mode, hvac_mode.
 		if payload != "" {
 			return call("set_hvac_mode", map[string]any{"hvac_mode": payload})
 		}
-	case domain == "climate" && cmd.Method == "temperature":
+	case domain == "climate" && cmd.Method == hamapping.MethodTemperature:
 		// climate/services.yaml:17-34 set_temperature, temperature.
 		if f, ok := number(payload); ok {
 			return call("set_temperature", map[string]any{"temperature": f})
 		}
-	case domain == "climate" && (cmd.Method == "temperature_low" || cmd.Method == "temperature_high"):
+	case domain == "climate" && (cmd.Method == hamapping.MethodTemperatureLow || cmd.Method == hamapping.MethodTemperatureHigh):
 		// climate/services.py:49-62: target_temp_low and target_temp_high
 		// are Inclusive — both or neither; the other bound is the current.
 		f, ok := number(payload)
@@ -92,7 +93,7 @@ func Service(cmd model.Command, cur *ha.State) (ha.ServiceCall, error) {
 			break
 		}
 		set, other := "target_temp_low", "target_temp_high"
-		if cmd.Method == "temperature_high" {
+		if cmd.Method == hamapping.MethodTemperatureHigh {
 			set, other = other, set
 		}
 		var attrs map[string]any
@@ -104,17 +105,17 @@ func Service(cmd model.Command, cur *ha.State) (ha.ServiceCall, error) {
 			return ha.ServiceCall{}, fmt.Errorf("%w: %s %s without a current %s", ErrCommand, id, set, other)
 		}
 		return call("set_temperature", map[string]any{set: f, other: o})
-	case domain == "fan" && cmd.Method == "percentage":
+	case domain == "fan" && cmd.Method == hamapping.MethodPercentage:
 		// fan/services.yaml:16-29 set_percentage, percentage 0 to 100.
 		if n, ok := integer(payload, 0, 100); ok {
 			return call("set_percentage", map[string]any{"percentage": n})
 		}
-	case domain == "fan" && cmd.Method == "preset_mode":
+	case domain == "fan" && cmd.Method == hamapping.MethodPresetMode:
 		// fan/services.yaml:2-14 set_preset_mode, preset_mode.
 		if payload != "" {
 			return call("set_preset_mode", map[string]any{"preset_mode": payload})
 		}
-	case domain == "fan" && cmd.Method == "oscillation":
+	case domain == "fan" && cmd.Method == hamapping.MethodOscillation:
 		// fan/services.yaml:63-73 oscillate, oscillating (boolean).
 		if on, ok := catalogPayload(cmd.Entity, "payload_oscillation_on"); ok && payload == on {
 			return call("oscillate", map[string]any{"oscillating": true})
@@ -122,7 +123,7 @@ func Service(cmd model.Command, cur *ha.State) (ha.ServiceCall, error) {
 		if off, ok := catalogPayload(cmd.Entity, "payload_oscillation_off"); ok && payload == off {
 			return call("oscillate", map[string]any{"oscillating": false})
 		}
-	case domain == "fan" && cmd.Method == "direction":
+	case domain == "fan" && cmd.Method == hamapping.MethodDirection:
 		// fan/services.yaml:80-94 set_direction, direction forward|reverse.
 		if payload == "forward" || payload == "reverse" {
 			return call("set_direction", map[string]any{"direction": payload})
