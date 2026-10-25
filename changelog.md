@@ -17,8 +17,8 @@ Labels, the family's web UI, and the stable entity identity (brief H3).
   name case-insensitively, else its `label_id`; an entity carries its own
   labels and its device's. The order is disabled, hidden, the web UI's
   override, exclude (ids, globs, labels), include (ids, globs, labels),
-  Assist. A value that names no label is a warning (log
-  `bridge.label_unresolved`, the status's `warnings`), not an error.
+  Assist. A value that names no label is a warning in the log
+  (`bridge.label_unresolved`), not an error.
 - `config/label_registry/list` and the `label_registry_updated`
   subscription; a label change re-plans the bridge.
 - The web UI is go-fabric-ui `v0.1.0` (`fabricui.Handler`): health,
@@ -28,7 +28,7 @@ Labels, the family's web UI, and the stable entity identity (brief H3).
   (`/data/selection.json` in the add-on). Administrator: the Ingress proxy
   in the add-on; stand-alone read-only unless `WEB_ADMIN=true` (the UI's
   token mode).
-- The plan (`--dump-plan`, `/api/plan`) carries each entity's labels and
+- The plan (`--dump-plan`, the UI's selection) carries each entity's labels and
   the deciding layer (`source`).
 
 ### Changed
@@ -44,14 +44,15 @@ Labels, the family's web UI, and the stable entity identity (brief H3).
   naming Alexa (`packages/backend/src/services/bridges/bridge-endpoint-manager.ts:968-971`,
   #438 at `:55-58`, at `664575a`). Expect to put the devices into rooms and
   groups again.
-- `GET /api/health` shows the pairing codes only to the web UI's
-  administrator. `GET /api/health` and `GET /api/plan` are kept for the 0.2
-  releases and removed in 0.3.0; the UI reads `/api/v1`.
 - go-fabric `v0.12.0`, go-hamapping `v0.2.0`; the command mapping uses
   go-hamapping's method constants.
 
 ### Removed
 
+- `GET /api/health` and `GET /api/plan` (0.1.0's JSON routes): the web UI's
+  `GET /api/v1/node/status` (the node's health, endpoints, fabrics, window)
+  and `GET /api/v1/node/exposure` (every candidate entity with its verdict,
+  labels and deciding layer) replace them.
 - The page of 0.1.0 and its QR encoder (`internal/web/assets`, its golden
   test): go-fabric-ui's pairing page replaces them.
 

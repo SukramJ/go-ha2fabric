@@ -61,8 +61,7 @@ See go-fabric's README, section "Not certified".
   commissioning window, the fabrics, the endpoints, diagnostics, and the
   entity selection — every candidate entity with its labels, the layer of
   the rule that decided and go-hamapping's verdict, with per-entity
-  overrides. `--dump-plan` prints the same table. `GET /api/health` and
-  `GET /api/plan` of 0.1.0 stay for the 0.2 releases.
+  overrides. `--dump-plan` prints the same table.
 - **Pure Go**, `CGO_ENABLED=0`: a static binary, a distroless image, a Home
   Assistant add-on for amd64, aarch64 and armv7.
 

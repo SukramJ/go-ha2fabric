@@ -6,15 +6,15 @@
 // (fabricui.Handler at v0.1.0: the node pages — health, pairing and the
 // commissioning window, fabrics, the entity selection, endpoints,
 // diagnostics — and their API under /api/v1), behind the client filter.
-// GET /api/health and GET /api/plan, the JSON of 0.1.0, stay as aliases
-// for the 0.2 releases and go in 0.3.0. The UI's URLs are relative, so it
+// The 0.1.0 JSON routes GET /api/health and GET /api/plan are gone (owner
+// decision 2026-10-25): /api/v1/node/status and /api/v1/node/exposure
+// replace them. The UI's URLs are relative, so it
 // works under Ingress's path prefix (go-fabric-ui docs/embedding.md,
 // "Behind an Ingress").
 package web
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -24,24 +24,7 @@ import (
 	"time"
 
 	fabricui "github.com/SukramJ/go-fabric-ui/fabricui"
-	"github.com/SukramJ/go-fabric/node"
-
-	"github.com/SukramJ/go-ha2fabric/internal/bridge"
-	"github.com/SukramJ/go-ha2fabric/internal/version"
 )
-
-// Bridge is what the page reads of the bridge.
-type Bridge interface {
-	Status() bridge.Status
-	Plan() []bridge.Verdict
-}
-
-// Node is what the page reads of the node; *node.Node is one.
-type Node interface {
-	PairingCodes() (qr, manual string, err error)
-	FabricInfos(ctx context.Context) ([]node.FabricInfo, error)
-	Health() (node.HealthSample, bool)
-}
 
 // Options configure the server.
 type Options struct {
@@ -56,15 +39,13 @@ type Options struct {
 
 // Server is the web UI.
 type Server struct {
-	br    Bridge
-	n     Node
 	opts  Options
 	log   *slog.Logger
 	allow []net.IP
 }
 
 // New returns the server; [Server.Run] binds it.
-func New(br Bridge, n Node, opts Options) *Server {
+func New(opts Options) *Server {
 	log := opts.Logger
 	if log == nil {
 		log = slog.Default()
@@ -72,7 +53,7 @@ func New(br Bridge, n Node, opts Options) *Server {
 	if opts.UI.Logger == nil {
 		opts.UI.Logger = log
 	}
-	s := &Server{br: br, n: n, opts: opts, log: log}
+	s := &Server{opts: opts, log: log}
 	for _, a := range opts.Allow {
 		if ip := net.ParseIP(a); ip != nil {
 			s.allow = append(s.allow, ip)
@@ -81,52 +62,9 @@ func New(br Bridge, n Node, opts Options) *Server {
 	return s
 }
 
-// Health is GET /api/health (0.1.0's form; the UI reads /api/v1).
-type Health struct {
-	Status   string        `json:"status"`
-	Version  string        `json:"version"`
-	Bridge   bridge.Status `json:"bridge"`
-	Node     *NodeHealth   `json:"node,omitempty"`
-	Pairing  *Pairing      `json:"pairing,omitempty"`
-	Fabrics  []Fabric      `json:"fabrics"`
-	Problems []string      `json:"problems,omitempty"`
-}
-
-// NodeHealth is the node's last health sample.
-type NodeHealth struct {
-	Healthy bool   `json:"healthy"`
-	Note    string `json:"note,omitempty"`
-}
-
-// Pairing is the pairing codes (go-fabric cookbook §7).
-type Pairing struct {
-	QR     string `json:"qr"`
-	Manual string `json:"manual"`
-}
-
-// Fabric is one commissioned fabric.
-type Fabric struct {
-	Index    uint8  `json:"index"`
-	FabricID string `json:"fabric_id"`
-	VendorID string `json:"vendor_id"`
-	Label    string `json:"label,omitempty"`
-}
-
-// Handler is the routes behind the client filter: the two 0.1.0
-// aliases, everything else go-fabric-ui's.
+// Handler is go-fabric-ui's routes behind the client filter.
 func (s *Server) Handler() http.Handler {
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/health", s.health)
-	mux.HandleFunc("GET /api/plan", s.plan)
-	mux.Handle("/", fabricui.Handler(s.opts.UI))
-	return s.filter(mux)
-}
-
-// admin is whether the request may read a secret: the UI's Admin. In
-// the UI's token mode (Admin nil) the alias shows no pairing code, which
-// the UI hands out only against its token.
-func (s *Server) admin(r *http.Request) bool {
-	return s.opts.UI.Admin != nil && s.opts.UI.Admin(r)
+	return s.filter(fabricui.Handler(s.opts.UI))
 }
 
 // filter refuses a client outside Allow: the add-on runs on the host's
@@ -146,57 +84,6 @@ func (s *Server) filter(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
-}
-
-func (s *Server) health(w http.ResponseWriter, r *http.Request) {
-	h := Health{Status: "ok", Version: version.Version, Bridge: s.br.Status(), Fabrics: []Fabric{}}
-	if !h.Bridge.HAConnected {
-		h.Problems = append(h.Problems, "Home Assistant is not connected")
-	} else if h.Bridge.LastSync.IsZero() {
-		h.Problems = append(h.Problems, "Home Assistant is not read yet")
-	}
-	if s.n != nil {
-		if sample, ok := s.n.Health(); ok {
-			h.Node = &NodeHealth{Healthy: sample.Healthy, Note: sample.Note}
-			if !sample.Healthy {
-				h.Problems = append(h.Problems, "node: "+sample.Note)
-			}
-		}
-		if qr, manual, err := s.n.PairingCodes(); err == nil && s.admin(r) {
-			h.Pairing = &Pairing{QR: qr, Manual: manual}
-		}
-		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-		defer cancel()
-		if fabrics, err := s.n.FabricInfos(ctx); err == nil {
-			for _, f := range fabrics {
-				h.Fabrics = append(h.Fabrics, Fabric{Index: f.FabricIndex, FabricID: fmt.Sprintf("%016X", f.FabricID), VendorID: fmt.Sprintf("0x%04X", f.VendorID), Label: f.Label})
-			}
-		} else {
-			h.Problems = append(h.Problems, "fabrics: "+err.Error())
-		}
-	}
-	code := http.StatusOK
-	if len(h.Problems) > 0 {
-		h.Status, code = "degraded", http.StatusServiceUnavailable
-	}
-	writeJSON(w, code, h)
-}
-
-func (s *Server) plan(w http.ResponseWriter, _ *http.Request) {
-	p := s.br.Plan()
-	if p == nil {
-		p = []bridge.Verdict{}
-	}
-	writeJSON(w, http.StatusOK, p)
-}
-
-func writeJSON(w http.ResponseWriter, code int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "no-store")
-	w.WriteHeader(code)
-	enc := json.NewEncoder(w)
-	enc.SetIndent("", " ")
-	_ = enc.Encode(v)
 }
 
 // Run serves until ctx ends.

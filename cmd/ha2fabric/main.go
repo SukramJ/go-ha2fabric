@@ -110,7 +110,7 @@ func run(ctx context.Context, args []string, env config.Env, stdout, stderr io.W
 	wg.Go(func() { _ = client.Run(rctx, br) })
 	webErr := make(chan error, 1)
 	if cfg.WebListen != "" {
-		ws := web.New(br, n, web.Options{Listen: cfg.WebListen, Allow: cfg.WebAllow, Logger: logger, UI: fabricui.Options{
+		ws := web.New(web.Options{Listen: cfg.WebListen, Allow: cfg.WebAllow, Logger: logger, UI: fabricui.Options{
 			Node: n, Exposure: br.Exposure(), Admin: admin(cfg), Reassemble: br.Resync, Events: uiEvents, Logger: logger,
 		}})
 		wg.Go(func() { webErr <- ws.Run(rctx) })

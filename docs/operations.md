@@ -159,22 +159,20 @@ go-hamapping composes with its device's name as any entity name.
 
 ## Health
 
-The web UI reads `/api/v1/node/status`. `GET /api/health` (kept for the
-0.2 releases, removed in 0.3.0) answers 200 with `"status": "ok"`, or 503 with
-`"status": "degraded"` and the problems: Home Assistant not connected or
-not read yet, the node's health probe unhealthy, the fabrics unreadable.
-It also carries the
-pairing codes (only for a request the web UI's administrator check
-admits), the commissioned fabrics and the bridge's counters
-(endpoints, candidates, service calls and their failures).
-`GET /api/plan` is every candidate entity with the exposure rule's word and
-go-hamapping's verdict, the same as `--dump-plan` prints.
+`GET /api/v1/node/status` (go-fabric-ui's contract) is the node's health
+sample, its listen address, its endpoint and fabric counts and whether the
+commissioning window is open; `GET
+/api/v1/node/exposure` is every candidate entity with the exposure rule's
+word, its labels, the deciding layer and go-hamapping's verdict, the same
+as `--dump-plan` prints, and stays empty until Home Assistant has been read
+once. The Home Assistant connection is in the log (`ha.connected`,
+`ha.disconnected`, `bridge.synced`). 0.1.0's `GET /api/health` and `GET
+/api/plan` are gone since 0.2.0.
 
 ## Pairing
 
 The pairing code is in the log at start (`ha2fabric.pairing`), on the web
-UI's pairing page with its QR code (for an administrator), and in
-`/api/health`. The node opens its commissioning window when no controller
+UI's pairing page with its QR code (for an administrator). The node opens its commissioning window when no controller
 has paired; the first controller closes it. To pair a second ecosystem,
 open a pairing window from the first controller (its multi-admin sharing
 of the bridge), or from the web UI's pairing page, which opens one with

@@ -44,7 +44,7 @@ var layers = map[string][]string{
 	"internal/adapt":     {"internal/ha"},
 	"internal/config":    {"internal/expose"},
 	"internal/bridge":    {"internal/ha", "internal/adapt", "internal/expose", "internal/config", "internal/selection", "internal/version"},
-	"internal/web":       {"internal/bridge", "internal/version"},
+	"internal/web":       {},
 	"internal/arch":      {},
 	"cmd/ha2fabric":      {"internal/bridge", "internal/config", "internal/ha", "internal/selection", "internal/version", "internal/web"},
 }

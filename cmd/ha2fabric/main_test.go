@@ -95,10 +95,12 @@ func TestRun(t *testing.T) {
 	go func() { done <- run(ctx, nil, env, io.Discard, &logs) }()
 	deadline := time.Now().Add(20 * time.Second)
 	for {
-		res, err := http.Get("http://" + webAddr + "/api/health") //nolint:noctx // the test's own daemon
+		// The selection lists the candidates once Home Assistant is read.
+		res, err := http.Get("http://" + webAddr + "/api/v1/node/exposure") //nolint:noctx // the test's own daemon
 		if err == nil {
+			b, _ := io.ReadAll(res.Body)
 			_ = res.Body.Close()
-			if res.StatusCode == http.StatusOK {
+			if res.StatusCode == http.StatusOK && strings.Contains(string(b), "light.kitchen") {
 				break
 			}
 		}
