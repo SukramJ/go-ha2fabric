@@ -62,7 +62,7 @@ func get(t *testing.T, h http.Handler, path, remote string) (code int, body []by
 }
 
 func TestHealthAndPlan(t *testing.T) {
-	s := New(fakeBridge{bridge.Status{HAConnected: true, Endpoints: 4}}, fakeNode{healthy: true}, Options{})
+	s := New(fakeBridge{bridge.Status{HAConnected: true, LastSync: time.Now(), Endpoints: 4}}, fakeNode{healthy: true}, Options{})
 	code, b := get(t, s.Handler(), "/api/health", "")
 	var h Health
 	if err := json.Unmarshal(b, &h); err != nil || code != http.StatusOK || h.Status != "ok" || h.Pairing.Manual != "34970112332" ||
@@ -73,6 +73,11 @@ func TestHealthAndPlan(t *testing.T) {
 	var p []bridge.Verdict
 	if err := json.Unmarshal(b, &p); err != nil || code != http.StatusOK || len(p) != 1 || p[0].Endpoint != 3 {
 		t.Fatalf("plan %s", b)
+	}
+	// Connected but not read yet.
+	s = New(fakeBridge{bridge.Status{HAConnected: true}}, nil, Options{})
+	if code, b := get(t, s.Handler(), "/api/health", ""); code != http.StatusServiceUnavailable || !strings.Contains(string(b), "not read yet") {
+		t.Fatalf("before the first sync %d %s", code, b)
 	}
 	// Degraded: Home Assistant away, the node unhealthy, the fabrics unread.
 	s = New(fakeBridge{}, fakeNode{err: errors.New("store closed")}, Options{})
@@ -111,7 +116,7 @@ func TestRun(t *testing.T) {
 	addr := ln.Addr().String()
 	_ = ln.Close()
 	ctx, cancel := context.WithCancel(context.Background())
-	s := New(fakeBridge{bridge.Status{HAConnected: true}}, nil, Options{Listen: addr})
+	s := New(fakeBridge{bridge.Status{HAConnected: true, LastSync: time.Now()}}, nil, Options{Listen: addr})
 	done := make(chan error, 1)
 	go func() { done <- s.Run(ctx) }()
 	deadline := time.Now().Add(5 * time.Second)

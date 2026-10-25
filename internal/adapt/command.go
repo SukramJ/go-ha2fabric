@@ -85,7 +85,7 @@ func Service(cmd model.Command, cur *ha.State) (ha.ServiceCall, error) {
 			return call("set_temperature", map[string]any{"temperature": f})
 		}
 	case domain == "climate" && (cmd.Method == "temperature_low" || cmd.Method == "temperature_high"):
-		// climate/services.py:49-60: target_temp_low and target_temp_high
+		// climate/services.py:49-62: target_temp_low and target_temp_high
 		// are Inclusive — both or neither; the other bound is the current.
 		f, ok := number(payload)
 		if !ok {
@@ -123,7 +123,7 @@ func Service(cmd model.Command, cur *ha.State) (ha.ServiceCall, error) {
 			return call("oscillate", map[string]any{"oscillating": false})
 		}
 	case domain == "fan" && cmd.Method == "direction":
-		// fan/services.yaml:80-93 set_direction, direction forward|reverse.
+		// fan/services.yaml:80-94 set_direction, direction forward|reverse.
 		if payload == "forward" || payload == "reverse" {
 			return call("set_direction", map[string]any{"direction": payload})
 		}

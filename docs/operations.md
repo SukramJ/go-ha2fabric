@@ -113,8 +113,9 @@ The lines to know:
 ## Health
 
 `GET /api/health` answers 200 with `"status": "ok"`, or 503 with
-`"status": "degraded"` and the problems: Home Assistant not connected, the
-node's health probe unhealthy, the fabrics unreadable. It also carries the
+`"status": "degraded"` and the problems: Home Assistant not connected or
+not read yet, the node's health probe unhealthy, the fabrics unreadable.
+It also carries the
 pairing codes, the commissioned fabrics and the bridge's counters
 (endpoints, candidates, service calls and their failures).
 `GET /api/plan` is every candidate entity with the exposure rule's word and

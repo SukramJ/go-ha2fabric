@@ -226,7 +226,7 @@ func State(st *ha.State) model.State {
 	if ha.Domain(st.EntityID) == "light" {
 		// Rows light/*: state.color_temp (kelvin, extra.color_temp_kelvin
 		// true), state.color.h/.s from hs_color, state.color.x/.y from
-		// xy_color (light/__init__.py:609-656, light/const.py:110-115).
+		// xy_color (light/__init__.py:609-660, light/const.py:110-115).
 		delete(ex, "color_temp")
 		if k, ok := toFloat(ex["color_temp_kelvin"]); ok {
 			ex["color_temp"] = k

@@ -145,6 +145,8 @@ func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 	h := Health{Status: "ok", Version: version.Version, Bridge: s.br.Status(), Fabrics: []Fabric{}}
 	if !h.Bridge.HAConnected {
 		h.Problems = append(h.Problems, "Home Assistant is not connected")
+	} else if h.Bridge.LastSync.IsZero() {
+		h.Problems = append(h.Problems, "Home Assistant is not read yet")
 	}
 	if s.n != nil {
 		if sample, ok := s.n.Health(); ok {
