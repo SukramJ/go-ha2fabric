@@ -1,5 +1,5 @@
 {
- "_mirrors": "homeassistant/components/config/device_registry.py:75-101 (config/device_registry/list) and homeassistant/helpers/device_registry.py:589-629 (DeviceEntry.dict_repr) @2026.10.3",
+ "_mirrors": "homeassistant/components/config/device_registry.py:75-101 (config/device_registry/list) and homeassistant/helpers/device_registry.py:589-629 (DeviceEntry.dict_repr) @2026.10.3; dev-tuya-1 carries an identifier whose value is a JSON number, which the registry never rejects (helpers/device_registry.py:411, no type validator)",
  "result": [
   {
    "area_id": "kitchen",
@@ -299,6 +299,10 @@
     [
      "tuya",
      "bf1234"
+    ],
+    [
+     "tuya",
+     1234
     ]
    ],
    "labels": [],

@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- `config/device_registry/list` no longer fails the sync
+  (`bridge.sync_failed`, "cannot unmarshal number into ... identifiers")
+  when an integration registers a device identifier or connection whose
+  value is not a string. Home Assistant declares both as pairs of strings
+  but does not validate the element types, so a number reaches the wire as
+  a JSON number; the daemon now reads it as its decimal text.
+
 ## [0.2.0] - 2026-10-25
 
 Labels, the family's web UI, and the stable entity identity (brief H3).
