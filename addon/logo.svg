@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0
+     Copyright (C) 2026 SukramJ.
+
+     The add-on logo: the icon and the name. The wordmark is a system
+     sans-serif at render time (Helvetica Neue on macOS).
+     Render: rsvg-convert -w 500 -h 140 addon/logo.svg -o addon/logo.png -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 140" width="500" height="140">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1aa9d6"/>
+      <stop offset="1" stop-color="#007aa3"/>
+    </linearGradient>
+  </defs>
+  <rect width="500" height="140" rx="28" fill="url(#bg)"/>
+  <rect x="1" y="1" width="498" height="138" rx="27" fill="none" stroke="#ffffff" stroke-opacity="0.35" stroke-width="2"/>
+  <!-- the icon's glyph, scaled 0.45 into a 116px tile at (12,12) -->
+  <g transform="translate(12 12) scale(0.453125)">
+    <path d="M28 112 L66 76 L104 112" stroke="#ffffff" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    <path d="M40 108v62h52v-62z" stroke="#ffffff" stroke-width="14" stroke-linejoin="round" fill="#ffffff"/>
+    <g stroke="#ffffff" stroke-width="14" stroke-linecap="round" fill="none">
+      <path d="M124 104h96"/>
+      <path d="M92 136h128"/>
+      <path d="M124 168h96"/>
+    </g>
+    <circle cx="184" cy="136" r="22" fill="#ffffff"/>
+    <circle cx="184" cy="136" r="9" fill="#007aa3"/>
+  </g>
+  <text x="140" y="78" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="52" font-weight="700" fill="#ffffff">go-ha2fabric</text>
+  <text x="142" y="110" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="19" fill="#ffffff" fill-opacity="0.85">Home Assistant entities as one bridge</text>
+</svg>
