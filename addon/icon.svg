@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0
+     Copyright (C) 2026 SukramJ.
+
+     The add-on icon: a home (Home Assistant's entities) at one end of the
+     fabric, go-fabric-ui's three threads and node (its favicon) at the
+     other. No Connectivity Standards Alliance mark is used.
+     Render: rsvg-convert -w 256 -h 256 addon/icon.svg -o addon/icon.png -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1aa9d6"/>
+      <stop offset="1" stop-color="#007aa3"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="56" fill="url(#bg)"/>
+  <rect x="2" y="2" width="252" height="252" rx="54" fill="none" stroke="#ffffff" stroke-opacity="0.35" stroke-width="2"/>
+  <!-- the home, on the fabric's middle thread -->
+  <path d="M28 112 L66 76 L104 112" stroke="#ffffff" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <path d="M40 108v62h52v-62z" stroke="#ffffff" stroke-width="14" stroke-linejoin="round" fill="#ffffff"/>
+  <!-- the three threads -->
+  <g stroke="#ffffff" stroke-width="14" stroke-linecap="round" fill="none">
+    <path d="M124 104h96"/>
+    <path d="M92 136h128"/>
+    <path d="M124 168h96"/>
+  </g>
+  <!-- the node on the fabric -->
+  <circle cx="184" cy="136" r="22" fill="#ffffff"/>
+  <circle cx="184" cy="136" r="9" fill="#007aa3"/>
+</svg>

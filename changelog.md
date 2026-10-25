@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- The add-on's icon and logo (`addon/icon.png`, `addon/logo.png`, sources
+  beside them as SVG): the home on go-fabric-ui's fabric. The add-on store
+  showed the Supervisor's default before.
+
 ### Fixed
 
 - `config/device_registry/list` no longer fails the sync
