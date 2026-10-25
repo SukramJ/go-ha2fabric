@@ -177,13 +177,11 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 	ws.SetReadLimit(1 << 20)
 	ctx := r.Context()
 	c := &conn{ws: ws, subs: map[string][]int64{}}
-	if !s.handshake(ctx, c) {
-		_ = ws.Close(websocket.StatusPolicyViolation, "auth")
-		return
-	}
+	// Registered before the handshake: the client reports itself
+	// connected on auth_ok, and a Down right after must reach this
+	// connection (TestClientReconnects raced the registration).
 	s.mu.Lock()
 	s.conns[c] = true
-	s.authed++
 	s.mu.Unlock()
 	defer func() {
 		s.mu.Lock()
@@ -191,6 +189,10 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 		s.mu.Unlock()
 		_ = ws.CloseNow()
 	}()
+	if !s.handshake(ctx, c) {
+		_ = ws.Close(websocket.StatusPolicyViolation, "auth")
+		return
+	}
 	for {
 		_, b, err := ws.Read(ctx)
 		if err != nil {
@@ -228,6 +230,11 @@ func (s *Server) handshake(ctx context.Context, c *conn) bool {
 		_ = c.ws.Write(ctx, websocket.MessageText, Fixture(s.t, "auth_invalid.json"))
 		return false
 	}
+	// Counted before auth_ok leaves: the client reports itself connected
+	// on it, and a test reads the count right after.
+	s.mu.Lock()
+	s.authed++
+	s.mu.Unlock()
 	return c.ws.Write(ctx, websocket.MessageText, Fixture(s.t, "auth_ok.json")) == nil
 }
 
