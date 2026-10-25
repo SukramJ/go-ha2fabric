@@ -1,10 +1,10 @@
 # GitHub Actions CI for go-ha2fabric, the form of the sibling repositories
-# (go-zendure2mqtt and go-fabric): lint (go vet + gofumpt + golangci-lint +
-# go.mod tidiness), security (govulncheck + go-licenses; the secrets scan
-# joins with the first code that handles a credential), test (the OS
-# triplet, race detector on, so CGo for that single step), coverage and
-# fuzz-smoke (disabled until there is code to measure — the `if: false`
-# below is removed with the first package that has a floor), build.
+# (go-zendure2mqtt, go-fabric-server): lint (go vet + gofumpt + golangci-lint
+# + go.mod tidiness), security (govulncheck + go-licenses + the gitleaks
+# history scan — the daemon reads a Home Assistant token), test (the OS
+# triplet, race detector on, so CGo for that single step), coverage (the
+# per-package floors), fuzz-smoke (the HA message decoder), build (the
+# binary, the release dry run) and docker (both images, amd64, no push).
 name: ci
 
 on:
@@ -22,7 +22,7 @@ concurrency:
 
 env:
   CGO_ENABLED: "0"
-  GO_VERSION: "1.27.2"
+  GO_VERSION: "1.27.3"
   # Pinned, not @latest: a tool release must not turn an unrelated pull
   # request red. Keep in step with `make setup`.
   GOFUMPT_VERSION: "v0.12.0"
@@ -73,8 +73,8 @@ jobs:
         run: |
           go install github.com/google/go-licenses@${{ env.GOLICENSES_VERSION }}
           make licenses
-      # The gitleaks history scan of the sibling repositories joins with
-      # the first code that handles a credential (a Home Assistant token).
+      - name: gitleaks
+        run: make secrets
 
   test:
     name: test (${{ matrix.os }})
@@ -92,23 +92,31 @@ jobs:
       - name: go test
         env:
           CGO_ENABLED: "1"
-        run: go test -race -count=1 -timeout=120s ./...
+        run: go test -race -count=1 -timeout=600s ./...
 
   coverage:
     name: coverage
-    if: false # switched on with the first package that has a coverage floor
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - run: echo "no coverage floor yet"
+      - uses: actions/setup-go@v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: cover-check
+        run: make cover-check
 
   fuzz-smoke:
     name: fuzz-smoke
-    if: false # switched on with the first Fuzz target
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - run: echo "no fuzz target yet"
+      - uses: actions/setup-go@v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: fuzz-smoke
+        run: make fuzz-smoke FUZZTIME=20000x
 
   build:
     name: build
@@ -121,7 +129,19 @@ jobs:
           cache: true
       - name: build
         run: make build
-      - name: placeholder banner
-        run: |
-          go build -o /tmp/ha2fabric ./cmd/ha2fabric
-          /tmp/ha2fabric && exit 1 || test $? -eq 2
+      - name: the daemon answers --version
+        run: bin/ha2fabric --version
+      - name: release dry run
+        run: make release
+
+  docker:
+    name: docker (both images, amd64)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: the daemon image
+        run: docker build -t go-ha2fabric:ci .
+      - name: the add-on image
+        run: docker build --build-arg BUILD_FROM=ghcr.io/home-assistant/amd64-base:latest -f addon/Dockerfile -t go-ha2fabric-addon:ci .
+      - name: the daemon image runs
+        run: docker run --rm go-ha2fabric:ci --version
