@@ -6,6 +6,55 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-25
+
+Labels, the family's web UI, and the stable entity identity (brief H3).
+
+### Added
+
+- Exposure by Home Assistant label: `INCLUDE_LABELS` / `EXCLUDE_LABELS`
+  (add-on `include_labels`, `exclude_labels`). A value matches a label's
+  name case-insensitively, else its `label_id`; an entity carries its own
+  labels and its device's. The order is disabled, hidden, the web UI's
+  override, exclude (ids, globs, labels), include (ids, globs, labels),
+  Assist. A value that names no label is a warning (log
+  `bridge.label_unresolved`, the status's `warnings`), not an error.
+- `config/label_registry/list` and the `label_registry_updated`
+  subscription; a label change re-plans the bridge.
+- The web UI is go-fabric-ui `v0.1.0` (`fabricui.Handler`): health,
+  pairing and the commissioning window, fabrics, endpoints, diagnostics,
+  and the entity selection with preview and per-entity overrides (enable,
+  disable, rename) in `selection.json` beside the store
+  (`/data/selection.json` in the add-on). Administrator: the Ingress proxy
+  in the add-on; stand-alone read-only unless `WEB_ADMIN=true` (the UI's
+  token mode).
+- The plan (`--dump-plan`, `/api/plan`) carries each entity's labels and
+  the deciding layer (`source`).
+
+### Changed
+
+- **Endpoint numbers change once at this upgrade.** An endpoint's stable
+  key is now the device's registry id and the entity's registry entry id
+  (go-hamapping `v0.2.0` `Options.StableKey`), so a renamed entity id keeps
+  its endpoint; every existing endpoint gets a new number once, and a
+  controller re-learns the bridge. What Apple Home does with the old
+  devices is not recorded in the H2 report (a real pairing was the owner's
+  step) nor in matter-hub; matter-hub's code says a lost endpoint number
+  makes controllers "treat the recreated device as new and lose groups",
+  naming Alexa (`packages/backend/src/services/bridges/bridge-endpoint-manager.ts:968-971`,
+  #438 at `:55-58`, at `664575a`). Expect to put the devices into rooms and
+  groups again.
+- `GET /api/health` shows the pairing codes only to the web UI's
+  administrator. `GET /api/health` and `GET /api/plan` are kept for the 0.2
+  releases and removed in 0.3.0; the UI reads `/api/v1`.
+- go-fabric `v0.12.0`, go-hamapping `v0.2.0`; the command mapping uses
+  go-hamapping's method constants.
+
+### Removed
+
+- The page of 0.1.0 and its QR encoder (`internal/web/assets`, its golden
+  test): go-fabric-ui's pairing page replaces them.
+
 ## [0.1.0] - 2026-10-25
 
 The first release: the daemon and its Home Assistant add-on (brief H2).

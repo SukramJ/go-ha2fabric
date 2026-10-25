@@ -4,7 +4,7 @@
 # (ghcr.io/sukramj/go-ha2fabric-addon-{arch}); the release workflow refuses a
 # tag where they differ.
 name: go-ha2fabric
-version: "0.1.0"
+version: "0.2.0"
 slug: go-ha2fabric
 description: >-
   Serves Home Assistant entities to Matter controllers (Apple Home, Google
@@ -55,6 +55,8 @@ options:
   expose_assist: true
   include: []
   exclude: []
+  include_labels: []
+  exclude_labels: []
   log_level: info
 
 schema:
@@ -68,5 +70,9 @@ schema:
   include:
     - str
   exclude:
+    - str
+  include_labels:
+    - str
+  exclude_labels:
     - str
   log_level: list(debug|info|warn|error)

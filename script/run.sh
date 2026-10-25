@@ -25,7 +25,8 @@ export STORE_PATH="/data/ha2fabric.db"
 
 # --- Exposure ---
 export EXPOSE_ASSIST="$(bashio::config 'expose_assist')"
-# Lists arrive one item per line; the daemon splits on newlines and commas.
+# Lists arrive one item per line; the daemon splits on newlines and commas
+# (label names keep their spaces).
 INCLUDE=""
 if bashio::config.has_value 'include'; then
   INCLUDE="$(bashio::config 'include')"
@@ -36,12 +37,22 @@ if bashio::config.has_value 'exclude'; then
   EXCLUDE="$(bashio::config 'exclude')"
 fi
 export EXCLUDE
+INCLUDE_LABELS=""
+if bashio::config.has_value 'include_labels'; then
+  INCLUDE_LABELS="$(bashio::config 'include_labels')"
+fi
+export INCLUDE_LABELS
+EXCLUDE_LABELS=""
+if bashio::config.has_value 'exclude_labels'; then
+  EXCLUDE_LABELS="$(bashio::config 'exclude_labels')"
+fi
+export EXCLUDE_LABELS
 
 export LOG_LEVEL="$(bashio::config 'log_level')"
 
 # --- Web UI through Ingress ---
 # On the host's network: listen on ingress_port and serve only the Ingress
-# proxy (172.30.32.2).
+# proxy (172.30.32.2), which is also the web UI's administrator.
 export WEB_LISTEN="0.0.0.0:8486"
 export WEB_ALLOW="172.30.32.2"
 

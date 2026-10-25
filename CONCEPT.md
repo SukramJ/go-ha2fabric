@@ -1,6 +1,7 @@
 # go-ha2fabric: concept
 
-Status: implemented in 0.1.0 (brief H2, 2026-10-25). Written 2026-10-24
+Status: implemented in 0.1.0 (brief H2, 2026-10-25); labels, the web UI
+from go-fabric-ui and the stable entity identity in 0.2.0 (brief H3). Written 2026-10-24
 from go-fabric's concept v6 part B (2026-10-20) and the owner's decisions
 of 2026-10-24 (go-fabric concept v8: `go-fabric-server`; evening: this
 daemon embeds go-fabric). Changes to this document follow those decisions.
@@ -9,8 +10,11 @@ daemon embeds go-fabric). Changes to this document follow those decisions.
 
 Home Assistant entities as a bridge for Matter controllers (Apple Home,
 Google Home, Amazon Alexa): the role
-[home-assistant-matter-bridge](https://github.com/Nabu-Casa/home-assistant-matter-bridge)
+[home-assistant-matter-hub](https://github.com/RiDDiX/home-assistant-matter-hub)
 plays on matter.js, as a static Go binary and a Home Assistant add-on.
+matter-hub is the helper reference for how a real Home Assistant bridge
+behaves (cited `file:line` at a pinned commit, `docs/by_design.md`); it is
+never a reference for Matter behaviour, which is go-fabric's.
 
 ## Shape (decisions of 2026-10-24, evening)
 

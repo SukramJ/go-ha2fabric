@@ -8,7 +8,8 @@ this page is the daemon's version.
 
 ## Files
 
-The daemon keeps one file: the node's SQLite store, `STORE_PATH`.
+The daemon keeps two files: the node's SQLite store, `STORE_PATH`, and
+beside it `selection.json`, the web UI's per-entity overrides.
 
 | Where | Path |
 | --- | --- |
@@ -24,6 +25,14 @@ survives restarts and upgrades, protect it like a key (it holds private
 keys unencrypted), back it up only with the daemon stopped (the add-on
 sets `backup: cold`, so the Supervisor stops it for a backup), and never
 run two copies of one store.
+
+`selection.json` is `{"version": 1, "entities": {"<entity_id>": {"enabled":
+true, "name": "…"}}}`, written atomically (a temporary file, then a rename)
+and read at start. A file that does not parse is renamed to
+`selection.json.corrupt-<unix seconds>`, logged (`selection.corrupt`) and
+the daemon starts without overrides. The add-on's cold backup holds it with
+the store. An override keyed by an entity id does not follow a rename of
+that id.
 
 The daemon stores nothing else: not the token, not Home Assistant's
 registry, not the states. Everything it knows about Home Assistant it reads
@@ -86,8 +95,8 @@ exposure settings or the registries.
 | Command | When | Home Assistant core at 2026.10.3 |
 | --- | --- | --- |
 | `auth` | each connection | `websocket_api/auth.py:25-46` |
-| `subscribe_events` `state_changed`, `entity_registry_updated`, `device_registry_updated` | each connection | `websocket_api/commands.py:180-219` |
-| `config/entity_registry/list`, `config/device_registry/list`, `config/area_registry/list`, `get_states`, `get_config`, `homeassistant/expose_entity/list` | each connection and each registry change | `config/entity_registry.py:39-64`, `config/device_registry.py:75-101`, `config/area_registry.py:23-37`, `websocket_api/commands.py:369-385, 658-666`, `homeassistant/exposed_entities.py:414-442` |
+| `subscribe_events` `state_changed`, `entity_registry_updated`, `device_registry_updated`, `label_registry_updated` | each connection | `websocket_api/commands.py:180-219`; `helpers/label_registry.py:23-26` |
+| `config/entity_registry/list`, `config/device_registry/list`, `config/area_registry/list`, `config/label_registry/list`, `get_states`, `get_config`, `homeassistant/expose_entity/list` | each connection and each registry change | `config/entity_registry.py:39-64`, `config/device_registry.py:75-101`, `config/area_registry.py:23-37`, `config/label_registry.py:53-67`, `websocket_api/commands.py:369-385, 658-666`, `homeassistant/exposed_entities.py:414-442` |
 | `call_service` | a controller's command | `websocket_api/commands.py:266-295` |
 | `ping` | every 30 s | `websocket_api/commands.py:730-736` |
 
@@ -109,14 +118,54 @@ The lines to know:
 | `bridge.build_failed` | warn | go-fabric refused a device go-hamapping planned; its entities have no endpoint (the plan says why). |
 | `bridge.call_service_failed` | warn | A controller's command failed in Home Assistant; the entity's state goes back onto its endpoint. |
 | `bridge.command_unmapped` | warn | A command the daemon's service table has no service for. |
+| `bridge.label_unresolved` | warn | A label of `INCLUDE_LABELS`/`EXCLUDE_LABELS` names no Home Assistant label; it is used as a label id. Logged when the set changes. |
+| `bridge.selection_applied` | info | The web UI stored overrides. |
+| `selection.corrupt` | warn | `selection.json` did not parse and was moved aside. |
+
+## Labels
+
+`INCLUDE_LABELS` and `EXCLUDE_LABELS` (add-on `include_labels`,
+`exclude_labels`) name Home Assistant labels. A value matches the label
+whose name equals it, ignoring case, else the label whose id it is; a value
+that matches neither is used as a label id as given, so it takes effect
+once such a label is created. The plan's `labels` column and the web UI
+show an entity's labels, its own and its device's; the reason says which
+label decided ("included by label 'Matter'"). The daemon subscribes to
+`label_registry_updated`: creating, renaming or removing a label, or adding
+one to an entity or a device (`entity_registry_updated`,
+`device_registry_updated`), re-plans the bridge after a one-second
+debounce. The order: disabled, hidden, the web UI's override, `EXCLUDE`
+and `EXCLUDE_LABELS`, `INCLUDE` and `INCLUDE_LABELS`, Assist.
+
+## The web UI
+
+go-fabric-ui's interface (`v0.1.0`) at `WEB_LISTEN`, in the add-on through
+Ingress. Who may write — change the selection, open a commissioning window,
+remove a fabric — and read the pairing code: in the add-on the Ingress
+proxy (`172.30.32.2`), which has authenticated the Home Assistant user;
+stand-alone nobody, unless `WEB_ADMIN=true`, which selects the UI's token
+mode (every write carries a per-process token the page reads from
+`/api/v1/node/status`, so anyone who can reach the port can write — keep
+it on a trusted network). The selection page lists every candidate entity
+with entity id, name, domain, device, area, labels, Assist exposure and
+integration, grouped by device, filterable by domain, area, labels, verdict
+and the deciding layer (`rule:assist`, `rule:include`, `rule:label`,
+`rule:exclude`, `override:on`, `override:off`, `disabled`, `hidden`).
+Preview shows the verdicts a change would bring (go-hamapping's `Map`
+without building); apply stores the overrides in `selection.json` and
+re-plans the bridge before it answers. Turning an entity back to what the
+rule decides removes its override. A rename sets the entity's name, which
+go-hamapping composes with its device's name as any entity name.
 
 ## Health
 
-`GET /api/health` answers 200 with `"status": "ok"`, or 503 with
+The web UI reads `/api/v1/node/status`. `GET /api/health` (kept for the
+0.2 releases, removed in 0.3.0) answers 200 with `"status": "ok"`, or 503 with
 `"status": "degraded"` and the problems: Home Assistant not connected or
 not read yet, the node's health probe unhealthy, the fabrics unreadable.
 It also carries the
-pairing codes, the commissioned fabrics and the bridge's counters
+pairing codes (only for a request the web UI's administrator check
+admits), the commissioned fabrics and the bridge's counters
 (endpoints, candidates, service calls and their failures).
 `GET /api/plan` is every candidate entity with the exposure rule's word and
 go-hamapping's verdict, the same as `--dump-plan` prints.
@@ -124,11 +173,12 @@ go-hamapping's verdict, the same as `--dump-plan` prints.
 ## Pairing
 
 The pairing code is in the log at start (`ha2fabric.pairing`), on the web
-UI with its QR code, and in `/api/health`. The node opens its
-commissioning window when no controller has paired; the first controller
-closes it. To pair a second ecosystem, open a pairing window from the first
-controller (its multi-admin sharing of the bridge), which shows a code of
-its own.
+UI's pairing page with its QR code (for an administrator), and in
+`/api/health`. The node opens its commissioning window when no controller
+has paired; the first controller closes it. To pair a second ecosystem,
+open a pairing window from the first controller (its multi-admin sharing
+of the bridge), or from the web UI's pairing page, which opens one with
+fresh credentials and shows their codes.
 
 The defaults are public test values: passcode 20202021, discriminator 3840,
 the CSA test vendor 0xFFF1 and product 0x8001. Change the passcode before
