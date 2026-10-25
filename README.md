@@ -19,11 +19,9 @@ Twin of [`go-hamapping`](https://github.com/SukramJ/go-hamapping); both are buil
 setup (pure Go, `CGO_ENABLED=0`, Apache-2.0 with a contributor licence
 agreement, the same guards in CI).
 
-> **Status: concept, not started.** The design is in [`CONCEPT.md`](CONCEPT.md).
-> Work begins after go-fabric closes its milestone 4 and writes the concept
-> of `go-fabric-server`; the go-fabric
-> [roadmap](https://github.com/SukramJ/go-fabric/blob/main/docs/roadmap.md)
-> names the milestone. Nothing in this repository runs yet.
+> **Status: 0.1.0, the first release.** The daemon and its Home Assistant
+> add-on run; a real pairing with Apple Home is the owner's manual step
+> before the release is announced. The design is in [`CONCEPT.md`](CONCEPT.md).
 
 ## Why "Matter" is not in the name
 
@@ -45,15 +43,96 @@ See go-fabric's README, section "Not certified".
 
 ## Features
 
-Planned; see [`CONCEPT.md`](CONCEPT.md). Nothing is implemented.
+- **One bridge for every exposed entity.** Each Home Assistant device
+  becomes bridged endpoints of one go-fabric node; go-hamapping decides the
+  device types and clusters: lights (on/off, dimmable, colour temperature,
+  extended colour), switches, sensors (temperature, humidity, pressure,
+  illuminance, power, voltage, current, energy, with a device's battery on
+  its main endpoint), binary sensors (contact, motion, occupancy, water
+  leak, smoke, carbon monoxide), covers, climate, locks and fans.
+- **Both directions.** `state_changed` becomes an attribute report to every
+  subscribed controller; a controller's command becomes a `call_service`.
+- **Live topology.** A renamed, disabled, hidden or newly exposed entity
+  moves the bridge at run time; the other endpoints keep their numbers.
+- **Reachability.** An `unavailable` or `unknown` entity is unreachable;
+  while Home Assistant is away, every endpoint is.
+- **A read-only web UI** (Ingress in the add-on): the pairing QR code and
+  manual code, the commissioned fabrics, every candidate entity with the
+  exposure rule's word and go-hamapping's verdict, the connection and the
+  node's health. `GET /api/health`, `GET /api/plan`; `--dump-plan` prints
+  the same table.
+- **Pure Go**, `CGO_ENABLED=0`: a static binary, a distroless image, a Home
+  Assistant add-on for amd64, aarch64 and armv7.
+
+## The exposure rule
+
+An entity is served when it is exposed to Assist in Home Assistant
+(**Settings → Voice assistants → Expose**; `EXPOSE_ASSIST=true`, the
+default) **or** named in `INCLUDE`, **and** not named in `EXCLUDE`, **and**
+neither disabled nor hidden in Home Assistant. `INCLUDE` and `EXCLUDE`
+take entity ids or globs (`light.*`, `sensor.*_temperature`), comma- or
+newline-separated. go-hamapping then maps what is served, or says why it
+cannot. The daemon never writes Home Assistant's exposure settings.
 
 ## Quickstart
 
-There is nothing to run yet.
+### As a Home Assistant add-on
+
+1. **Settings → Add-ons → Add-on Store**, **⋮ → Repositories**, add
+   `https://github.com/SukramJ/go-ha2fabric`.
+2. Install **go-ha2fabric**, change its `passcode`, start it.
+3. Open its **Web UI** and pair the QR code from Apple Home, Google Home or
+   Alexa.
+
+[`addon/DOCS.md`](addon/DOCS.md) has the options.
+
+### Stand-alone
+
+Create a long-lived access token for an administrator (the user's profile,
+**Security**) and run the daemon on a host in the controllers' LAN, with
+host networking:
+
+```sh
+docker run --network host -v ha2fabric:/data \
+  -e HA_URL=ws://homeassistant.local:8123/api/websocket \
+  -e HA_TOKEN=<token> -e PASSCODE=<8 digits> \
+  ghcr.io/sukramj/go-ha2fabric
+```
+
+or the release binary:
+
+```sh
+HA_URL=ws://homeassistant.local:8123/api/websocket HA_TOKEN=<token> ./ha2fabric
+./ha2fabric --dump-plan     # what would be served, and why
+```
+
+The pairing code is in the log (`ha2fabric.pairing`) and on the web UI
+(`WEB_LISTEN`, default `127.0.0.1:8099`).
 
 ## Configuration
 
-Defined with the first release.
+Every setting is an environment variable with a flag of the same name
+(`LISTEN` and `--listen`); a flag wins. The token is read from the
+environment only and never logged or stored.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `HA_URL` | add-on: `ws://supervisor/core/websocket` | Home Assistant's WebSocket API. |
+| `HA_TOKEN` | add-on: `SUPERVISOR_TOKEN` | An administrator's long-lived access token. |
+| `LISTEN` | `:5540` | UDP address of the Matter node. |
+| `PASSCODE` | `20202021` | Setup passcode; trivial ones are refused. Change it. |
+| `DISCRIMINATOR` | `3840` | 12-bit discriminator. |
+| `VENDOR_ID`, `PRODUCT_ID` | `0xFFF1`, `0x8001` | The CSA test vendor and product. |
+| `LABEL` | `go-ha2fabric` | The bridge's node label (at most 32 bytes). |
+| `STORE_PATH` | `ha2fabric.db`; add-on `/data/ha2fabric.db` | The node's SQLite store. |
+| `EXPOSE_ASSIST` | `true` | Follow Home Assistant's expose-to-Assist setting. |
+| `INCLUDE`, `EXCLUDE` | empty | Entity ids or globs. |
+| `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error`. |
+| `WEB_LISTEN` | `127.0.0.1:8099` | The web UI; empty disables it. |
+| `WEB_ALLOW` | empty (all) | Client addresses the web UI serves. |
+
+[`docs/operations.md`](docs/operations.md) covers the files, ports, mDNS,
+the token's role, logs, health, pairing and a factory reset.
 
 ## Development
 
@@ -63,11 +142,17 @@ make test      # go test -count=1 ./...
 make race      # go test -race (CGO_ENABLED=1 for this run only)
 make lint      # gofumpt + golangci-lint + go mod tidy -diff
 make ci        # build vet test lint
+make cover-check fuzz-smoke   # the coverage floors, the decoder's fuzz target
+make docker addon-image       # both images (amd64)
+make release                  # the release dry run into dist/
 ```
 
 The guards, the tool versions and the workflow files follow the sibling
-repositories; what a concept repository cannot run yet is disabled in the
-workflow with a comment that says when it is switched on.
+repositories. `internal/arch` holds the import rule: go-fabric's facade
+(`node`, `device`, `contract`, `eligibility`, the `<cluster>def` packages)
+and nothing below it. The tests run against a fake Home Assistant built
+from recorded WebSocket fixtures (`testdata/ha/`) and go-fabric's in-process
+controller (`fabrictest`); no live Home Assistant in CI.
 
 ## Acknowledgements
 
