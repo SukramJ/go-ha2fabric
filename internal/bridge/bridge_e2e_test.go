@@ -90,9 +90,10 @@ func (e *env) commission() {
 }
 
 func (e *env) endpoint(entityID string) (uint16, bool) {
-	for _, v := range e.br.Plan() {
-		if v.EntityID == entityID && v.Endpoint != 0 {
-			return v.Endpoint, true
+	plan := e.br.Plan()
+	for i := range plan {
+		if plan[i].EntityID == entityID && plan[i].Endpoint != 0 {
+			return plan[i].Endpoint, true
 		}
 	}
 	return 0, false

@@ -36,8 +36,8 @@ func snapshot(t *testing.T) *bridge.Snapshot {
 
 func byID(vs []bridge.Verdict) map[string]bridge.Verdict {
 	out := map[string]bridge.Verdict{}
-	for _, v := range vs {
-		out[v.EntityID] = v
+	for i := range vs {
+		out[vs[i].EntityID] = vs[i]
 	}
 	return out
 }

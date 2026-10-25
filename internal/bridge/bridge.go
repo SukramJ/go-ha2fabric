@@ -322,11 +322,11 @@ type planned struct {
 	sig      string
 }
 
-// Assess applies the exposure rule and groups the exposed entities by
+// assess applies the exposure rule and groups the exposed entities by
 // device: the candidates' verdicts (go-hamapping's verdict left to the
 // caller) and the devices to plan. A candidate is every entity with a
 // state or a registry entry.
-func Assess(s *Snapshot, rule expose.Rule) ([]Verdict, []*planned) {
+func assess(s *Snapshot, rule expose.Rule) ([]Verdict, []*planned) {
 	reg := map[string]*ha.EntityEntry{}
 	for i := range s.Entities {
 		reg[s.Entities[i].EntityID] = &s.Entities[i]
@@ -442,7 +442,7 @@ func mapVerdicts(verdicts []Verdict, mv []hamapping.Verdict) {
 
 // Dry is the plan without a node: what --dump-plan prints.
 func Dry(s *Snapshot, rule expose.Rule) []Verdict {
-	verdicts, groups := Assess(s, rule)
+	verdicts, groups := assess(s, rule)
 	for _, g := range groups {
 		_, mv := hamapping.Map(g.device, g.entities)
 		mapVerdicts(verdicts, mv)
@@ -463,7 +463,7 @@ func (b *Bridge) sync(ctx context.Context) {
 		return
 	}
 	b.unit = snap.Config.TemperatureUnit()
-	verdicts, plannedGroups := Assess(snap, b.opts.Rule)
+	verdicts, plannedGroups := assess(snap, b.opts.Rule)
 
 	b.mu.Lock()
 	b.states = map[string]*ha.State{}
@@ -472,8 +472,8 @@ func (b *Bridge) sync(ctx context.Context) {
 	}
 	b.mu.Unlock()
 	b.known = map[string]bool{}
-	for _, v := range verdicts {
-		b.known[v.EntityID] = true
+	for i := range verdicts {
+		b.known[verdicts[i].EntityID] = true
 	}
 
 	next := map[string]*group{}
@@ -605,8 +605,8 @@ func (b *Bridge) build(ctx context.Context, p *planned) (*group, []hamapping.Ver
 	}
 	g.verdicts = mv
 	g.devices = devs
-	for _, ep := range plan.Endpoints {
-		g.keys = append(g.keys, ep.Options.StableKey)
+	for i := range plan.Endpoints {
+		g.keys = append(g.keys, plan.Endpoints[i].Options.StableKey)
 	}
 	plan.OnChange(b.onCommand)
 	return g, mv

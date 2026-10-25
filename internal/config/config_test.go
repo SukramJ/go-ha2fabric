@@ -87,6 +87,14 @@ func TestValidation(t *testing.T) {
 	}
 }
 
+func TestTrivialPasscodes(t *testing.T) {
+	for _, p := range []string{"12345678", "87654321", "00000000", "99999999", "100000000"} {
+		if _, err := Load([]string{"--passcode", p}, MapEnv(map[string]string{"HA_URL": "ws://a", "HA_TOKEN": "t"}), io.Discard); err == nil {
+			t.Errorf("passcode %s passed", p)
+		}
+	}
+}
+
 func TestTokenNotInErrors(t *testing.T) {
 	_, err := Load(nil, MapEnv(map[string]string{"HA_TOKEN": "very-secret", "LISTEN": "bad"}), io.Discard)
 	if err == nil || strings.Contains(err.Error(), "very-secret") {

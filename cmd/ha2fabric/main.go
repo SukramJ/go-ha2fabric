@@ -50,11 +50,11 @@ func run(ctx context.Context, args []string, env config.Env, stdout, stderr io.W
 		return 0
 	}
 	if err != nil {
-		fmt.Fprintln(stderr, err)
+		_, _ = fmt.Fprintln(stderr, err)
 		return 2
 	}
 	if cfg.Version {
-		fmt.Fprintln(stdout, version.String())
+		_, _ = fmt.Fprintln(stdout, version.String())
 		return 0
 	}
 	logger := slog.New(slog.NewTextHandler(stderr, &slog.HandlerOptions{Level: cfg.LogLevel}))
@@ -158,13 +158,15 @@ func dumpPlan(ctx context.Context, client *ha.Client, cfg *config.Config, out io
 	}
 	var buf bytes.Buffer
 	tw := tabwriter.NewWriter(&buf, 2, 4, 2, ' ', 0)
-	fmt.Fprintln(tw, "ENTITY\tDEVICE\tEXPOSED\tWHY\tROW\tVERDICT\tREASON")
-	for _, v := range bridge.Dry(snap, cfg.Exposure()) {
+	_, _ = fmt.Fprintln(tw, "ENTITY\tDEVICE\tEXPOSED\tWHY\tROW\tVERDICT\tREASON")
+	verdicts := bridge.Dry(snap, cfg.Exposure())
+	for i := range verdicts {
+		v := &verdicts[i]
 		exposed := "no"
 		if v.Exposed {
 			exposed = "yes"
 		}
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", v.EntityID, v.Device, exposed, v.ExposeReason, v.Row, v.State, v.Reason)
+		_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", v.EntityID, v.Device, exposed, v.ExposeReason, v.Row, v.State, v.Reason)
 	}
 	_ = tw.Flush()
 	if _, err := out.Write(buf.Bytes()); err != nil && !errors.Is(err, io.ErrClosedPipe) {

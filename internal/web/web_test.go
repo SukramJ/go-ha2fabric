@@ -35,7 +35,7 @@ type fakeNode struct {
 	err     error
 }
 
-func (fakeNode) PairingCodes() (string, string, error) {
+func (fakeNode) PairingCodes() (qr, manual string, err error) {
 	return "MT:Y.K9042C00KA0648G00", "34970112332", nil
 }
 
@@ -47,58 +47,59 @@ func (f fakeNode) Health() (node.HealthSample, bool) {
 	return node.HealthSample{Healthy: f.healthy, Note: "listener closed"}, true
 }
 
-func get(t *testing.T, h http.Handler, path, remote string) (*http.Response, []byte) {
+func get(t *testing.T, h http.Handler, path, remote string) (code int, body []byte) {
 	t.Helper()
-	req := httptest.NewRequest(http.MethodGet, path, nil)
+	req := httptest.NewRequest(http.MethodGet, path, http.NoBody)
 	if remote != "" {
 		req.RemoteAddr = remote
 	}
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	res := rec.Result()
+	defer func() { _ = res.Body.Close() }()
 	b, _ := io.ReadAll(res.Body)
-	return res, b
+	return res.StatusCode, b
 }
 
 func TestHealthAndPlan(t *testing.T) {
 	s := New(fakeBridge{bridge.Status{HAConnected: true, Endpoints: 4}}, fakeNode{healthy: true}, Options{})
-	res, b := get(t, s.Handler(), "/api/health", "")
+	code, b := get(t, s.Handler(), "/api/health", "")
 	var h Health
-	if err := json.Unmarshal(b, &h); err != nil || res.StatusCode != 200 || h.Status != "ok" || h.Pairing.Manual != "34970112332" ||
+	if err := json.Unmarshal(b, &h); err != nil || code != http.StatusOK || h.Status != "ok" || h.Pairing.Manual != "34970112332" ||
 		len(h.Fabrics) != 1 || h.Fabrics[0].VendorID != "0xFFF1" || h.Fabrics[0].FabricID != "0000000000000ABC" || !h.Node.Healthy || h.Bridge.Endpoints != 4 {
-		t.Fatalf("health %d %s", res.StatusCode, b)
+		t.Fatalf("health %d %s", code, b)
 	}
-	res, b = get(t, s.Handler(), "/api/plan", "")
+	code, b = get(t, s.Handler(), "/api/plan", "")
 	var p []bridge.Verdict
-	if err := json.Unmarshal(b, &p); err != nil || res.StatusCode != 200 || len(p) != 1 || p[0].Endpoint != 3 {
+	if err := json.Unmarshal(b, &p); err != nil || code != http.StatusOK || len(p) != 1 || p[0].Endpoint != 3 {
 		t.Fatalf("plan %s", b)
 	}
 	// Degraded: Home Assistant away, the node unhealthy, the fabrics unread.
 	s = New(fakeBridge{}, fakeNode{err: errors.New("store closed")}, Options{})
-	res, b = get(t, s.Handler(), "/api/health", "")
-	if res.StatusCode != http.StatusServiceUnavailable || !strings.Contains(string(b), "Home Assistant is not connected") ||
+	code, b = get(t, s.Handler(), "/api/health", "")
+	if code != http.StatusServiceUnavailable || !strings.Contains(string(b), "Home Assistant is not connected") ||
 		!strings.Contains(string(b), "listener closed") || !strings.Contains(string(b), "store closed") {
-		t.Fatalf("degraded %d %s", res.StatusCode, b)
+		t.Fatalf("degraded %d %s", code, b)
 	}
 	// The page and its scripts.
 	for path, want := range map[string]string{"/": "go-ha2fabric", "/qr.js": "qrMatrix", "/app.js": "api/health", "/style.css": "--bg"} {
-		res, b := get(t, s.Handler(), path, "")
-		if res.StatusCode != 200 || !strings.Contains(string(b), want) {
-			t.Errorf("%s: %d", path, res.StatusCode)
+		code, b := get(t, s.Handler(), path, "")
+		if code != http.StatusOK || !strings.Contains(string(b), want) {
+			t.Errorf("%s: %d", path, code)
 		}
 	}
 }
 
 func TestAllow(t *testing.T) {
 	s := New(fakeBridge{}, nil, Options{Allow: []string{"172.30.32.2", "nonsense"}})
-	if res, _ := get(t, s.Handler(), "/api/plan", "172.30.32.2:4321"); res.StatusCode != 200 {
-		t.Fatalf("Ingress proxy refused: %d", res.StatusCode)
+	if code, _ := get(t, s.Handler(), "/api/plan", "172.30.32.2:4321"); code != http.StatusOK {
+		t.Fatalf("Ingress proxy refused: %d", code)
 	}
-	if res, _ := get(t, s.Handler(), "/api/plan", "192.168.1.20:4321"); res.StatusCode != http.StatusForbidden {
-		t.Fatalf("a LAN client was served: %d", res.StatusCode)
+	if code, _ := get(t, s.Handler(), "/api/plan", "192.168.1.20:4321"); code != http.StatusForbidden {
+		t.Fatalf("a LAN client was served: %d", code)
 	}
-	if res, _ := get(t, s.Handler(), "/api/plan", "garbage"); res.StatusCode != http.StatusForbidden {
-		t.Fatalf("an unparsable client was served: %d", res.StatusCode)
+	if code, _ := get(t, s.Handler(), "/api/plan", "garbage"); code != http.StatusForbidden {
+		t.Fatalf("an unparsable client was served: %d", code)
 	}
 }
 
@@ -118,7 +119,7 @@ func TestRun(t *testing.T) {
 		res, err := http.Get("http://" + addr + "/api/health") //nolint:noctx // a test against its own server
 		if err == nil {
 			_ = res.Body.Close()
-			if res.StatusCode != 200 {
+			if res.StatusCode != http.StatusOK {
 				t.Fatalf("health %d", res.StatusCode)
 			}
 			break

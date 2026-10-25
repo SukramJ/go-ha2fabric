@@ -197,7 +197,8 @@ func (s *Server) Run(ctx context.Context) error {
 		ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 30 * time.Second,
 		WriteTimeout: 30 * time.Second, IdleTimeout: 120 * time.Second,
 	}
-	ln, err := net.Listen("tcp", s.opts.Listen)
+	var lc net.ListenConfig
+	ln, err := lc.Listen(ctx, "tcp", s.opts.Listen)
 	if err != nil {
 		return fmt.Errorf("web: %w", err)
 	}
