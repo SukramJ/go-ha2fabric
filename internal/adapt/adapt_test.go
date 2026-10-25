@@ -115,7 +115,7 @@ func TestEntityDescription(t *testing.T) {
 	reg := &ha.EntityEntry{EntityID: "light.kitchen", HasEntityName: true, EntityCategory: "config"}
 	dev := adapt.Device(&ha.DeviceEntry{
 		ID: "dev1", Name: "Kitchen ceiling", NameByUser: "Ceiling", Manufacturer: "Signify", Model: "LCA001",
-		SWVersion: "1.1", AreaID: "kitchen", Identifiers: [][]string{{"hue", "abc"}, {"bad"}}, Connections: [][]string{{"mac", "00:11"}},
+		SWVersion: "1.1", AreaID: "kitchen", Identifiers: []ha.Tuple{{"hue", "abc"}, {"bad"}}, Connections: []ha.Tuple{{"mac", "00:11"}},
 	},
 		map[string]string{"kitchen": "Kitchen"})
 	if dev.UID() == "" || dev.Name.Default != "Ceiling" || dev.SuggestedArea != "Kitchen" || len(dev.Identity.IDs) != 2 || len(dev.Identity.Connections) != 1 {

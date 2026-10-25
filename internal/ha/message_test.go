@@ -4,7 +4,9 @@
 package ha
 
 import (
+	"encoding/json"
 	"errors"
+	"reflect"
 	"testing"
 )
 
@@ -90,4 +92,43 @@ func FuzzDecode(f *testing.F) {
 			}
 		}
 	})
+}
+
+func TestTupleUnmarshal(t *testing.T) {
+	for _, c := range []struct {
+		in   string
+		want Tuple
+		err  bool
+	}{
+		{`["hue","abc"]`, Tuple{"hue", "abc"}, false},
+		{`["tuya", 1234]`, Tuple{"tuya", "1234"}, false},
+		{`["x", 1.5]`, Tuple{"x", "1.5"}, false},
+		{`["x", true]`, Tuple{"x", "true"}, false},
+		{`["x", null]`, Tuple{"x", ""}, false},
+		{`["x", [1, "a"]]`, Tuple{"x", `[1,"a"]`}, false},
+		{`["x", {"a": 1}]`, Tuple{"x", `{"a":1}`}, false},
+		{`["only"]`, Tuple{"only"}, false},
+		{`[]`, Tuple{}, false},
+		{`"not an array"`, nil, true},
+		{`{"a":1}`, nil, true},
+	} {
+		var got Tuple
+		err := json.Unmarshal([]byte(c.in), &got)
+		if c.err {
+			if err == nil {
+				t.Errorf("Unmarshal(%s) = %v, want error", c.in, got)
+			}
+			continue
+		}
+		if err != nil || !reflect.DeepEqual(got, c.want) {
+			t.Errorf("Unmarshal(%s) = %v, %v; want %v", c.in, got, err, c.want)
+		}
+	}
+	var d DeviceEntry
+	if err := json.Unmarshal([]byte(`{"id":"d","identifiers":[["tuya",1234],["tuya","bf"]],"connections":[["mac","00:11"]]}`), &d); err != nil {
+		t.Fatal(err)
+	}
+	if len(d.Identifiers) != 2 || d.Identifiers[0][1] != "1234" || d.Connections[0][1] != "00:11" {
+		t.Fatalf("device %+v", d)
+	}
 }

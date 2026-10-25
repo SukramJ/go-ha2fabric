@@ -222,24 +222,66 @@ func Domain(entityID string) string {
 // 2026.10.3); a child device's entry (:739-755) carries no manufacturer,
 // model or versions.
 type DeviceEntry struct {
-	ID               string     `json:"id"`
-	Name             string     `json:"name"`
-	NameByUser       string     `json:"name_by_user"`
-	Manufacturer     string     `json:"manufacturer"`
-	Model            string     `json:"model"`
-	ModelID          string     `json:"model_id"`
-	SWVersion        string     `json:"sw_version"`
-	HWVersion        string     `json:"hw_version"`
-	SerialNumber     string     `json:"serial_number"`
-	AreaID           string     `json:"area_id"`
-	DisabledBy       string     `json:"disabled_by"`
-	ViaDeviceID      string     `json:"via_device_id"`
-	ConfigurationURL string     `json:"configuration_url"`
-	Identifiers      [][]string `json:"identifiers"`
-	Connections      [][]string `json:"connections"`
+	ID               string `json:"id"`
+	Name             string `json:"name"`
+	NameByUser       string `json:"name_by_user"`
+	Manufacturer     string `json:"manufacturer"`
+	Model            string `json:"model"`
+	ModelID          string `json:"model_id"`
+	SWVersion        string `json:"sw_version"`
+	HWVersion        string `json:"hw_version"`
+	SerialNumber     string `json:"serial_number"`
+	AreaID           string `json:"area_id"`
+	DisabledBy       string `json:"disabled_by"`
+	ViaDeviceID      string `json:"via_device_id"`
+	ConfigurationURL string `json:"configuration_url"`
+	// Identifiers and Connections are the registry's (domain, value) and
+	// (type, value) pairs. The registry declares both as tuple[str, str]
+	// but validates neither element's type (helpers/device_registry.py:411,
+	// :515: attr.ib(converter=set) without a type validator; :373-383
+	// checks only a mac's format), so an integration's int reaches the
+	// wire as a JSON number: Tuple decodes it as its decimal text.
+	Identifiers []Tuple `json:"identifiers"`
+	Connections []Tuple `json:"connections"`
 	// Labels are the device's label ids (helpers/device_registry.py:412,
 	// :616 in dict_repr).
 	Labels []string `json:"labels"`
+}
+
+// Tuple is one identifier or connection of a device entry: the JSON array
+// as strings. A string element is itself, null is "", and any other
+// element (a number, a bool, a nested value) is its JSON text, so an
+// integration's int identifier (which Home Assistant never rejects, see
+// DeviceEntry) decodes as its decimal text rather than failing the whole
+// config/device_registry/list result.
+type Tuple []string
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (t *Tuple) UnmarshalJSON(b []byte) error {
+	var raw []json.RawMessage
+	if err := json.Unmarshal(b, &raw); err != nil {
+		return err
+	}
+	out := make(Tuple, len(raw))
+	for i, r := range raw {
+		r = bytes.TrimSpace(r)
+		switch {
+		case len(r) > 0 && r[0] == '"':
+			if err := json.Unmarshal(r, &out[i]); err != nil {
+				return err
+			}
+		case bytes.Equal(r, []byte("null")):
+			out[i] = ""
+		default:
+			var buf bytes.Buffer
+			if err := json.Compact(&buf, r); err != nil {
+				return err
+			}
+			out[i] = buf.String()
+		}
+	}
+	*t = out
+	return nil
 }
 
 // Area is one entry of config/area_registry/list: AreaEntry.json_fragment
