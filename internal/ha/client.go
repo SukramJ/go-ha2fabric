@@ -466,6 +466,15 @@ func (c *Client) ListAreas(ctx context.Context) ([]Area, error) {
 	return out, err
 }
 
+// ListLabels is config/label_registry/list, which needs no
+// administrator (homeassistant/components/config/label_registry.py:53-67
+// at 2026.10.3).
+func (c *Client) ListLabels(ctx context.Context) ([]Label, error) {
+	var out []Label
+	err := c.Call(ctx, map[string]any{"type": "config/label_registry/list"}, &out)
+	return out, err
+}
+
 // GetStates is get_states: every state the user may read
 // (websocket_api/commands.py:369-385 at 2026.10.3).
 func (c *Client) GetStates(ctx context.Context) ([]State, error) {

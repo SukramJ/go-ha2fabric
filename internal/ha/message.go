@@ -30,11 +30,15 @@ const (
 // The events the daemon subscribes to. homeassistant/const.py:286
 // (state_changed), homeassistant/helpers/entity_registry.py:83-85
 // (entity_registry_updated), homeassistant/helpers/device_registry.py:78-80
-// (device_registry_updated), all at 2026.10.3.
+// (device_registry_updated), homeassistant/helpers/label_registry.py:23-26
+// (label_registry_updated), all at 2026.10.3. Each is in the
+// SUBSCRIBE_ALLOWLIST (homeassistant/auth/permissions/events.py:30-50;
+// label_registry_updated at :46), so none needs an administrator.
 const (
 	EventStateChanged          = "state_changed"
 	EventEntityRegistryUpdated = "entity_registry_updated"
 	EventDeviceRegistryUpdated = "device_registry_updated"
+	EventLabelRegistryUpdated  = "label_registry_updated"
 )
 
 // Message is one message of the WebSocket API, in either direction: the
@@ -155,6 +159,27 @@ type RegistryUpdated struct {
 	Changes     map[string]any `json:"changes,omitempty"`
 }
 
+// LabelRegistryUpdated is the data of label_registry_updated: action
+// create, remove or update and the label's id
+// (homeassistant/helpers/label_registry.py:50-54 at 2026.10.3). A rename
+// is an update with the same label_id (:183-224).
+type LabelRegistryUpdated struct {
+	Action  string `json:"action"`
+	LabelID string `json:"label_id"`
+}
+
+// Label is one entry of config/label_registry/list: _entry_dict
+// (homeassistant/components/config/label_registry.py:155-166 at
+// 2026.10.3; color, created_at, description, icon, label_id, name,
+// modified_at). The daemon reads the id and the name.
+type Label struct {
+	LabelID     string `json:"label_id"`
+	Name        string `json:"name"`
+	Icon        string `json:"icon,omitempty"`
+	Color       string `json:"color,omitempty"`
+	Description string `json:"description,omitempty"`
+}
+
 // EntityEntry is one entry of config/entity_registry/list: RegistryEntry
 // .as_partial_dict (homeassistant/helpers/entity_registry.py:369-403 at
 // 2026.10.3). The list carries no device_class, unit, capabilities or
@@ -162,6 +187,9 @@ type RegistryUpdated struct {
 // attributes carry them. Platform is the integration, the domain is the
 // entity id's prefix.
 type EntityEntry struct {
+	// ID is the registry entry's id (helpers/entity_registry.py:261-263, a
+	// random uuid hex). A rename of the entity id keeps it: the update
+	// evolves the entry with the new entity_id only (:2051-2061, :2104).
 	ID             string                    `json:"id"`
 	EntityID       string                    `json:"entity_id"`
 	UniqueID       string                    `json:"unique_id"`
@@ -175,6 +203,9 @@ type EntityEntry struct {
 	Name           string                    `json:"name"`
 	OriginalName   string                    `json:"original_name"`
 	Options        map[string]map[string]any `json:"options"`
+	// Labels are the entry's label ids (helpers/entity_registry.py:264,
+	// :393 in as_partial_dict).
+	Labels []string `json:"labels"`
 }
 
 // Domain is the entity's domain, the entity id's prefix.
@@ -206,6 +237,9 @@ type DeviceEntry struct {
 	ConfigurationURL string     `json:"configuration_url"`
 	Identifiers      [][]string `json:"identifiers"`
 	Connections      [][]string `json:"connections"`
+	// Labels are the device's label ids (helpers/device_registry.py:412,
+	// :616 in dict_repr).
+	Labels []string `json:"labels"`
 }
 
 // Area is one entry of config/area_registry/list: AreaEntry.json_fragment

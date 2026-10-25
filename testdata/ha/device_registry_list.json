@@ -65,7 +65,9 @@
      "00:15:8d:00:01:02:03:04"
     ]
    ],
-   "labels": [],
+   "labels": [
+    "matter"
+   ],
    "manufacturer": "LUMI",
    "model": "lumi.weather",
    "model_id": null,

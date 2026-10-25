@@ -2,7 +2,8 @@
 // Copyright (C) 2026 SukramJ.
 
 // Package hatest is a fake Home Assistant WebSocket API for the daemon's
-// tests: the auth handshake, the registry lists, get_states, get_config,
+// tests: the auth handshake, the registry lists (entities, devices,
+// areas, labels), get_states, get_config,
 // homeassistant/expose_entity/list, subscribe_events with the events the
 // test raises, ping, and call_service recording. Its data is the recorded
 // fixtures under testdata/ha/ of the repository, each of which names the
@@ -41,6 +42,7 @@ type Server struct {
 	entities []map[string]any
 	devices  []map[string]any
 	areas    []map[string]any
+	labels   []map[string]any
 	states   []map[string]any
 	exposed  map[string]map[string]bool
 	config   map[string]any
@@ -112,6 +114,7 @@ func New(tb testing.TB) *Server {
 		entities: decode[[]map[string]any](tb, "entity_registry_list.json"),
 		devices:  decode[[]map[string]any](tb, "device_registry_list.json"),
 		areas:    decode[[]map[string]any](tb, "area_registry_list.json"),
+		labels:   decode[[]map[string]any](tb, "label_registry_list.json"),
 		states:   decode[[]map[string]any](tb, "get_states.json"),
 		config:   decode[map[string]any](tb, "get_config.json"),
 		conns:    map[*conn]bool{},
@@ -243,6 +246,8 @@ func (s *Server) command(ctx context.Context, c *conn, id int64, cmd map[string]
 		result = clone(s.devices)
 	case "config/area_registry/list":
 		result = clone(s.areas)
+	case "config/label_registry/list":
+		result = clone(s.labels)
 	case "get_states":
 		result = clone(s.states)
 	case "get_config":
@@ -399,6 +404,84 @@ func (s *Server) UpdateEntity(entityID string, changes map[string]any) {
 	}
 	s.mu.Unlock()
 	s.fire(ha.EventEntityRegistryUpdated, map[string]any{"action": "update", "entity_id": entityID, "changes": old})
+}
+
+// UpdateDevice merges changes into a device's registry entry and fires
+// device_registry_updated with action update
+// (homeassistant/helpers/device_registry.py:78-80 and its update event
+// data, device_id and changes, at 2026.10.3).
+func (s *Server) UpdateDevice(deviceID string, changes map[string]any) {
+	s.mu.Lock()
+	old := map[string]any{}
+	for _, d := range s.devices {
+		if d["id"] == deviceID {
+			for k, v := range changes {
+				old[k] = d[k]
+				d[k] = v
+			}
+		}
+	}
+	s.mu.Unlock()
+	s.fire(ha.EventDeviceRegistryUpdated, map[string]any{"action": "update", "device_id": deviceID, "changes": old})
+}
+
+// RenameEntity changes an entity's id in its registry entry and state,
+// keeping the entry's id, and fires entity_registry_updated with
+// old_entity_id (homeassistant/helpers/entity_registry.py:171-189,
+// :2051-2061 at 2026.10.3).
+func (s *Server) RenameEntity(oldID, newID string) {
+	s.mu.Lock()
+	for _, e := range s.entities {
+		if e["entity_id"] == oldID {
+			e["entity_id"] = newID
+		}
+	}
+	for _, st := range s.states {
+		if st["entity_id"] == oldID {
+			st["entity_id"] = newID
+		}
+	}
+	if ex, ok := s.exposed[oldID]; ok {
+		s.exposed[newID] = ex
+		delete(s.exposed, oldID)
+	}
+	s.mu.Unlock()
+	s.fire(ha.EventEntityRegistryUpdated, map[string]any{
+		"action": "update", "entity_id": newID, "old_entity_id": oldID,
+		"changes": map[string]any{"entity_id": oldID},
+	})
+}
+
+// UpdateLabel renames a label and fires label_registry_updated with
+// action update (homeassistant/helpers/label_registry.py:183-224 at
+// 2026.10.3).
+func (s *Server) UpdateLabel(labelID, name string) {
+	s.mu.Lock()
+	for _, l := range s.labels {
+		if l["label_id"] == labelID {
+			l["name"] = name
+		}
+	}
+	s.mu.Unlock()
+	s.fire(ha.EventLabelRegistryUpdated, map[string]any{"action": "update", "label_id": labelID})
+}
+
+// RemoveLabel deletes a label, clears it from every entity and device
+// that carries it, and fires label_registry_updated with action remove
+// (homeassistant/helpers/label_registry.py:169-180; the registries clear
+// the id, helpers/entity_registry.py:2529-2532, at 2026.10.3).
+func (s *Server) RemoveLabel(labelID string) {
+	s.mu.Lock()
+	s.labels = slices.DeleteFunc(s.labels, func(l map[string]any) bool { return l["label_id"] == labelID })
+	for _, list := range [][]map[string]any{s.entities, s.devices} {
+		for _, e := range list {
+			if ls, ok := e["labels"].([]any); ok {
+				e["labels"] = slices.DeleteFunc(slices.Clone(ls), func(v any) bool { return v == labelID })
+			}
+		}
+	}
+	s.mu.Unlock()
+	s.fire(ha.EventLabelRegistryUpdated, map[string]any{"action": "remove", "label_id": labelID})
 }
 
 // SetExposed sets an entity's exposure to Assist, as

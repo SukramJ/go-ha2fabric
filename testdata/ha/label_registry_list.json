@@ -1,0 +1,23 @@
+{
+ "_mirrors": "homeassistant/components/config/label_registry.py:53-67 (config/label_registry/list) and :155-166 (_entry_dict) @2026.10.3",
+ "result": [
+  {
+   "color": "indigo",
+   "created_at": 1761350400.0,
+   "description": "Serve on the Matter bridge",
+   "icon": "mdi:bridge",
+   "label_id": "matter",
+   "name": "Matter",
+   "modified_at": 1761350400.0
+  },
+  {
+   "color": null,
+   "created_at": 1761350400.0,
+   "description": null,
+   "icon": null,
+   "label_id": "not_on_bridge",
+   "name": "Not on bridge",
+   "modified_at": 1761350400.0
+  }
+ ]
+}

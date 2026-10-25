@@ -343,7 +343,9 @@
    "hidden_by": null,
    "icon": null,
    "id": "reg-sensor-outdoor",
-   "labels": [],
+   "labels": [
+    "matter"
+   ],
    "modified_at": 1761350400.0,
    "name": "Outdoor temperature",
    "next_name_part": null,
