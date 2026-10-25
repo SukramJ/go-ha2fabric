@@ -6,5 +6,6 @@ internal/bridge     82
 internal/config     92
 internal/expose     95
 internal/ha         80
+internal/selection  90
 internal/version    75
 internal/web        85
