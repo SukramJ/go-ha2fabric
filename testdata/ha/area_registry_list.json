@@ -1,0 +1,31 @@
+{
+ "_mirrors": "homeassistant/components/config/area_registry.py:23-37 (config/area_registry/list) and homeassistant/helpers/area_registry.py:88-104 (AreaEntry.json_fragment) @2026.10.3",
+ "result": [
+  {
+   "aliases": [],
+   "area_id": "kitchen",
+   "created_at": 1761350400.0,
+   "floor_id": null,
+   "humidity_entity_id": null,
+   "icon": null,
+   "labels": [],
+   "modified_at": 1761350400.0,
+   "name": "Kitchen",
+   "picture": null,
+   "temperature_entity_id": null
+  },
+  {
+   "aliases": [],
+   "area_id": "living_room",
+   "created_at": 1761350400.0,
+   "floor_id": null,
+   "humidity_entity_id": null,
+   "icon": null,
+   "labels": [],
+   "modified_at": 1761350400.0,
+   "name": "Living room",
+   "picture": null,
+   "temperature_entity_id": null
+  }
+ ]
+}

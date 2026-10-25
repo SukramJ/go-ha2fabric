@@ -1,0 +1,291 @@
+{
+ "_mirrors": "homeassistant/components/websocket_api/commands.py:369-385 (get_states) and homeassistant/core.py:1988-2014 (State._as_dict); attributes per homeassistant/helpers/entity.py:1115-1176 and the domains' state attributes (light/__init__.py:447-469,609-660 capability and state attributes, light/const.py:102-122, climate/const.py:114-136,169-191, cover/const.py:18-23, fan/const.py:26-31) @2026.10.3",
+ "result": [
+  {
+   "entity_id": "light.kitchen",
+   "state": "on",
+   "attributes": {
+    "min_color_temp_kelvin": 2000,
+    "max_color_temp_kelvin": 6535,
+    "effect_list": [
+     "None",
+     "candle"
+    ],
+    "supported_color_modes": [
+     "color_temp",
+     "xy"
+    ],
+    "effect": null,
+    "color_mode": "color_temp",
+    "brightness": 180,
+    "color_temp_kelvin": 2702,
+    "hs_color": [
+     28.391,
+     65.659
+    ],
+    "rgb_color": [
+     255,
+     167,
+     87
+    ],
+    "xy_color": [
+     0.526,
+     0.387
+    ],
+    "friendly_name": "Kitchen ceiling",
+    "supported_features": 44
+   },
+   "last_changed": "2026-10-25T08:00:00.000000+00:00",
+   "last_reported": "2026-10-25T08:00:00.000000+00:00",
+   "last_updated": "2026-10-25T08:00:00.000000+00:00",
+   "context": {
+    "id": "01JB0000000000000000000003",
+    "parent_id": null,
+    "user_id": null
+   }
+  },
+  {
+   "entity_id": "sensor.living_temperature",
+   "state": "21.5",
+   "attributes": {
+    "state_class": "measurement",
+    "unit_of_measurement": "°C",
+    "device_class": "temperature",
+    "friendly_name": "Living room climate sensor Temperature"
+   },
+   "last_changed": "2026-10-25T08:00:00.000000+00:00",
+   "last_reported": "2026-10-25T08:00:00.000000+00:00",
+   "last_updated": "2026-10-25T08:00:00.000000+00:00",
+   "context": {
+    "id": "01JB0000000000000000000005",
+    "parent_id": null,
+    "user_id": null
+   }
+  },
+  {
+   "entity_id": "sensor.living_battery",
+   "state": "87",
+   "attributes": {
+    "state_class": "measurement",
+    "unit_of_measurement": "%",
+    "device_class": "battery",
+    "friendly_name": "Living room climate sensor Battery"
+   },
+   "last_changed": "2026-10-25T08:00:00.000000+00:00",
+   "last_reported": "2026-10-25T08:00:00.000000+00:00",
+   "last_updated": "2026-10-25T08:00:00.000000+00:00",
+   "context": {
+    "id": "01JB0000000000000000000001",
+    "parent_id": null,
+    "user_id": null
+   }
+  },
+  {
+   "entity_id": "switch.coffee",
+   "state": "off",
+   "attributes": {
+    "device_class": "outlet",
+    "friendly_name": "Coffee"
+   },
+   "last_changed": "2026-10-25T08:00:00.000000+00:00",
+   "last_reported": "2026-10-25T08:00:00.000000+00:00",
+   "last_updated": "2026-10-25T08:00:00.000000+00:00",
+   "context": {
+    "id": "01JB0000000000000000000003",
+    "parent_id": null,
+    "user_id": null
+   }
+  },
+  {
+   "entity_id": "binary_sensor.front_door",
+   "state": "off",
+   "attributes": {
+    "device_class": "door",
+    "friendly_name": "Front door contact Door"
+   },
+   "last_changed": "2026-10-25T08:00:00.000000+00:00",
+   "last_reported": "2026-10-25T08:00:00.000000+00:00",
+   "last_updated": "2026-10-25T08:00:00.000000+00:00",
+   "context": {
+    "id": "01JB0000000000000000000004",
+    "parent_id": null,
+    "user_id": null
+   }
+  },
+  {
+   "entity_id": "cover.living_blind",
+   "state": "open",
+   "attributes": {
+    "current_position": 70,
+    "device_class": "blind",
+    "friendly_name": "Living room blind",
+    "supported_features": 15
+   },
+   "last_changed": "2026-10-25T08:00:00.000000+00:00",
+   "last_reported": "2026-10-25T08:00:00.000000+00:00",
+   "last_updated": "2026-10-25T08:00:00.000000+00:00",
+   "context": {
+    "id": "01JB0000000000000000000008",
+    "parent_id": null,
+    "user_id": null
+   }
+  },
+  {
+   "entity_id": "climate.hall",
+   "state": "heat",
+   "attributes": {
+    "hvac_modes": [
+     "off",
+     "heat",
+     "auto"
+    ],
+    "min_temp": 5,
+    "max_temp": 25,
+    "target_temp_step": 0.1,
+    "preset_modes": [
+     "away",
+     "home"
+    ],
+    "current_temperature": 20.3,
+    "temperature": 21,
+    "hvac_action": "heating",
+    "preset_mode": "home",
+    "friendly_name": "Hall thermostat",
+    "supported_features": 401
+   },
+   "last_changed": "2026-10-25T08:00:00.000000+00:00",
+   "last_reported": "2026-10-25T08:00:00.000000+00:00",
+   "last_updated": "2026-10-25T08:00:00.000000+00:00",
+   "context": {
+    "id": "01JB0000000000000000000002",
+    "parent_id": null,
+    "user_id": null
+   }
+  },
+  {
+   "entity_id": "lock.front",
+   "state": "locked",
+   "attributes": {
+    "friendly_name": "Front door lock",
+    "supported_features": 1
+   },
+   "last_changed": "2026-10-25T08:00:00.000000+00:00",
+   "last_reported": "2026-10-25T08:00:00.000000+00:00",
+   "last_updated": "2026-10-25T08:00:00.000000+00:00",
+   "context": {
+    "id": "01JB0000000000000000000000",
+    "parent_id": null,
+    "user_id": null
+   }
+  },
+  {
+   "entity_id": "fan.ceiling",
+   "state": "on",
+   "attributes": {
+    "preset_modes": null,
+    "oscillating": false,
+    "percentage": 50,
+    "percentage_step": 33.333333333333336,
+    "preset_mode": null,
+    "friendly_name": "Ceiling fan",
+    "supported_features": 51
+   },
+   "last_changed": "2026-10-25T08:00:00.000000+00:00",
+   "last_reported": "2026-10-25T08:00:00.000000+00:00",
+   "last_updated": "2026-10-25T08:00:00.000000+00:00",
+   "context": {
+    "id": "01JB0000000000000000000001",
+    "parent_id": null,
+    "user_id": null
+   }
+  },
+  {
+   "entity_id": "light.cellar",
+   "state": "unavailable",
+   "attributes": {
+    "restored": true,
+    "friendly_name": "Cellar light",
+    "supported_features": 0
+   },
+   "last_changed": "2026-10-25T08:00:00.000000+00:00",
+   "last_reported": "2026-10-25T08:00:00.000000+00:00",
+   "last_updated": "2026-10-25T08:00:00.000000+00:00",
+   "context": {
+    "id": "01JB0000000000000000000002",
+    "parent_id": null,
+    "user_id": null
+   }
+  },
+  {
+   "entity_id": "light.attic",
+   "state": "off",
+   "attributes": {
+    "supported_color_modes": [
+     "brightness"
+    ],
+    "color_mode": null,
+    "brightness": null,
+    "friendly_name": "Attic light",
+    "supported_features": 0
+   },
+   "last_changed": "2026-10-25T08:00:00.000000+00:00",
+   "last_reported": "2026-10-25T08:00:00.000000+00:00",
+   "last_updated": "2026-10-25T08:00:00.000000+00:00",
+   "context": {
+    "id": "01JB0000000000000000000001",
+    "parent_id": null,
+    "user_id": null
+   }
+  },
+  {
+   "entity_id": "sensor.processor_use",
+   "state": "4",
+   "attributes": {
+    "state_class": "measurement",
+    "unit_of_measurement": "%",
+    "icon": "mdi:cpu-64-bit",
+    "friendly_name": "Processor use"
+   },
+   "last_changed": "2026-10-25T08:00:00.000000+00:00",
+   "last_reported": "2026-10-25T08:00:00.000000+00:00",
+   "last_updated": "2026-10-25T08:00:00.000000+00:00",
+   "context": {
+    "id": "01JB0000000000000000000000",
+    "parent_id": null,
+    "user_id": null
+   }
+  },
+  {
+   "entity_id": "sensor.outdoor",
+   "state": "12.4",
+   "attributes": {
+    "unit_of_measurement": "°C",
+    "device_class": "temperature",
+    "friendly_name": "Outdoor temperature"
+   },
+   "last_changed": "2026-10-25T08:00:00.000000+00:00",
+   "last_reported": "2026-10-25T08:00:00.000000+00:00",
+   "last_updated": "2026-10-25T08:00:00.000000+00:00",
+   "context": {
+    "id": "01JB0000000000000000000004",
+    "parent_id": null,
+    "user_id": null
+   }
+  },
+  {
+   "entity_id": "sensor.legacy_yaml",
+   "state": "3",
+   "attributes": {
+    "friendly_name": "Legacy YAML sensor"
+   },
+   "last_changed": "2026-10-25T08:00:00.000000+00:00",
+   "last_reported": "2026-10-25T08:00:00.000000+00:00",
+   "last_updated": "2026-10-25T08:00:00.000000+00:00",
+   "context": {
+    "id": "01JB0000000000000000000008",
+    "parent_id": null,
+    "user_id": null
+   }
+  }
+ ]
+}

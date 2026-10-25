@@ -1,0 +1,395 @@
+{
+ "_mirrors": "homeassistant/components/config/device_registry.py:75-101 (config/device_registry/list) and homeassistant/helpers/device_registry.py:589-629 (DeviceEntry.dict_repr) @2026.10.3",
+ "result": [
+  {
+   "area_id": "kitchen",
+   "configuration_url": null,
+   "config_entries": [
+    "ce"
+   ],
+   "config_entries_subentries": {
+    "ce": [
+     null
+    ]
+   },
+   "config_entry_id": "ce",
+   "config_subentry_id": null,
+   "connections": [],
+   "created_at": 1761350400.0,
+   "disabled_by": null,
+   "entry_type": null,
+   "hw_version": null,
+   "id": "dev-hue-1",
+   "identifiers": [
+    [
+     "hue",
+     "00:17:88:01:0a:0b:0c:0d-0b"
+    ]
+   ],
+   "labels": [],
+   "manufacturer": "Signify Netherlands B.V.",
+   "model": "LCA001",
+   "model_id": null,
+   "modified_at": 1761350400.0,
+   "name_by_user": null,
+   "name": "Kitchen ceiling",
+   "next_name_part": null,
+   "parent_device_id": null,
+   "primary_config_entry": "ce",
+   "serial_number": null,
+   "sw_version": "1.104.2",
+   "via_device_id": null
+  },
+  {
+   "area_id": "living_room",
+   "configuration_url": null,
+   "config_entries": [
+    "ce"
+   ],
+   "config_entries_subentries": {
+    "ce": [
+     null
+    ]
+   },
+   "config_entry_id": "ce",
+   "config_subentry_id": null,
+   "connections": [],
+   "created_at": 1761350400.0,
+   "disabled_by": null,
+   "entry_type": null,
+   "hw_version": null,
+   "id": "dev-zha-1",
+   "identifiers": [
+    [
+     "zha",
+     "00:15:8d:00:01:02:03:04"
+    ]
+   ],
+   "labels": [],
+   "manufacturer": "LUMI",
+   "model": "lumi.weather",
+   "model_id": null,
+   "modified_at": 1761350400.0,
+   "name_by_user": null,
+   "name": "Living room climate sensor",
+   "next_name_part": null,
+   "parent_device_id": null,
+   "primary_config_entry": "ce",
+   "serial_number": null,
+   "sw_version": "0x0000001e",
+   "via_device_id": null
+  },
+  {
+   "area_id": null,
+   "configuration_url": null,
+   "config_entries": [
+    "ce"
+   ],
+   "config_entries_subentries": {
+    "ce": [
+     null
+    ]
+   },
+   "config_entry_id": "ce",
+   "config_subentry_id": null,
+   "connections": [],
+   "created_at": 1761350400.0,
+   "disabled_by": null,
+   "entry_type": null,
+   "hw_version": null,
+   "id": "dev-shelly-1",
+   "identifiers": [
+    [
+     "shelly",
+     "a8032ab12345"
+    ]
+   ],
+   "labels": [],
+   "manufacturer": "Shelly",
+   "model": "Plus Plug S",
+   "model_id": null,
+   "modified_at": 1761350400.0,
+   "name_by_user": "Coffee",
+   "name": "Coffee machine plug",
+   "next_name_part": null,
+   "parent_device_id": null,
+   "primary_config_entry": "ce",
+   "serial_number": null,
+   "sw_version": "1.4.4",
+   "via_device_id": null
+  },
+  {
+   "area_id": null,
+   "configuration_url": null,
+   "config_entries": [
+    "ce"
+   ],
+   "config_entries_subentries": {
+    "ce": [
+     null
+    ]
+   },
+   "config_entry_id": "ce",
+   "config_subentry_id": null,
+   "connections": [],
+   "created_at": 1761350400.0,
+   "disabled_by": null,
+   "entry_type": null,
+   "hw_version": null,
+   "id": "dev-zha-2",
+   "identifiers": [
+    [
+     "zha",
+     "00:15:8d:00:05:06:07:08"
+    ]
+   ],
+   "labels": [],
+   "manufacturer": "IKEA of Sweden",
+   "model": "PARASOLL",
+   "model_id": null,
+   "modified_at": 1761350400.0,
+   "name_by_user": null,
+   "name": "Front door contact",
+   "next_name_part": null,
+   "parent_device_id": null,
+   "primary_config_entry": "ce",
+   "serial_number": null,
+   "sw_version": "1.0.19",
+   "via_device_id": null
+  },
+  {
+   "area_id": "living_room",
+   "configuration_url": null,
+   "config_entries": [
+    "ce"
+   ],
+   "config_entries_subentries": {
+    "ce": [
+     null
+    ]
+   },
+   "config_entry_id": "ce",
+   "config_subentry_id": null,
+   "connections": [],
+   "created_at": 1761350400.0,
+   "disabled_by": null,
+   "entry_type": null,
+   "hw_version": null,
+   "id": "dev-somfy-1",
+   "identifiers": [
+    [
+     "somfy",
+     "1234567"
+    ]
+   ],
+   "labels": [],
+   "manufacturer": "Somfy",
+   "model": "Oximo io",
+   "model_id": null,
+   "modified_at": 1761350400.0,
+   "name_by_user": null,
+   "name": "Living room blind",
+   "next_name_part": null,
+   "parent_device_id": null,
+   "primary_config_entry": "ce",
+   "serial_number": null,
+   "sw_version": null,
+   "via_device_id": null
+  },
+  {
+   "area_id": null,
+   "configuration_url": null,
+   "config_entries": [
+    "ce"
+   ],
+   "config_entries_subentries": {
+    "ce": [
+     null
+    ]
+   },
+   "config_entry_id": "ce",
+   "config_subentry_id": null,
+   "connections": [],
+   "created_at": 1761350400.0,
+   "disabled_by": null,
+   "entry_type": null,
+   "hw_version": null,
+   "id": "dev-tado-1",
+   "identifiers": [
+    [
+     "tado",
+     "VA1234567890"
+    ]
+   ],
+   "labels": [],
+   "manufacturer": "tado",
+   "model": "VA02",
+   "model_id": null,
+   "modified_at": 1761350400.0,
+   "name_by_user": null,
+   "name": "Hall thermostat",
+   "next_name_part": null,
+   "parent_device_id": null,
+   "primary_config_entry": "ce",
+   "serial_number": null,
+   "sw_version": "57.2",
+   "via_device_id": null
+  },
+  {
+   "area_id": null,
+   "configuration_url": null,
+   "config_entries": [
+    "ce"
+   ],
+   "config_entries_subentries": {
+    "ce": [
+     null
+    ]
+   },
+   "config_entry_id": "ce",
+   "config_subentry_id": null,
+   "connections": [],
+   "created_at": 1761350400.0,
+   "disabled_by": null,
+   "entry_type": null,
+   "hw_version": null,
+   "id": "dev-nuki-1",
+   "identifiers": [
+    [
+     "nuki",
+     "1ABC2DEF"
+    ]
+   ],
+   "labels": [],
+   "manufacturer": "Nuki",
+   "model": "Smart Lock 4.0",
+   "model_id": null,
+   "modified_at": 1761350400.0,
+   "name_by_user": null,
+   "name": "Front door lock",
+   "next_name_part": null,
+   "parent_device_id": null,
+   "primary_config_entry": "ce",
+   "serial_number": null,
+   "sw_version": "4.2.1",
+   "via_device_id": null
+  },
+  {
+   "area_id": null,
+   "configuration_url": null,
+   "config_entries": [
+    "ce"
+   ],
+   "config_entries_subentries": {
+    "ce": [
+     null
+    ]
+   },
+   "config_entry_id": "ce",
+   "config_subentry_id": null,
+   "connections": [],
+   "created_at": 1761350400.0,
+   "disabled_by": null,
+   "entry_type": null,
+   "hw_version": null,
+   "id": "dev-tuya-1",
+   "identifiers": [
+    [
+     "tuya",
+     "bf1234"
+    ]
+   ],
+   "labels": [],
+   "manufacturer": "Tuya",
+   "model": "FS-05",
+   "model_id": null,
+   "modified_at": 1761350400.0,
+   "name_by_user": null,
+   "name": "Ceiling fan",
+   "next_name_part": null,
+   "parent_device_id": null,
+   "primary_config_entry": "ce",
+   "serial_number": null,
+   "sw_version": "1.0.0",
+   "via_device_id": null
+  },
+  {
+   "area_id": null,
+   "configuration_url": null,
+   "config_entries": [
+    "ce"
+   ],
+   "config_entries_subentries": {
+    "ce": [
+     null
+    ]
+   },
+   "config_entry_id": "ce",
+   "config_subentry_id": null,
+   "connections": [],
+   "created_at": 1761350400.0,
+   "disabled_by": null,
+   "entry_type": null,
+   "hw_version": null,
+   "id": "dev-hue-2",
+   "identifiers": [
+    [
+     "hue",
+     "00:17:88:01:0a:0b:0c:0e-0b"
+    ]
+   ],
+   "labels": [],
+   "manufacturer": "Signify Netherlands B.V.",
+   "model": "LWB010",
+   "model_id": null,
+   "modified_at": 1761350400.0,
+   "name_by_user": null,
+   "name": "Cellar light",
+   "next_name_part": null,
+   "parent_device_id": null,
+   "primary_config_entry": "ce",
+   "serial_number": null,
+   "sw_version": "1.104.2",
+   "via_device_id": null
+  },
+  {
+   "area_id": null,
+   "configuration_url": null,
+   "config_entries": [
+    "ce"
+   ],
+   "config_entries_subentries": {
+    "ce": [
+     null
+    ]
+   },
+   "config_entry_id": "ce",
+   "config_subentry_id": null,
+   "connections": [],
+   "created_at": 1761350400.0,
+   "disabled_by": null,
+   "entry_type": null,
+   "hw_version": null,
+   "id": "dev-hue-3",
+   "identifiers": [
+    [
+     "hue",
+     "00:17:88:01:0a:0b:0c:0f-0b"
+    ]
+   ],
+   "labels": [],
+   "manufacturer": "Signify Netherlands B.V.",
+   "model": "LWB010",
+   "model_id": null,
+   "modified_at": 1761350400.0,
+   "name_by_user": null,
+   "name": "Attic light",
+   "next_name_part": null,
+   "parent_device_id": null,
+   "primary_config_entry": "ce",
+   "serial_number": null,
+   "sw_version": "1.104.2",
+   "via_device_id": null
+  }
+ ]
+}

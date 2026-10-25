@@ -1,0 +1,37 @@
+{
+ "_mirrors": "homeassistant/components/homeassistant/exposed_entities.py:414-442 (homeassistant/expose_entity/list) @2026.10.3",
+ "result": {
+  "exposed_entities": {
+   "light.kitchen": {
+    "conversation": true
+   },
+   "sensor.living_temperature": {
+    "conversation": true
+   },
+   "switch.coffee": {
+    "conversation": true
+   },
+   "binary_sensor.front_door": {
+    "conversation": true
+   },
+   "cover.living_blind": {
+    "conversation": true
+   },
+   "climate.hall": {
+    "conversation": true
+   },
+   "lock.front": {
+    "conversation": true
+   },
+   "fan.ceiling": {
+    "conversation": true
+   },
+   "light.cellar": {
+    "conversation": true
+   },
+   "light.attic": {
+    "conversation": true
+   }
+  }
+ }
+}

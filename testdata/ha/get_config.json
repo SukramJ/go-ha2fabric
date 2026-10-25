@@ -1,0 +1,39 @@
+{
+ "_mirrors": "homeassistant/components/websocket_api/commands.py:658-666 (get_config) and homeassistant/core_config.py:685-717, homeassistant/util/unit_system.py:213-224 @2026.10.3",
+ "result": {
+  "allowlist_external_dirs": [],
+  "allowlist_external_urls": [],
+  "components": [
+   "light"
+  ],
+  "config_dir": "/config",
+  "config_source": "storage",
+  "country": "DE",
+  "currency": "EUR",
+  "debug": false,
+  "elevation": 0,
+  "external_url": null,
+  "internal_url": null,
+  "language": "en",
+  "latitude": 52.37,
+  "location_name": "Home",
+  "longitude": 4.89,
+  "radius": 100,
+  "recovery_mode": false,
+  "safe_mode": false,
+  "state": "RUNNING",
+  "time_zone": "Europe/Berlin",
+  "unit_system": {
+   "length": "km",
+   "accumulated_precipitation": "mm",
+   "area": "m²",
+   "mass": "g",
+   "pressure": "Pa",
+   "temperature": "°C",
+   "volume": "L",
+   "wind_speed": "m/s"
+  },
+  "version": "2026.10.3",
+  "whitelist_external_dirs": []
+ }
+}

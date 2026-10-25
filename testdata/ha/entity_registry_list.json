@@ -1,0 +1,357 @@
+{
+ "_mirrors": "homeassistant/components/config/entity_registry.py:39-64 (config/entity_registry/list) and homeassistant/helpers/entity_registry.py:369-403 (RegistryEntry.as_partial_dict) @2026.10.3",
+ "result": [
+  {
+   "area_id": null,
+   "categories": {},
+   "config_entry_id": "ce-hue",
+   "config_subentry_id": null,
+   "created_at": 1761350400.0,
+   "device_id": "dev-hue-1",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "light.kitchen",
+   "has_entity_name": true,
+   "hidden_by": null,
+   "icon": null,
+   "id": "reg-light-kitchen",
+   "labels": [],
+   "modified_at": 1761350400.0,
+   "name": null,
+   "next_name_part": null,
+   "options": {
+    "conversation": {
+     "should_expose": true
+    }
+   },
+   "original_name": null,
+   "platform": "hue",
+   "translation_key": null,
+   "unique_id": "hue-1-light"
+  },
+  {
+   "area_id": null,
+   "categories": {},
+   "config_entry_id": "ce-zha",
+   "config_subentry_id": null,
+   "created_at": 1761350400.0,
+   "device_id": "dev-zha-1",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.living_temperature",
+   "has_entity_name": true,
+   "hidden_by": null,
+   "icon": null,
+   "id": "reg-sensor-living_temperature",
+   "labels": [],
+   "modified_at": 1761350400.0,
+   "name": null,
+   "next_name_part": null,
+   "options": {
+    "conversation": {
+     "should_expose": true
+    }
+   },
+   "original_name": "Temperature",
+   "platform": "zha",
+   "translation_key": null,
+   "unique_id": "zha-1-temp"
+  },
+  {
+   "area_id": null,
+   "categories": {},
+   "config_entry_id": "ce-zha",
+   "config_subentry_id": null,
+   "created_at": 1761350400.0,
+   "device_id": "dev-zha-1",
+   "disabled_by": null,
+   "entity_category": "diagnostic",
+   "entity_id": "sensor.living_battery",
+   "has_entity_name": true,
+   "hidden_by": null,
+   "icon": null,
+   "id": "reg-sensor-living_battery",
+   "labels": [],
+   "modified_at": 1761350400.0,
+   "name": null,
+   "next_name_part": null,
+   "options": {},
+   "original_name": "Battery",
+   "platform": "zha",
+   "translation_key": null,
+   "unique_id": "zha-1-batt"
+  },
+  {
+   "area_id": null,
+   "categories": {},
+   "config_entry_id": "ce-shelly",
+   "config_subentry_id": null,
+   "created_at": 1761350400.0,
+   "device_id": "dev-shelly-1",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "switch.coffee",
+   "has_entity_name": true,
+   "hidden_by": null,
+   "icon": null,
+   "id": "reg-switch-coffee",
+   "labels": [],
+   "modified_at": 1761350400.0,
+   "name": null,
+   "next_name_part": null,
+   "options": {
+    "conversation": {
+     "should_expose": true
+    }
+   },
+   "original_name": null,
+   "platform": "shelly",
+   "translation_key": null,
+   "unique_id": "shelly-1-relay"
+  },
+  {
+   "area_id": null,
+   "categories": {},
+   "config_entry_id": "ce-zha",
+   "config_subentry_id": null,
+   "created_at": 1761350400.0,
+   "device_id": "dev-zha-2",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "binary_sensor.front_door",
+   "has_entity_name": true,
+   "hidden_by": null,
+   "icon": null,
+   "id": "reg-binary_sensor-front_door",
+   "labels": [],
+   "modified_at": 1761350400.0,
+   "name": null,
+   "next_name_part": null,
+   "options": {
+    "conversation": {
+     "should_expose": true
+    }
+   },
+   "original_name": "Door",
+   "platform": "zha",
+   "translation_key": null,
+   "unique_id": "zha-2-contact"
+  },
+  {
+   "area_id": null,
+   "categories": {},
+   "config_entry_id": "ce-somfy",
+   "config_subentry_id": null,
+   "created_at": 1761350400.0,
+   "device_id": "dev-somfy-1",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "cover.living_blind",
+   "has_entity_name": true,
+   "hidden_by": null,
+   "icon": null,
+   "id": "reg-cover-living_blind",
+   "labels": [],
+   "modified_at": 1761350400.0,
+   "name": null,
+   "next_name_part": null,
+   "options": {
+    "conversation": {
+     "should_expose": true
+    }
+   },
+   "original_name": null,
+   "platform": "somfy",
+   "translation_key": null,
+   "unique_id": "somfy-1"
+  },
+  {
+   "area_id": null,
+   "categories": {},
+   "config_entry_id": "ce-tado",
+   "config_subentry_id": null,
+   "created_at": 1761350400.0,
+   "device_id": "dev-tado-1",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "climate.hall",
+   "has_entity_name": true,
+   "hidden_by": null,
+   "icon": null,
+   "id": "reg-climate-hall",
+   "labels": [],
+   "modified_at": 1761350400.0,
+   "name": null,
+   "next_name_part": null,
+   "options": {
+    "conversation": {
+     "should_expose": true
+    }
+   },
+   "original_name": null,
+   "platform": "tado",
+   "translation_key": null,
+   "unique_id": "tado-1"
+  },
+  {
+   "area_id": null,
+   "categories": {},
+   "config_entry_id": "ce-nuki",
+   "config_subentry_id": null,
+   "created_at": 1761350400.0,
+   "device_id": "dev-nuki-1",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "lock.front",
+   "has_entity_name": true,
+   "hidden_by": null,
+   "icon": null,
+   "id": "reg-lock-front",
+   "labels": [],
+   "modified_at": 1761350400.0,
+   "name": null,
+   "next_name_part": null,
+   "options": {
+    "conversation": {
+     "should_expose": true
+    }
+   },
+   "original_name": null,
+   "platform": "nuki",
+   "translation_key": null,
+   "unique_id": "nuki-1"
+  },
+  {
+   "area_id": null,
+   "categories": {},
+   "config_entry_id": "ce-tuya",
+   "config_subentry_id": null,
+   "created_at": 1761350400.0,
+   "device_id": "dev-tuya-1",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "fan.ceiling",
+   "has_entity_name": true,
+   "hidden_by": null,
+   "icon": null,
+   "id": "reg-fan-ceiling",
+   "labels": [],
+   "modified_at": 1761350400.0,
+   "name": null,
+   "next_name_part": null,
+   "options": {
+    "conversation": {
+     "should_expose": true
+    }
+   },
+   "original_name": null,
+   "platform": "tuya",
+   "translation_key": null,
+   "unique_id": "tuya-1"
+  },
+  {
+   "area_id": null,
+   "categories": {},
+   "config_entry_id": "ce-hue",
+   "config_subentry_id": null,
+   "created_at": 1761350400.0,
+   "device_id": "dev-hue-2",
+   "disabled_by": "user",
+   "entity_category": null,
+   "entity_id": "light.cellar",
+   "has_entity_name": true,
+   "hidden_by": null,
+   "icon": null,
+   "id": "reg-light-cellar",
+   "labels": [],
+   "modified_at": 1761350400.0,
+   "name": null,
+   "next_name_part": null,
+   "options": {
+    "conversation": {
+     "should_expose": true
+    }
+   },
+   "original_name": null,
+   "platform": "hue",
+   "translation_key": null,
+   "unique_id": "hue-2-light"
+  },
+  {
+   "area_id": null,
+   "categories": {},
+   "config_entry_id": "ce-hue",
+   "config_subentry_id": null,
+   "created_at": 1761350400.0,
+   "device_id": "dev-hue-3",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "light.attic",
+   "has_entity_name": true,
+   "hidden_by": "user",
+   "icon": null,
+   "id": "reg-light-attic",
+   "labels": [],
+   "modified_at": 1761350400.0,
+   "name": null,
+   "next_name_part": null,
+   "options": {
+    "conversation": {
+     "should_expose": true
+    }
+   },
+   "original_name": null,
+   "platform": "hue",
+   "translation_key": null,
+   "unique_id": "hue-3-light"
+  },
+  {
+   "area_id": null,
+   "categories": {},
+   "config_entry_id": "ce-systemmonitor",
+   "config_subentry_id": null,
+   "created_at": 1761350400.0,
+   "device_id": null,
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.processor_use",
+   "has_entity_name": true,
+   "hidden_by": null,
+   "icon": null,
+   "id": "reg-sensor-processor_use",
+   "labels": [],
+   "modified_at": 1761350400.0,
+   "name": null,
+   "next_name_part": null,
+   "options": {},
+   "original_name": "Processor use",
+   "platform": "systemmonitor",
+   "translation_key": null,
+   "unique_id": "sysmon-cpu"
+  },
+  {
+   "area_id": null,
+   "categories": {},
+   "config_entry_id": "ce-template",
+   "config_subentry_id": null,
+   "created_at": 1761350400.0,
+   "device_id": null,
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.outdoor",
+   "has_entity_name": true,
+   "hidden_by": null,
+   "icon": null,
+   "id": "reg-sensor-outdoor",
+   "labels": [],
+   "modified_at": 1761350400.0,
+   "name": "Outdoor temperature",
+   "next_name_part": null,
+   "options": {},
+   "original_name": null,
+   "platform": "template",
+   "translation_key": null,
+   "unique_id": "tmpl-outdoor"
+  }
+ ]
+}
