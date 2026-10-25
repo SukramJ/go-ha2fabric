@@ -5,6 +5,12 @@ tracks the project release; the project's
 [changelog.md](https://github.com/SukramJ/go-ha2fabric/blob/main/changelog.md)
 has the details.
 
+## 0.2.1
+
+- The add-on has its icon and logo in the store.
+- A device whose integration registered a numeric identifier no longer
+  stops the sync (`bridge.sync_failed`, "cannot unmarshal number").
+
 ## 0.2.0
 
 - Labels: `include_labels` and `exclude_labels` serve or hide the entities
