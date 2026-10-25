@@ -1,0 +1,7 @@
+{
+ "_mirrors": "homeassistant/components/websocket_api/auth.py:38 (AUTH_OK_MESSAGE) @2026.10.3",
+ "message": {
+  "type": "auth_ok",
+  "ha_version": "2026.10.3"
+ }
+}

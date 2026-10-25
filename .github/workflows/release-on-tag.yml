@@ -1,9 +1,17 @@
 name: "Release: Create from Tag"
+# A tag vX.Y.Z builds the release matrix (linux/amd64, linux/arm64,
+# linux/arm/v7) with `make release` — the same command as a local dry run —
+# and attaches the archives and SHA256SUMS to a GitHub release whose notes
+# are the changelog.md section. The tag must equal internal/version's
+# Version and addon/config.yaml's version, and changelog.md must have its
+# section: the job refuses the tag otherwise. The images are
+# docker-build-push.yml's and addon-image.yml's. The template is the sibling
+# repositories' release-on-tag.yml (go-zendure2mqtt, go-fabric-server).
 # yamllint disable-line rule:truthy
 on:
   push:
     tags:
-      - '**'
+      - 'v*'
 
 permissions:
   contents: write
@@ -13,18 +21,44 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GO_VERSION: "1.27.2"
+  GO_VERSION: "1.27.3"
 
 jobs:
   create_release:
-    # Disabled until the first release: there is no `make release` yet.
-    # The sibling repositories' job (cross-compile, SHA256SUMS, notes from
-    # changelog.md, softprops/action-gh-release) is the template.
-    if: false && github.repository_owner == 'SukramJ'
+    if: github.repository_owner == 'SukramJ'
     name: Create GitHub Release (${{ github.ref_name }})
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - run: echo "release pipeline arrives with the first release"
+      - name: Determine version from tag
+        run: |
+          TAG_NAME="${GITHUB_REF_NAME}"
+          VERSION="${TAG_NAME#v}"
+          echo "TAG_NAME=${TAG_NAME}" >> "$GITHUB_ENV"
+          echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
+      - uses: actions/setup-go@v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: The tag matches internal/version, addon/config.yaml and changelog.md
+        run: |
+          want=$(awk -F'"' '/^[[:space:]]*Version = /{print $2; exit}' internal/version/version.go)
+          test "$want" = "$VERSION" || { echo "tag $VERSION, internal/version $want"; exit 1; }
+          make version-check
+      - name: Build release archives + extract notes
+        run: make release RELEASE_VERSION="${VERSION}"
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64  # v3
+        with:
+          tag_name: ${{ env.TAG_NAME }}
+          name: ${{ env.TAG_NAME }}
+          body_path: dist/RELEASE_NOTES.md
+          draft: false
+          prerelease: false
+          files: |
+            dist/*.tar.gz
+            dist/SHA256SUMS
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

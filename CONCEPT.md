@@ -1,9 +1,9 @@
 # go-ha2fabric: concept
 
-Status: concept, not started. Written 2026-10-24 from go-fabric's concept
-v6 part B (2026-10-20) and the owner's decisions of 2026-10-24 (go-fabric
-concept v8: `go-fabric-server`; evening: this daemon embeds go-fabric). Changes to this document follow those
-decisions; the go-fabric roadmap names the milestone in which work starts.
+Status: implemented in 0.1.0 (brief H2, 2026-10-25). Written 2026-10-24
+from go-fabric's concept v6 part B (2026-10-20) and the owner's decisions
+of 2026-10-24 (go-fabric concept v8: `go-fabric-server`; evening: this
+daemon embeds go-fabric). Changes to this document follow those decisions.
 
 ## Purpose
 
@@ -19,10 +19,9 @@ go-fabric's cookbook "Embed in a daemon" (wave CE): one process, one store,
 one add-on, no protocol between two Go programs.
 
 - **Home Assistant side.** The Home Assistant WebSocket API: the entity
-  and device registries decide what is exposed; `state_changed` events
-  carry the values; `call_service` executes a controller's command. The
-  exposure follows Home Assistant's own "expose" settings where they
-  exist, with an allow list in the add-on configuration as the fallback.
+  and device registries and the exposure list decide what is exposed;
+  `state_changed` events carry the values; `call_service` executes a
+  controller's command. The exposure rule is decided below.
 - **Matter side.** go-fabric's `node` facade and device kit: each exposed
   entity is a typed declaration under the node's Aggregator; a controller's
   invoke or write reaches the daemon as a handler call and becomes a
@@ -45,14 +44,15 @@ Against go-fabric's in-process test package (`fabrictest`, an in-process
 controller): the bridge is commissioned, a Home Assistant entity appears as an
 endpoint, a controller's invoke becomes a `call_service`, a
 `state_changed` becomes an attribute report. A recorded Home Assistant
-WebSocket session is the fixture; no live Home Assistant in CI.
+WebSocket session is the fixture (`testdata/ha/`, each file citing the
+Home Assistant core lines it mirrors); no live Home Assistant in CI.
 
 ## Packaging
 
 A distroless, non-root image; a Home Assistant add-on (`addon/`,
 `repository.yaml`) in the form of the `go-*2mqtt` family; release
-binaries for linux amd64, arm64 and arm/v7. The add-on directory and its
-workflows exist here as disabled placeholders until the first release.
+binaries for linux amd64, arm64 and arm/v7. The add-on runs on the host's
+network (mDNS and UDP 5540) and serves its web UI through Ingress only.
 
 ## Name
 
@@ -69,14 +69,20 @@ renamed the same day; GitHub redirects the old name.
 3. This repository starts: the Home Assistant client, the registry
    adapter onto go-hamqtt's vocabulary, the embedding, the add-on.
 
-## Open decisions
+## Decided (brief H2, 2026-10-25)
 
-- Which Home Assistant exposure settings are honoured and in which order
-  (the Matter integration's "expose" flags, the conversation exposure,
-  an add-on allow list).
-- The first supported component set (concept v6 named `light`, `switch`,
-  `cover`, `climate`, `lock`, `fan`, `sensor`, `binary_sensor`; the table
-  decides).
+- **Exposure.** An entity is exposed when it is exposed to Assist
+  (`conversation`) in `homeassistant/expose_entity/list`, or named in the
+  `include` option (entity ids or globs), and not named in `exclude`; a
+  disabled or hidden registry entry never is. Home Assistant has no
+  Matter-specific expose flag (its assistants are `conversation`,
+  `cloud.alexa` and `cloud.google_assistant`, core
+  `homeassistant/exposed_entities.py:25` at 2026.10.3); Assist's list is
+  the one every installation has. The daemon never writes exposure
+  settings. `--dump-plan` and the web UI show every candidate's verdict.
+- **The component set** is go-hamapping's table at `v0.1.0`: `light`,
+  `switch`, `cover`, `climate`, `lock`, `fan`, `sensor`, `binary_sensor`;
+  the daemon adds none of its own.
 
 ## References
 

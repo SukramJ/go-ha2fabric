@@ -1,0 +1,7 @@
+{
+ "_mirrors": "homeassistant/components/websocket_api/auth.py:44-46,126 (auth_invalid_message) @2026.10.3",
+ "message": {
+  "type": "auth_invalid",
+  "message": "Invalid access token or password"
+ }
+}

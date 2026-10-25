@@ -1,0 +1,6 @@
+# Home Assistant add-on repository descriptor: add this GitHub repository under
+# Settings -> Add-ons -> Add-on Store -> Repositories; the Supervisor then finds
+# the add-on in addon/.
+name: go-ha2fabric Add-ons
+url: https://github.com/SukramJ/go-ha2fabric
+maintainer: SukramJ <sukramj@icloud.com>

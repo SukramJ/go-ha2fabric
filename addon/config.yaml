@@ -1,0 +1,72 @@
+# Home Assistant add-on manifest for go-ha2fabric.
+#
+# version MUST equal internal/version's Version and the published image tag
+# (ghcr.io/sukramj/go-ha2fabric-addon-{arch}); the release workflow refuses a
+# tag where they differ.
+name: go-ha2fabric
+version: "0.1.0"
+slug: go-ha2fabric
+description: >-
+  Serves Home Assistant entities to Matter controllers (Apple Home, Google
+  Home, Amazon Alexa) as one bridge. Uncertified: a controller may warn.
+url: https://github.com/SukramJ/go-ha2fabric
+arch:
+  - amd64
+  - aarch64
+  - armv7
+
+# Per-arch add-on image (HA base + bashio + run.sh) published by
+# .github/workflows/addon-image.yml; the Supervisor substitutes {arch} and
+# pulls <image>:<version>. The distroless daemon image
+# (ghcr.io/sukramj/go-ha2fabric) runs the binary directly and is not an
+# add-on image. Remove this key to build addon/Dockerfile on the host.
+image: "ghcr.io/sukramj/go-ha2fabric-addon-{arch}"
+
+# The HA base image ships s6-overlay as its init.
+init: false
+
+# The add-on reaches Core's WebSocket API through the Supervisor's proxy
+# (ws://supervisor/core/websocket) with SUPERVISOR_TOKEN, and acts there as
+# an administrator.
+homeassistant_api: true
+
+# Matter needs the host's network: the controllers find the bridge over mDNS
+# and talk to it over UDP (port, default 5540) on the LAN, IPv6 included. With
+# host networking the web UI listens on the host too; the daemon serves it only
+# to the Ingress proxy (172.30.32.2), as the Supervisor's Ingress requires.
+host_network: true
+
+# The node's store is a SQLite file under /data; a cold backup stops the
+# add-on first, so the backup holds a consistent store.
+backup: cold
+
+ingress: true
+ingress_port: 8486
+panel_icon: mdi:bridge
+panel_title: go-ha2fabric
+
+options:
+  port: 5540
+  passcode: 20202021
+  discriminator: 3840
+  vendor_id: 65521
+  product_id: 32769
+  label: go-ha2fabric
+  expose_assist: true
+  include: []
+  exclude: []
+  log_level: info
+
+schema:
+  port: port
+  passcode: int(1,99999998)
+  discriminator: int(0,4095)
+  vendor_id: int(1,65535)
+  product_id: int(1,65535)
+  label: str
+  expose_assist: bool
+  include:
+    - str
+  exclude:
+    - str
+  log_level: list(debug|info|warn|error)

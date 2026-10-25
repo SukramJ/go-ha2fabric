@@ -1,0 +1,13 @@
+# Build configuration of the local-build fallback: the Supervisor reads it only
+# when addon/config.yaml has no `image:` key. build_from maps each architecture
+# to the Home Assistant base image that provides bashio and with-contenv for
+# script/run.sh.
+build_from:
+  aarch64: "ghcr.io/home-assistant/aarch64-base:latest"
+  amd64: "ghcr.io/home-assistant/amd64-base:latest"
+  armv7: "ghcr.io/home-assistant/armv7-base:latest"
+
+labels:
+  org.opencontainers.image.title: "go-ha2fabric"
+  org.opencontainers.image.source: "https://github.com/SukramJ/go-ha2fabric"
+  org.opencontainers.image.licenses: "Apache-2.0"

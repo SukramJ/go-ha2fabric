@@ -1,0 +1,10 @@
+# Statement coverage floors per package (script/coverfloor). A ratchet:
+# raise a floor with the change that raises the coverage.
+cmd/ha2fabric       75
+internal/adapt      90
+internal/bridge     82
+internal/config     92
+internal/expose     95
+internal/ha         80
+internal/version    75
+internal/web        85
