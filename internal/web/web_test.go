@@ -11,13 +11,11 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	fabricui "github.com/SukramJ/go-fabric-ui/fabricui"
 	"github.com/SukramJ/go-fabric/node"
 
 	"github.com/SukramJ/go-ha2fabric/internal/bridge"
@@ -62,7 +60,8 @@ func get(t *testing.T, h http.Handler, path, remote string) (code int, body []by
 }
 
 func TestHealthAndPlan(t *testing.T) {
-	s := New(fakeBridge{bridge.Status{HAConnected: true, LastSync: time.Now(), Endpoints: 4}}, fakeNode{healthy: true}, Options{})
+	admin := Options{UI: fabricui.Options{Admin: func(*http.Request) bool { return true }}}
+	s := New(fakeBridge{bridge.Status{HAConnected: true, LastSync: time.Now(), Endpoints: 4}}, fakeNode{healthy: true}, admin)
 	code, b := get(t, s.Handler(), "/api/health", "")
 	var h Health
 	if err := json.Unmarshal(b, &h); err != nil || code != http.StatusOK || h.Status != "ok" || h.Pairing.Manual != "34970112332" ||
@@ -73,6 +72,15 @@ func TestHealthAndPlan(t *testing.T) {
 	var p []bridge.Verdict
 	if err := json.Unmarshal(b, &p); err != nil || code != http.StatusOK || len(p) != 1 || p[0].Endpoint != 3 {
 		t.Fatalf("plan %s", b)
+	}
+	// Without the administrator the alias shows no pairing code (the
+	// UI's token mode, Admin nil, and the read-only UI alike).
+	for _, o := range []Options{{}, {UI: fabricui.Options{Admin: ReadOnly}}} {
+		s := New(fakeBridge{bridge.Status{HAConnected: true, LastSync: time.Now()}}, fakeNode{healthy: true}, o)
+		_, b := get(t, s.Handler(), "/api/health", "")
+		if strings.Contains(string(b), "34970112332") {
+			t.Fatalf("pairing code without the administrator: %s", b)
+		}
 	}
 	// Connected but not read yet.
 	s = New(fakeBridge{bridge.Status{HAConnected: true}}, nil, Options{})
@@ -86,11 +94,22 @@ func TestHealthAndPlan(t *testing.T) {
 		!strings.Contains(string(b), "listener closed") || !strings.Contains(string(b), "store closed") {
 		t.Fatalf("degraded %d %s", code, b)
 	}
-	// The page and its scripts.
-	for path, want := range map[string]string{"/": "go-ha2fabric", "/qr.js": "qrMatrix", "/app.js": "api/health", "/style.css": "--bg"} {
-		code, b := get(t, s.Handler(), path, "")
-		if code != http.StatusOK || !strings.Contains(string(b), want) {
-			t.Errorf("%s: %d", path, code)
+	// go-fabric-ui's shell and its API.
+	for path, want := range map[string]string{"/": "<html", "/#/node/pair": "<html", "/api/v1/node/status": `"enabled"`, "/api/v1/nope": "not_found"} {
+		_, b := get(t, s.Handler(), path, "")
+		if !strings.Contains(string(b), want) {
+			t.Errorf("%s: %.200s", path, b)
+		}
+	}
+}
+
+func TestAdmin(t *testing.T) {
+	ingress := From("172.30.32.2")
+	for remote, want := range map[string]bool{"172.30.32.2:4000": true, "172.30.32.3:4000": false, "garbage": false} {
+		req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+		req.RemoteAddr = remote
+		if ingress(req) != want || ReadOnly(req) {
+			t.Errorf("%s: From %v, want %v", remote, ingress(req), want)
 		}
 	}
 }
@@ -140,51 +159,5 @@ func TestRun(t *testing.T) {
 	}
 	if err := New(fakeBridge{}, nil, Options{Listen: "256.0.0.1:1"}).Run(context.Background()); err == nil {
 		t.Fatal("a bad address served")
-	}
-}
-
-// TestQRMatchesReference runs the page's encoder (assets/qr.js) under
-// node and compares its matrix, per mask, with the reference matrices of
-// python-qrcode in testdata/qr_golden.json. Without node the test skips:
-// CI's ubuntu runner has it.
-func TestQRMatchesReference(t *testing.T) {
-	nodeBin, err := exec.LookPath("node")
-	if err != nil {
-		t.Skip("node is not installed")
-	}
-	b, err := os.ReadFile(filepath.Join("testdata", "qr_golden.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var golden struct {
-		Cases map[string]map[string][]string `json:"cases"`
-	}
-	if err := json.Unmarshal(b, &golden); err != nil {
-		t.Fatal(err)
-	}
-	qr, _ := filepath.Abs(filepath.Join("assets", "qr.js"))
-	script := `const {qrMatrix} = require(process.argv[1]); const out = {};
-for (let m = 0; m < 8; m++) out[m] = qrMatrix(process.argv[2], m).map(r => r.map(v => v ? 1 : 0).join(""));
-out.auto = qrMatrix(process.argv[2]).map(r => r.map(v => v ? 1 : 0).join(""));
-console.log(JSON.stringify(out));`
-	for text, masks := range golden.Cases {
-		out, err := exec.Command(nodeBin, "-e", script, qr, text).Output() //nolint:gosec // the test's own script
-		if err != nil {
-			t.Fatalf("node: %v", err)
-		}
-		var got map[string][]string
-		if err := json.Unmarshal(out, &got); err != nil {
-			t.Fatal(err)
-		}
-		auto := false
-		for mask, want := range masks {
-			if strings.Join(got[mask], "\n") != strings.Join(want, "\n") {
-				t.Errorf("%q mask %s differs from the reference", text, mask)
-			}
-			auto = auto || strings.Join(got["auto"], "\n") == strings.Join(want, "\n")
-		}
-		if !auto {
-			t.Errorf("%q: the chosen mask is none of the reference's", text)
-		}
 	}
 }

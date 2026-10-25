@@ -1,37 +1,34 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (C) 2026 SukramJ.
 
-// Package web serves the daemon's one read-only page (through Home
-// Assistant's Ingress in the add-on): the pairing QR code — rendered in
-// the browser from the payload text by an embedded encoder, so no image
-// dependency — and the manual code, the commissioned fabrics, the
-// candidate entities with their verdicts and reasons, the Home Assistant
-// connection and the node's health. GET /api/health and GET /api/plan
-// serve the same as JSON. The page's URLs are relative, so it works under
-// Ingress's path prefix.
+// Package web serves the daemon's web interface (through Home
+// Assistant's Ingress in the add-on): go-fabric-ui's handler
+// (fabricui.Handler at v0.1.0: the node pages — health, pairing and the
+// commissioning window, fabrics, the entity selection, endpoints,
+// diagnostics — and their API under /api/v1), behind the client filter.
+// GET /api/health and GET /api/plan, the JSON of 0.1.0, stay as aliases
+// for the 0.2 releases and go in 0.3.0. The UI's URLs are relative, so it
+// works under Ingress's path prefix (go-fabric-ui docs/embedding.md,
+// "Behind an Ingress").
 package web
 
 import (
 	"context"
-	"embed"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/fs"
 	"log/slog"
 	"net"
 	"net/http"
 	"slices"
 	"time"
 
+	fabricui "github.com/SukramJ/go-fabric-ui/fabricui"
 	"github.com/SukramJ/go-fabric/node"
 
 	"github.com/SukramJ/go-ha2fabric/internal/bridge"
 	"github.com/SukramJ/go-ha2fabric/internal/version"
 )
-
-//go:embed assets
-var assets embed.FS
 
 // Bridge is what the page reads of the bridge.
 type Bridge interface {
@@ -52,6 +49,9 @@ type Options struct {
 	Listen string
 	Allow  []string
 	Logger *slog.Logger
+	// UI are go-fabric-ui's options (Node, Exposure, Admin, Reassemble,
+	// Events); their Logger defaults to Logger.
+	UI fabricui.Options
 }
 
 // Server is the web UI.
@@ -69,6 +69,9 @@ func New(br Bridge, n Node, opts Options) *Server {
 	if log == nil {
 		log = slog.Default()
 	}
+	if opts.UI.Logger == nil {
+		opts.UI.Logger = log
+	}
 	s := &Server{br: br, n: n, opts: opts, log: log}
 	for _, a := range opts.Allow {
 		if ip := net.ParseIP(a); ip != nil {
@@ -78,7 +81,7 @@ func New(br Bridge, n Node, opts Options) *Server {
 	return s
 }
 
-// Health is GET /api/health.
+// Health is GET /api/health (0.1.0's form; the UI reads /api/v1).
 type Health struct {
 	Status   string        `json:"status"`
 	Version  string        `json:"version"`
@@ -109,17 +112,21 @@ type Fabric struct {
 	Label    string `json:"label,omitempty"`
 }
 
-// Handler is the routes behind the client filter.
+// Handler is the routes behind the client filter: the two 0.1.0
+// aliases, everything else go-fabric-ui's.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/health", s.health)
 	mux.HandleFunc("GET /api/plan", s.plan)
-	sub, err := fs.Sub(assets, "assets")
-	if err != nil {
-		panic("web: " + err.Error()) // a constant path of the embed
-	}
-	mux.Handle("GET /", http.FileServerFS(sub))
+	mux.Handle("/", fabricui.Handler(s.opts.UI))
 	return s.filter(mux)
+}
+
+// admin is whether the request may read a secret: the UI's Admin. In
+// the UI's token mode (Admin nil) the alias shows no pairing code, which
+// the UI hands out only against its token.
+func (s *Server) admin(r *http.Request) bool {
+	return s.opts.UI.Admin != nil && s.opts.UI.Admin(r)
 }
 
 // filter refuses a client outside Allow: the add-on runs on the host's
@@ -155,7 +162,7 @@ func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 				h.Problems = append(h.Problems, "node: "+sample.Note)
 			}
 		}
-		if qr, manual, err := s.n.PairingCodes(); err == nil {
+		if qr, manual, err := s.n.PairingCodes(); err == nil && s.admin(r) {
 			h.Pairing = &Pairing{QR: qr, Manual: manual}
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
@@ -194,10 +201,13 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 
 // Run serves until ctx ends.
 func (s *Server) Run(ctx context.Context) error {
+	// No WriteTimeout: the UI's event stream (GET /api/v1/node/stream)
+	// is a response that stays open; the handler's heartbeat ends it on a
+	// dead client.
 	srv := &http.Server{
 		Addr: s.opts.Listen, Handler: s.Handler(),
 		ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 30 * time.Second,
-		WriteTimeout: 30 * time.Second, IdleTimeout: 120 * time.Second,
+		IdleTimeout: 120 * time.Second,
 	}
 	var lc net.ListenConfig
 	ln, err := lc.Listen(ctx, "tcp", s.opts.Listen)
@@ -219,3 +229,20 @@ func (s *Server) Run(ctx context.Context) error {
 		return err
 	}
 }
+
+// From is an Admin that admits a request whose client address is ip: the
+// add-on's Ingress proxy, which has authenticated the Home Assistant user
+// before it forwards (go-fabric-ui docs/embedding.md, "Admin gate by the
+// host").
+func From(ip string) func(*http.Request) bool {
+	want := net.ParseIP(ip)
+	return func(r *http.Request) bool {
+		host, _, err := net.SplitHostPort(r.RemoteAddr)
+		got := net.ParseIP(host)
+		return err == nil && got != nil && want != nil && got.Equal(want)
+	}
+}
+
+// ReadOnly is an Admin that admits no request: the stand-alone UI without
+// WEB_ADMIN.
+func ReadOnly(*http.Request) bool { return false }

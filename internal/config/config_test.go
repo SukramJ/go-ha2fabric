@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -25,7 +26,10 @@ func TestDefaultsStandAlone(t *testing.T) {
 }
 
 func TestAddon(t *testing.T) {
-	env := MapEnv(map[string]string{SupervisorTokenEnv: "sup", "INCLUDE": "light.*, switch.a", "EXPOSE_ASSIST": "false", "WEB_ALLOW": "172.30.32.2"})
+	env := MapEnv(map[string]string{
+		SupervisorTokenEnv: "sup", "INCLUDE": "light.*, switch.a", "EXPOSE_ASSIST": "false", "WEB_ALLOW": "172.30.32.2",
+		"INCLUDE_LABELS": "Matter\nLiving room", "EXCLUDE_LABELS": "no_bridge, ",
+	})
 	c, err := Load(nil, env, io.Discard)
 	if err == nil {
 		// /data does not exist on the test host.
@@ -38,8 +42,19 @@ func TestAddon(t *testing.T) {
 	if !c.Addon || c.HAURL != SupervisorURL || c.HAToken != "sup" || c.ExposeAssist || !slices.Equal(c.Include, []string{"light.*", "switch.a"}) || !slices.Equal(c.WebAllow, []string{"172.30.32.2"}) {
 		t.Fatalf("add-on %+v", c)
 	}
-	if r := c.Exposure(); r.Assist || len(r.Include) != 2 {
+	if r := c.Exposure(); r.Assist || len(r.Include) != 2 || !slices.Equal(r.IncludeLabels, []string{"Matter", "Living room"}) || !slices.Equal(r.ExcludeLabels, []string{"no_bridge"}) {
 		t.Fatalf("rule %+v", r)
+	}
+	if want := filepath.Join(filepath.Dir(c.StorePath), SelectionFile); c.SelectionPath != want || c.WebAdmin {
+		t.Fatalf("selection %q (want %q), web admin %v", c.SelectionPath, want, c.WebAdmin)
+	}
+}
+
+func TestWebAdmin(t *testing.T) {
+	env := MapEnv(map[string]string{"HA_URL": "ws://a/api/websocket", "HA_TOKEN": "t", "WEB_ADMIN": "true"})
+	c, err := Load([]string{"--store-path", t.TempDir() + "/s.db"}, env, io.Discard)
+	if err != nil || !c.WebAdmin {
+		t.Fatalf("%+v %v", c, err)
 	}
 }
 
@@ -59,13 +74,14 @@ func TestValidation(t *testing.T) {
 		"HA_URL": "http://x", "LISTEN": "5540", "PASSCODE": "11111111", "DISCRIMINATOR": "5000", "VENDOR_ID": "0",
 		"PRODUCT_ID": "zz", "LABEL": strings.Repeat("x", 33), "STORE_PATH": "/no/such/dir/x.db", "INCLUDE": "light.[",
 		"EXPOSE_ASSIST": "perhaps", "LOG_LEVEL": "loud", "WEB_LISTEN": "localhost", "WEB_ALLOW": "nobody",
+		"WEB_ADMIN": "maybe",
 	})
 	_, err := Load([]string{"extra"}, env, io.Discard)
 	var ve *ValidationError
 	if !errors.As(err, &ve) {
 		t.Fatalf("%v", err)
 	}
-	for _, want := range []string{"unexpected arguments", "HA_URL must be", "HA_TOKEN is required", "LISTEN", "PASSCODE 11111111", "DISCRIMINATOR", "VENDOR_ID", "PRODUCT_ID", "LABEL is 33", "STORE_PATH", "INCLUDE/EXCLUDE", "EXPOSE_ASSIST", "LOG_LEVEL", "WEB_LISTEN", "WEB_ALLOW"} {
+	for _, want := range []string{"unexpected arguments", "HA_URL must be", "HA_TOKEN is required", "LISTEN", "PASSCODE 11111111", "DISCRIMINATOR", "VENDOR_ID", "PRODUCT_ID", "LABEL is 33", "STORE_PATH", "INCLUDE/EXCLUDE", "EXPOSE_ASSIST", "LOG_LEVEL", "WEB_LISTEN", "WEB_ALLOW", "WEB_ADMIN"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("no %q in %v", want, err)
 		}

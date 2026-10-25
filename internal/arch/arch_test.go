@@ -38,14 +38,15 @@ var testOnly = map[string]bool{"fabrictest": true, "controller/client": true, "c
 var layers = map[string][]string{
 	"internal/version":   {},
 	"internal/expose":    {},
+	"internal/selection": {},
 	"internal/ha":        {},
 	"internal/ha/hatest": {"internal/ha"},
 	"internal/adapt":     {"internal/ha"},
 	"internal/config":    {"internal/expose"},
-	"internal/bridge":    {"internal/ha", "internal/adapt", "internal/expose", "internal/config", "internal/version"},
+	"internal/bridge":    {"internal/ha", "internal/adapt", "internal/expose", "internal/config", "internal/selection", "internal/version"},
 	"internal/web":       {"internal/bridge", "internal/version"},
 	"internal/arch":      {},
-	"cmd/ha2fabric":      {"internal/bridge", "internal/config", "internal/ha", "internal/version", "internal/web"},
+	"cmd/ha2fabric":      {"internal/bridge", "internal/config", "internal/ha", "internal/selection", "internal/version", "internal/web"},
 }
 
 // testLayers widen layers for a package's tests.
@@ -63,6 +64,7 @@ var thirdParty = []string{
 	"github.com/SukramJ/go-hamqtt/model",
 	"github.com/SukramJ/go-ha-catalog",
 	"github.com/coder/websocket",
+	"github.com/SukramJ/go-fabric-ui/fabricui",
 }
 
 func isDef(rel string) bool {
