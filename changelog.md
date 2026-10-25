@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-25
+
+The add-on icon, and a sync that survives a non-string device identifier.
+
 ### Added
 
 - The add-on's icon and logo (`addon/icon.png`, `addon/logo.png`, sources
@@ -121,5 +125,7 @@ The first release: the daemon and its Home Assistant add-on (brief H2).
 The bridge carries the CSA test vendor and go-fabric's test attestation
 chain: it is uncertified, and a controller may warn when pairing it.
 
-[Unreleased]: https://github.com/SukramJ/go-ha2fabric/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/SukramJ/go-ha2fabric/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/SukramJ/go-ha2fabric/releases/tag/v0.2.1
+[0.2.0]: https://github.com/SukramJ/go-ha2fabric/releases/tag/v0.2.0
 [0.1.0]: https://github.com/SukramJ/go-ha2fabric/releases/tag/v0.1.0
