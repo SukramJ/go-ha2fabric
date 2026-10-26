@@ -118,9 +118,9 @@ The lines to know:
 | `bridge.build_failed` | warn | go-fabric refused a device go-hamapping planned; its entities have no endpoint (the plan says why). |
 | `bridge.call_service_failed` | warn | A controller's command failed in Home Assistant; the entity's state goes back onto its endpoint. |
 | `bridge.command_unmapped` | warn | A command the daemon's service table has no service for. |
-| `bridge.label_unresolved` | warn | A label of `INCLUDE_LABELS`/`EXCLUDE_LABELS` names no Home Assistant label; it is used as a label id. Logged when the set changes. |
+| `bridge.label_unresolved` | warn | A label of `INCLUDE_LABELS`/`EXCLUDE_LABELS` names no Home Assistant label; it is used as a label id. Logged when the set changes; also on the web UI's status page. |
 | `bridge.selection_applied` | info | The web UI stored overrides. |
-| `selection.corrupt` | warn | `selection.json` did not parse and was moved aside. |
+| `selection.corrupt` | warn | `selection.json` did not parse and was moved aside; also on the web UI's status page. |
 
 ## Labels
 
@@ -128,7 +128,11 @@ The lines to know:
 `exclude_labels`) name Home Assistant labels. A value matches the label
 whose name equals it, ignoring case, else the label whose id it is; a value
 that matches neither is used as a label id as given, so it takes effect
-once such a label is created. The plan's `labels` column and the web UI
+once such a label is created. Such a value is a warning: in the log
+(`bridge.label_unresolved`, when the set of unresolved values changes) and
+on the web UI's status page and above its selection list
+(`label_unresolved`, with the time it was first seen), until the label
+exists or the value is corrected. The plan's `labels` column and the web UI
 show an entity's labels, its own and its device's; the reason says which
 label decided ("included by label 'Matter'"). The daemon subscribes to
 `label_registry_updated`: creating, renaming or removing a label, or adding
@@ -139,7 +143,7 @@ and `EXCLUDE_LABELS`, `INCLUDE` and `INCLUDE_LABELS`, Assist.
 
 ## The web UI
 
-go-fabric-ui's interface (`v0.1.0`) at `WEB_LISTEN`, in the add-on through
+go-fabric-ui's interface (`v0.1.2`) at `WEB_LISTEN`, in the add-on through
 Ingress. Who may write — change the selection, open a commissioning window,
 remove a fabric — and read the pairing code: in the add-on the Ingress
 proxy (`172.30.32.2`), which has authenticated the Home Assistant user;
@@ -148,14 +152,19 @@ mode (every write carries a per-process token the page reads from
 `/api/v1/node/status`, so anyone who can reach the port can write — keep
 it on a trusted network). The selection page lists every candidate entity
 with entity id, name, domain, device, area, labels, Assist exposure and
-integration, grouped by device, filterable by domain, area, labels, verdict
+integration, grouped by device, filterable by domain, area, a single label, verdict
 and the deciding layer (`rule:assist`, `rule:include`, `rule:label`,
 `rule:exclude`, `override:on`, `override:off`, `disabled`, `hidden`).
 Preview shows the verdicts a change would bring (go-hamapping's `Map`
 without building); apply stores the overrides in `selection.json` and
 re-plans the bridge before it answers. Turning an entity back to what the
-rule decides removes its override. A rename sets the entity's name, which
-go-hamapping composes with its device's name as any entity name.
+rule decides removes its override; an entity turned off and on again gets
+its endpoint number back. A rename is the endpoint's name in the controller
+as typed (its node label, at most 32 bytes), without the device name
+go-hamapping puts in front of an entity name otherwise. The status page
+lists the configuration's warnings: unresolved label values
+(`label_unresolved`) and an overrides file moved aside at start
+(`selection_corrupt`).
 
 ## Health
 

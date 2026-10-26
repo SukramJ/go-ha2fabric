@@ -70,9 +70,10 @@ and until a newer registry snapshot (`ENDPOINT_REMOVAL_GRACE_MS`,
 deleting erases the persisted number and controllers lose groups; an
 entity its filter drops is closed at once and keeps its number for a later
 re-inclusion (`:949-965`, issues #468, #404). go-ha2fabric removes the
-endpoint on the next sync, and go-fabric numbers a device added again anew
-(H3 test `TestWebUI`). Whether a grace or a number reservation is wanted is
-an open question of brief H3.
+endpoint on the next sync, without a grace (the owner's decision on H3 Q1,
+2026-10-25), and go-fabric keeps the removed key's number for its re-add
+(`v0.12.1`, and `v0.13.0` keeps a stored number until `Forget`), so an
+entity that comes back gets its number again (F1 test `TestWebUI`).
 
 ## Naming
 

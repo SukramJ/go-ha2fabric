@@ -75,6 +75,9 @@ func TestCorruptFileIsMovedAside(t *testing.T) {
 			if len(aside) != 1 || !strings.Contains(log.String(), "selection.corrupt") {
 				t.Fatalf("aside %v, log %q", aside, log.String())
 			}
+			if r, ok := s.Recovered(); !ok || r.MovedTo != aside[0] || r.Err == "" || r.At.IsZero() {
+				t.Fatalf("recovered %+v %v", r, ok)
+			}
 		})
 	}
 }

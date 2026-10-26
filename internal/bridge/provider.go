@@ -50,7 +50,9 @@ var schema = fabricui.Schema{
 		{Key: fieldDomain, Label: "Domain", Filter: true},
 		{Key: fieldDevice, Label: "Device"},
 		{Key: fieldArea, Label: "Area", Filter: true},
-		{Key: fieldLabels, Label: "Labels", Filter: true},
+		// Multi: an entity's labels are a list; the UI filters by one label,
+		// not by the combination (H3 Q2, go-fabric-ui v0.1.1).
+		{Key: fieldLabels, Label: "Labels", Filter: true, Multi: true},
 		{Key: fieldAssist, Label: "Exposed to Assist"},
 		{Key: fieldPlatform, Label: "Integration"},
 	},

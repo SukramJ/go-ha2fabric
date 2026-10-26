@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	fabricui "github.com/SukramJ/go-fabric-ui/fabricui"
+	bridgedbidef "github.com/SukramJ/go-fabric/cluster/spec/bridgeddevicebasicinformation"
 	"github.com/SukramJ/go-fabric/fabrictest"
 
 	"github.com/SukramJ/go-ha2fabric/internal/bridge"
@@ -133,7 +134,7 @@ func newUI(t *testing.T) (*env, *ui) {
 	})
 	h := fabricui.Handler(fabricui.Options{
 		Node: e.dev.Node(), Exposure: e.br.Exposure(), Admin: func(*http.Request) bool { return true },
-		Reassemble: e.br.Resync, Events: ev, Logger: logger(), ConfiguredWindow: true,
+		Reassemble: e.br.Resync, Events: ev, Warnings: e.br.Warnings, Logger: logger(), ConfiguredWindow: true,
 	})
 	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)
@@ -245,6 +246,24 @@ func TestWebUI(t *testing.T) {
 	e, u := newUI(t)
 	e.commission()
 
+	// The labels column is list-valued (H3 Q2): the UI filters by one
+	// label, not by the combination.
+	var sch struct {
+		Columns []fabricui.Column `json:"columns"`
+	}
+	if code := u.do(t, http.MethodGet, "/exposure/schema", nil, &sch); code != http.StatusOK {
+		t.Fatalf("schema %d", code)
+	}
+	multi := false
+	for _, c := range sch.Columns {
+		if c.Key == "labels" {
+			multi = c.Multi && c.Filter
+		}
+	}
+	if !multi {
+		t.Fatalf("labels column %+v", sch.Columns)
+	}
+
 	items := u.items(t)
 	if it := items["light.kitchen"]; !it.Enabled || it.Source != expose.SourceAssist || it.Group != "Kitchen ceiling" || it.Fields["domain"] != "light" || it.Verdict.State != "mappable" {
 		t.Fatalf("light.kitchen %+v", it)
@@ -300,13 +319,14 @@ func TestWebUI(t *testing.T) {
 	}
 
 	// Back to what the rule says: the override goes, the endpoint
-	// returns (go-fabric numbers a re-added device anew).
+	// returns under its number (go-fabric v0.12.1 keeps a removed key's
+	// number for its re-add).
 	on := map[string]any{"items": []map[string]any{{"key": "switch.coffee", "enabled": true}}}
 	if code := u.do(t, http.MethodPut, "/exposure", on, nil); code != http.StatusOK {
 		t.Fatalf("apply on %d", code)
 	}
-	if again, ok := e.endpoint("switch.coffee"); !ok || again == 0 {
-		t.Fatalf("the plug is not back (%d %v, was %d)", again, ok, plug)
+	if again, ok := e.endpoint("switch.coffee"); !ok || again != plug {
+		t.Fatalf("the plug is not back on its number (%d %v, was %d)", again, ok, plug)
 	}
 	if len(u.sel.Entries()) != 0 {
 		t.Fatalf("overrides left %v", u.sel.Entries())
@@ -324,9 +344,70 @@ func TestWebUI(t *testing.T) {
 	if it := u.items(t)["switch.coffee"]; it.Name != name || it.Source != expose.SourceOverrideOn {
 		t.Fatalf("renamed plug %+v", it)
 	}
+	// The rename is the node label as typed, without the device name
+	// (hamapping.Options.Name, verbatim; H3 Q3).
+	renamed, _ := e.endpoint("switch.coffee")
+	e.eventually("the node label is the rename", func() bool {
+		values, err := fabrictest.ReadCluster(e.ctx, e.pair, renamed, bridgedbidef.ClusterID)
+		if err != nil {
+			return false
+		}
+		st, _ := bridgedbidef.StateFrom(values)
+		return st.NodeLabel == name
+	})
 	for _, key := range []string{"light.cellar", "light.nope"} {
 		if code := u.do(t, http.MethodPut, "/exposure", map[string]any{"items": []map[string]any{{"key": key, "enabled": true}}}, nil); code != http.StatusBadRequest {
 			t.Errorf("%s: %d, want 400", key, code)
+		}
+	}
+}
+
+// TestUIWarnings: the UI's status carries the half-valid configuration
+// the log reports — a label value that names no label and an overrides
+// file moved aside at start (fabricui.Options.Warnings, H3 side effect).
+func TestUIWarnings(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "selection.json")
+	if err := os.WriteFile(path, []byte("{not json"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	sel, err := selection.Open(path, logger())
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := newEnv(t, expose.Rule{IncludeLabels: []string{"MATTER", "Later"}}, func(o *bridge.Options) { o.Selection = sel })
+	srv := httptest.NewServer(fabricui.Handler(fabricui.Options{
+		Node: e.dev.Node(), Exposure: e.br.Exposure(), Warnings: e.br.Warnings, Logger: logger(),
+	}))
+	t.Cleanup(srv.Close)
+	res, err := http.Get(srv.URL + "/api/v1/node/status") //nolint:noctx // a test request
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = res.Body.Close() }()
+	var st struct {
+		Warnings []fabricui.Warning `json:"warnings"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&st); err != nil {
+		t.Fatal(err)
+	}
+	codes := map[string]fabricui.Warning{}
+	for _, w := range st.Warnings {
+		codes[w.Code] = w
+	}
+	if w, ok := codes[bridge.WarningLabelUnresolved]; len(st.Warnings) != 2 || !ok || !strings.Contains(w.Message, `"Later"`) || w.Since.IsZero() {
+		t.Fatalf("warnings %+v", st.Warnings)
+	}
+	if w, ok := codes[bridge.WarningSelectionCorrupt]; !ok || !strings.Contains(w.Message, ".corrupt-") || w.Since.IsZero() {
+		t.Fatalf("warnings %+v", st.Warnings)
+	}
+	// The label's first sighting stays across syncs.
+	first := codes[bridge.WarningLabelUnresolved].Since
+	if err := e.br.Resync(e.ctx); err != nil {
+		t.Fatal(err)
+	}
+	for _, w := range e.br.Warnings(e.ctx) {
+		if w.Code == bridge.WarningLabelUnresolved && !w.Since.Equal(first) {
+			t.Fatalf("since moved from %v to %v", first, w.Since)
 		}
 	}
 }

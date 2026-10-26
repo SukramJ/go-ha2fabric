@@ -52,8 +52,20 @@ type Store struct {
 	path string
 	log  *slog.Logger
 
-	mu      sync.Mutex
-	entries map[string]Entry
+	mu        sync.Mutex
+	entries   map[string]Entry
+	recovered *Recovery
+}
+
+// Recovery is an overrides file that did not parse at [Open] and was
+// moved aside.
+type Recovery struct {
+	// MovedTo is the path the file was renamed to.
+	MovedTo string
+	// Err is why it did not parse.
+	Err string
+	// At is when it was moved.
+	At time.Time
 }
 
 // Open reads the file at path; a missing file is no overrides. A file
@@ -79,18 +91,28 @@ func Open(path string, log *slog.Logger) (*Store, error) {
 		err = fmt.Errorf("version %d, want %d", f.Version, Version)
 	}
 	if err != nil {
-		aside := fmt.Sprintf("%s.corrupt-%d", path, time.Now().Unix())
+		now := time.Now()
+		aside := fmt.Sprintf("%s.corrupt-%d", path, now.Unix())
 		if rerr := os.Rename(path, aside); rerr != nil {
 			return nil, fmt.Errorf("selection: %s does not parse (%w) and cannot be moved aside: %w", path, err, rerr)
 		}
 		log.Warn("selection.corrupt", slog.String("file", path), slog.String("moved_to", aside), slog.String("error", err.Error()),
 			slog.String("hint", "the web UI's overrides start empty"))
+		s.recovered = &Recovery{MovedTo: aside, Err: err.Error(), At: now}
 		return s, nil
 	}
 	for id, e := range f.Entities {
 		s.entries[id] = e
 	}
 	return s, nil
+}
+
+// Recovered reports the file [Open] moved aside, if it did.
+func (s *Store) Recovered() (Recovery, bool) {
+	if s.recovered == nil {
+		return Recovery{}, false
+	}
+	return *s.recovered, true
 }
 
 // Path is the file's path; empty for an in-memory store.
