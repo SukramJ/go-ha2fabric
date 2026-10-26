@@ -75,13 +75,10 @@ func run(ctx context.Context, args []string, env config.Env, stdout, stderr io.W
 
 	// The cookbook's order (docs/guides/embed-in-a-daemon.md §6): the node
 	// starts before the backend runs and stops after it.
-	// The web UI's event stream reports fabrics and windows through the
-	// node's observers, which node.New takes (go-fabric-ui
-	// docs/embedding.md).
+	// The web UI's event stream observes the node itself (Node.Observe,
+	// go-fabric-ui v0.1.2); uiEvents carries the bridge's own events.
 	uiEvents := fabricui.NewEvents()
-	nc := bridge.NodeConfig(cfg, logger)
-	nc.Observers = uiEvents.Observers(nc.Observers)
-	n, err := node.New(nc) //nolint:contextcheck // the node's constructor takes no context
+	n, err := node.New(bridge.NodeConfig(cfg, logger)) //nolint:contextcheck // the node's constructor takes no context
 	if err != nil {
 		logger.Error("ha2fabric.node", slog.String("error", err.Error()))
 		return 1
@@ -111,7 +108,7 @@ func run(ctx context.Context, args []string, env config.Env, stdout, stderr io.W
 	webErr := make(chan error, 1)
 	if cfg.WebListen != "" {
 		ws := web.New(web.Options{Listen: cfg.WebListen, Allow: cfg.WebAllow, Logger: logger, UI: fabricui.Options{
-			Node: n, Exposure: br.Exposure(), Admin: admin(cfg), Reassemble: br.Resync, Events: uiEvents, Logger: logger,
+			Node: n, Exposure: br.Exposure(), Admin: admin(cfg), Reassemble: br.Resync, Events: uiEvents, Warnings: br.Warnings, Logger: logger,
 		}})
 		wg.Go(func() { webErr <- ws.Run(rctx) })
 	}

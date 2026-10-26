@@ -6,6 +6,39 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-10-26
+
+The family bump (brief F1): go-fabric `v0.13.3`, go-fabric-ui `v0.1.2`,
+go-hamapping `v0.2.1`.
+
+### Added
+
+- The web UI's status shows the configuration's warnings
+  (`fabricui.Options.Warnings`, go-fabric-ui `v0.1.1`): a label value of
+  `INCLUDE_LABELS`/`EXCLUDE_LABELS` that names no Home Assistant label
+  (`label_unresolved`, the log's `bridge.label_unresolved`), and an
+  overrides file that did not parse and was moved aside at start
+  (`selection_corrupt`, the log's `selection.corrupt`). Before, both were
+  in the log only.
+
+### Changed
+
+- The labels column of the web UI's selection is list-valued
+  (`fabricui.Column.Multi`): the filter offers each label and matches an
+  entity that carries it, not the combination of an entity's labels
+  (H3 Q2).
+- A rename in the web UI is the endpoint's node label as typed, without
+  the device name (go-hamapping `Options.Name`, verbatim; H3 Q3). Before,
+  go-hamapping composed it with the device name.
+- An entity whose endpoint is removed and added again — turned off and on
+  in the web UI, or left out by the rule and let in again — gets its
+  endpoint number back (go-fabric `v0.12.1`, `node.Aggregator.Remove`
+  keeps the number); go-fabric `v0.13.0` keeps a stored number until
+  `Forget`, so the daemon's first-sync `MarkComplete` call is gone.
+- The web UI's event stream observes the node itself (go-fabric-ui
+  `v0.1.2`); the daemon no longer wires `Events.Observers` into the node's
+  configuration.
+
 ## [0.2.1] - 2026-10-25
 
 The add-on icon, and a sync that survives a non-string device identifier.

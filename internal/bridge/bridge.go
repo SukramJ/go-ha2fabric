@@ -33,6 +33,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	fabricui "github.com/SukramJ/go-fabric-ui/fabricui"
 	"github.com/SukramJ/go-fabric/device"
 	"github.com/SukramJ/go-fabric/eligibility"
 	"github.com/SukramJ/go-fabric/node"
@@ -144,7 +145,6 @@ type Bridge struct {
 	cmds chan model.Command
 
 	connected atomic.Bool
-	complete  bool
 
 	// worker-owned
 	groups map[string]*group
@@ -152,6 +152,7 @@ type Bridge struct {
 	known  map[string]bool
 	unit   string
 	warned string
+	since  map[string]time.Time
 
 	mu       sync.Mutex
 	states   map[string]*ha.State
@@ -159,6 +160,7 @@ type Bridge struct {
 	last     *Snapshot
 	all      map[string]*Verdict
 	status   Status
+	warnings []fabricui.Warning
 	timer    *time.Timer
 	synced   chan struct{}
 }
@@ -519,13 +521,23 @@ func deviceName(d *ha.DeviceEntry) string {
 // 261-263), which a rename of the entity id keeps (:2051-2061, :2104),
 // so a renamed entity keeps its endpoint number. An entity without a
 // registry entry keeps go-hamapping's default, its entity id.
-func mapOptions(regs map[string]*ha.EntityEntry) hamapping.Options {
-	return hamapping.Options{StableKey: func(e model.Entity) string {
-		if r := regs[e.Key()]; r != nil {
-			return r.ID
-		}
-		return ""
-	}}
+//
+// names are the web UI's name overrides: an overridden entity's node label
+// is the name as typed, without the device name (hamapping.Options.Name,
+// verbatim; the owner's decision on H3 Q3, a name typed in a UI is final).
+func mapOptions(regs map[string]*ha.EntityEntry, names map[string]string) hamapping.Options {
+	return hamapping.Options{
+		StableKey: func(e model.Entity) string {
+			if r := regs[e.Key()]; r != nil {
+				return r.ID
+			}
+			return ""
+		},
+		Name: func(e model.Entity) (string, bool) {
+			n := names[e.Key()]
+			return n, n != ""
+		},
+	}
 }
 
 // Dry is the plan without a node: what --dump-plan prints. names are the
@@ -533,7 +545,7 @@ func mapOptions(regs map[string]*ha.EntityEntry) hamapping.Options {
 func Dry(s *Snapshot, rule expose.Rule, names map[string]string) []Verdict {
 	verdicts, groups := assess(s, rule, names)
 	for _, g := range groups {
-		_, mv := hamapping.Map(g.device, g.entities, mapOptions(g.regs))
+		_, mv := hamapping.Map(g.device, g.entities, mapOptions(g.regs, g.names))
 		mapVerdicts(verdicts, mv)
 	}
 	return verdicts
@@ -567,7 +579,7 @@ func (b *Bridge) sync(ctx context.Context) {
 	rule, names := b.rule(), b.names()
 	verdicts, plannedGroups := assess(snap, rule, names)
 	all := candidates(snap, names)
-	warnings := b.warn(rule, snap.LabelRegistry())
+	warnings, uiWarnings := b.warn(rule, snap.LabelRegistry())
 
 	b.mu.Lock()
 	b.states = map[string]*ha.State{}
@@ -643,12 +655,8 @@ func (b *Bridge) sync(ctx context.Context) {
 				errs = append(errs, bt.Add(d))
 			}
 		}
-		if !b.complete {
-			bt.MarkComplete()
-		}
 		return errors.Join(errs...)
 	})
-	b.complete = true
 	if err != nil {
 		b.log.Error("bridge.batch", slog.String("error", err.Error()))
 	}
@@ -696,6 +704,7 @@ func (b *Bridge) sync(ctx context.Context) {
 	b.last = snap
 	b.all = all
 	b.status.Warnings = warnings
+	b.warnings = uiWarnings
 	b.status.LastSync = time.Now()
 	b.status.SyncError = ""
 	b.status.Endpoints = endpoints
@@ -737,22 +746,64 @@ func (b *Bridge) names() map[string]string {
 	return out
 }
 
+// WarningLabelUnresolved is the web UI's code of a label value that
+// names no Home Assistant label (the log's bridge.label_unresolved).
+const WarningLabelUnresolved = "label_unresolved"
+
+// WarningSelectionCorrupt is the web UI's code of an overrides file that
+// did not parse and was moved aside at start (the log's
+// selection.corrupt).
+const WarningSelectionCorrupt = "selection_corrupt"
+
 // warn is the configuration's warnings against the label registry,
 // logged when they change: a label value that names no label is used as
-// a label_id and matches once such a label exists.
-func (b *Bridge) warn(rule expose.Rule, labels expose.Labels) []string {
+// a label_id and matches once such a label exists. The second result is
+// the same warnings for the web UI, each with the time it was first seen
+// in an unbroken run of syncs.
+func (b *Bridge) warn(rule expose.Rule, labels expose.Labels) ([]string, []fabricui.Warning) {
 	unresolved := rule.Unresolved(labels)
 	out := make([]string, 0, len(unresolved))
+	ui := make([]fabricui.Warning, 0, len(unresolved))
+	since := map[string]time.Time{}
+	now := time.Now()
 	for _, v := range unresolved {
-		out = append(out, fmt.Sprintf("label %q names no Home Assistant label; it matches a label with that id once one exists", v))
+		msg := fmt.Sprintf("label %q names no Home Assistant label; it matches a label with that id once one exists", v)
+		out = append(out, msg)
+		at, ok := b.since[msg]
+		if !ok {
+			at = now
+		}
+		since[msg] = at
+		ui = append(ui, fabricui.Warning{Code: WarningLabelUnresolved, Message: msg, Since: at})
 	}
+	b.since = since
 	if len(out) == 0 {
-		out = nil
+		out, ui = nil, nil
 	}
 	if key := fmt.Sprint(out); key != b.warned {
 		b.warned = key
 		for _, w := range out {
 			b.log.Warn("bridge.label_unresolved", slog.String("warning", w))
+		}
+	}
+	return out, ui
+}
+
+// Warnings are the configuration's half-valid parts for the web UI's
+// status (fabricui.Options.Warnings): the label values of the last sync
+// that name no Home Assistant label, and an overrides file that was moved
+// aside at start. The log carries the same findings.
+func (b *Bridge) Warnings(context.Context) []fabricui.Warning {
+	b.mu.Lock()
+	out := slices.Clone(b.warnings)
+	b.mu.Unlock()
+	if b.opts.Selection != nil {
+		if r, ok := b.opts.Selection.Recovered(); ok {
+			out = append(out, fabricui.Warning{
+				Code:    WarningSelectionCorrupt,
+				Message: fmt.Sprintf("the overrides file did not parse (%s) and was moved to %s; the web UI's overrides started empty", r.Err, r.MovedTo),
+				Since:   r.At,
+			})
 		}
 	}
 	return out
@@ -787,7 +838,7 @@ func (b *Bridge) Resync(ctx context.Context) error {
 // build maps and builds one device's plan; a build failure leaves the
 // device without endpoints and says why in its verdicts.
 func (b *Bridge) build(ctx context.Context, p *planned) (*group, []hamapping.Verdict) {
-	plan, mv := hamapping.Map(p.device, p.entities, mapOptions(p.regs))
+	plan, mv := hamapping.Map(p.device, p.entities, mapOptions(p.regs, p.names))
 	g := &group{key: p.key, sig: p.sig, device: p.device, regs: p.regs, descs: p.descs, names: p.names, plan: plan}
 	for _, e := range p.entities {
 		g.entities = append(g.entities, e.Key())

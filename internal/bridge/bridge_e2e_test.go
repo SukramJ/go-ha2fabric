@@ -19,6 +19,7 @@ import (
 	"github.com/SukramJ/go-fabric/fabrictest"
 
 	"github.com/SukramJ/go-ha2fabric/internal/bridge"
+	"github.com/SukramJ/go-ha2fabric/internal/config"
 	"github.com/SukramJ/go-ha2fabric/internal/expose"
 	"github.com/SukramJ/go-ha2fabric/internal/ha"
 	"github.com/SukramJ/go-ha2fabric/internal/ha/hatest"
@@ -56,7 +57,13 @@ func newEnv(t *testing.T, rule expose.Rule, edit ...func(*bridge.Options)) *env 
 	t.Cleanup(cancel)
 	srv := hatest.New(t)
 	site := fabrictest.NewSite(t, fabrictest.Options{Clock: clock.System{}, Logger: logger()})
-	dev := site.AddDevice(fabrictest.Topology{})
+	// The daemon's own node configuration on the site (go-fabric
+	// fabrictest.Site.AddNode, v0.12.1): the identity, the commissioning
+	// values and the health probe main.go hands node.New; the site puts in
+	// its network, clock, advertiser and a store (StorePath is empty).
+	dev := site.AddNode(bridge.NodeConfig(&config.Config{
+		Passcode: 20202021, Discriminator: 3840, VendorID: 0xFFF1, ProductID: 0x8000, Label: "go-ha2fabric",
+	}, logger()))
 	cl := ha.New(ha.Options{
 		URL: srv.URL(), Token: hatest.Token, Logger: logger(),
 		Events:     []string{ha.EventStateChanged, ha.EventEntityRegistryUpdated, ha.EventDeviceRegistryUpdated, ha.EventLabelRegistryUpdated},

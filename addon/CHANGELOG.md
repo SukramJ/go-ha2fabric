@@ -5,6 +5,17 @@ tracks the project release; the project's
 [changelog.md](https://github.com/SukramJ/go-ha2fabric/blob/main/changelog.md)
 has the details.
 
+## 0.2.2
+
+- The web UI shows the configuration's warnings: a label of
+  `include_labels`/`exclude_labels` that names no Home Assistant label, and
+  an overrides file that was moved aside at start.
+- The labels filter offers single labels and matches an entity that
+  carries the chosen one.
+- A name typed in the web UI is the device's name in the controller as
+  typed, without the device name in front.
+- An entity turned off and on again keeps its endpoint number.
+
 ## 0.2.1
 
 - The add-on has its icon and logo in the store.
