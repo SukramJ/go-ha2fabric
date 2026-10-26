@@ -50,8 +50,9 @@ var schema = fabricui.Schema{
 		{Key: fieldDomain, Label: "Domain", Filter: true},
 		{Key: fieldDevice, Label: "Device"},
 		{Key: fieldArea, Label: "Area", Filter: true},
-		// Multi: an entity's labels are a list; the UI filters by one label,
-		// not by the combination (H3 Q2, go-fabric-ui v0.1.1).
+		// Multi: an entity's labels are a list (Item.Lists); the UI filters
+		// by one label, not by the combination (H3 Q2, go-fabric-ui v0.1.1,
+		// list fields v0.1.3).
 		{Key: fieldLabels, Label: "Labels", Filter: true, Multi: true},
 		{Key: fieldAssist, Label: "Exposed to Assist"},
 		{Key: fieldPlatform, Label: "Integration"},
@@ -152,6 +153,10 @@ func (v *view) item(c *Verdict) fabricui.Item {
 		fieldArea: area, fieldLabels: strings.Join(c.Labels, ", "), fieldAssist: assist,
 		fieldPlatform: platform, fieldVerdict: it.Verdict.State.String(), fieldSource: c.Source,
 	}
+	// The labels column is Multi: its values are a list, so a label name
+	// with a comma stays one value (go-fabric-ui v0.1.3 Item.Lists; the
+	// owner's decision on F1 Q2). Fields keeps the display string.
+	it.Lists = map[string][]string{fieldLabels: append([]string{}, c.Labels...)}
 	return it
 }
 

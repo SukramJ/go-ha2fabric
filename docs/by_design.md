@@ -73,7 +73,15 @@ re-inclusion (`:949-965`, issues #468, #404). go-ha2fabric removes the
 endpoint on the next sync, without a grace (the owner's decision on H3 Q1,
 2026-10-25), and go-fabric keeps the removed key's number for its re-add
 (`v0.12.1`, and `v0.13.0` keeps a stored number until `Forget`), so an
-entity that comes back gets its number again (F1 test `TestWebUI`).
+entity that comes back gets its number again (F1 test `TestWebUI`). The
+exception is an entity deleted from the entity registry
+(`entity_registry_updated` with action `remove`,
+`homeassistant/helpers/entity_registry.py:171-175`, `:1728-1775` at
+2026.10.3): the bridge calls go-fabric's `Forget` for its key on the next
+sync, so a re-created entity — which Home Assistant gives its old registry
+id (`:1624`) — gets a fresh number (the owner's decision on F1 Q1,
+2026-10-26; F2 test `TestRemovedEntityIsForgotten`). A disabled, hidden or
+merely unexposed entity keeps its number.
 
 ## Naming
 

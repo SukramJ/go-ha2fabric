@@ -5,6 +5,12 @@ tracks the project release; the project's
 [changelog.md](https://github.com/SukramJ/go-ha2fabric/blob/main/changelog.md)
 has the details.
 
+## 0.2.3
+
+- An entity deleted from Home Assistant gets a fresh endpoint number when
+  it is created again; a disabled or hidden one keeps its number.
+- A label name with a comma is one label in the web UI.
+
 ## 0.2.2
 
 - The web UI shows the configuration's warnings: a label of

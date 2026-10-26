@@ -6,6 +6,23 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-10-26
+
+The F1 follow-ups (brief F2, issue #10): go-fabric-ui `v0.1.3`.
+
+### Changed
+
+- An entity deleted from Home Assistant's entity registry loses its
+  endpoint number (go-fabric's `Forget`, logged as `bridge.forget`): created
+  again, it is served under a fresh number, as a new device. A disabled,
+  hidden or unexposed entity keeps its number as before.
+
+### Fixed
+
+- A label whose name contains a comma ("Living, dining") is one label in
+  the web UI's labels column and filter, not two: the column reads the
+  item's list field (`Item.Lists["labels"]`, go-fabric-ui `v0.1.3`).
+
 ## [0.2.2] - 2026-10-26
 
 The family bump (brief F1): go-fabric `v0.13.3`, go-fabric-ui `v0.1.2`,
