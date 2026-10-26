@@ -48,12 +48,12 @@ type Server struct {
 	// deleted are removed registry entries and their states, by entity
 	// id, as Home Assistant's deleted_entities keeps them.
 	deleted map[string][2]map[string]any
-	config   map[string]any
-	calls    []ha.ServiceCall
-	conns    map[*conn]bool
-	down     bool
-	callCh   chan ha.ServiceCall
-	authed   int
+	config  map[string]any
+	calls   []ha.ServiceCall
+	conns   map[*conn]bool
+	down    bool
+	callCh  chan ha.ServiceCall
+	authed  int
 	// OnCall, when set, runs for every call_service after it is recorded
 	// (a test's model of the entity: a turn_on that sets the state).
 	OnCall func(ha.ServiceCall)

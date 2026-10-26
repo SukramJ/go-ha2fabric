@@ -120,6 +120,7 @@ The lines to know:
 | `bridge.command_unmapped` | warn | A command the daemon's service table has no service for. |
 | `bridge.label_unresolved` | warn | A label of `INCLUDE_LABELS`/`EXCLUDE_LABELS` names no Home Assistant label; it is used as a label id. Logged when the set changes; also on the web UI's status page. |
 | `bridge.selection_applied` | info | The web UI stored overrides. |
+| `bridge.forget` | info | An entity removed from Home Assistant's registry: its endpoint number is forgotten (`entity`, `key`); created again, it gets a fresh one. |
 | `selection.corrupt` | warn | `selection.json` did not parse and was moved aside; also on the web UI's status page. |
 
 ## Labels
@@ -159,7 +160,12 @@ Preview shows the verdicts a change would bring (go-hamapping's `Map`
 without building); apply stores the overrides in `selection.json` and
 re-plans the bridge before it answers. Turning an entity back to what the
 rule decides removes its override; an entity turned off and on again gets
-its endpoint number back. A rename is the endpoint's name in the controller
+its endpoint number back — as does one disabled, hidden or left out by the
+rule and then brought back. Only an entity deleted from Home Assistant's
+entity registry loses its number (`bridge.forget`): Home Assistant gives a
+re-created entity its old registry id, but the bridge serves it under a
+fresh number, as a new device. One deleted and re-created within the
+re-sync's debounce keeps its endpoint. A rename is the endpoint's name in the controller
 as typed (its node label, at most 32 bytes), without the device name
 go-hamapping puts in front of an entity name otherwise. The status page
 lists the configuration's warnings: unresolved label values
