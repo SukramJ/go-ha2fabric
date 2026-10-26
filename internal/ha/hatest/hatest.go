@@ -45,6 +45,9 @@ type Server struct {
 	labels   []map[string]any
 	states   []map[string]any
 	exposed  map[string]map[string]bool
+	// deleted are removed registry entries and their states, by entity
+	// id, as Home Assistant's deleted_entities keeps them.
+	deleted map[string][2]map[string]any
 	config   map[string]any
 	calls    []ha.ServiceCall
 	conns    map[*conn]bool
@@ -503,6 +506,53 @@ func (s *Server) SetExposed(entityID string, exposed bool) {
 	}
 	s.mu.Unlock()
 	s.fire(ha.EventEntityRegistryUpdated, map[string]any{"action": "update", "entity_id": entityID, "changes": map[string]any{"options": map[string]any{}}})
+}
+
+// RemoveEntity deletes an entity's registry entry and its state and fires
+// entity_registry_updated with action remove; the entry is kept for
+// [Server.RestoreEntity] as Home Assistant keeps it in deleted_entities
+// (homeassistant/helpers/entity_registry.py:171-175, :1728-1775 at
+// 2026.10.3).
+func (s *Server) RemoveEntity(entityID string) {
+	s.mu.Lock()
+	var kept [2]map[string]any
+	s.entities = slices.DeleteFunc(s.entities, func(e map[string]any) bool {
+		if e["entity_id"] == entityID {
+			kept[0] = e
+			return true
+		}
+		return false
+	})
+	s.states = slices.DeleteFunc(s.states, func(st map[string]any) bool {
+		if st["entity_id"] == entityID {
+			kept[1] = st
+			return true
+		}
+		return false
+	})
+	if s.deleted == nil {
+		s.deleted = map[string][2]map[string]any{}
+	}
+	s.deleted[entityID] = kept
+	s.mu.Unlock()
+	s.fire(ha.EventEntityRegistryUpdated, map[string]any{"action": "remove", "entity_id": entityID})
+}
+
+// RestoreEntity creates a removed entity again with its old registry
+// entry id (homeassistant/helpers/entity_registry.py:1624 at 2026.10.3)
+// and its state, and fires entity_registry_updated with action create.
+func (s *Server) RestoreEntity(entityID string) {
+	s.mu.Lock()
+	kept, ok := s.deleted[entityID]
+	delete(s.deleted, entityID)
+	if ok && kept[0] != nil {
+		s.entities = append(s.entities, kept[0])
+	}
+	if ok && kept[1] != nil {
+		s.states = append(s.states, kept[1])
+	}
+	s.mu.Unlock()
+	s.fire(ha.EventEntityRegistryUpdated, map[string]any{"action": "create", "entity_id": entityID})
 }
 
 // Calls returns the service calls recorded so far.

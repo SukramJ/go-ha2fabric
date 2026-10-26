@@ -27,6 +27,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"slices"
 	"sort"
 	"sync"
@@ -153,6 +154,10 @@ type Bridge struct {
 	unit   string
 	warned string
 	since  map[string]time.Time
+	// forget is the stable key of every entity removed from Home
+	// Assistant's registry since the last sync, by entity id: the next
+	// sync forgets it instead of removing it ([Bridge.noteRemoved]).
+	forget map[string]device.SourceKey
 
 	mu       sync.Mutex
 	states   map[string]*ha.State
@@ -180,6 +185,7 @@ func New(n *node.Node, up Upstream, opts Options) *Bridge {
 		work:   make(chan func(context.Context), 1024),
 		cmds:   make(chan model.Command, 256),
 		groups: map[string]*group{}, owner: map[string]*group{}, known: map[string]bool{},
+		forget: map[string]device.SourceKey{},
 		states: map[string]*ha.State{},
 		synced: make(chan struct{}),
 	}
@@ -259,12 +265,71 @@ func (b *Bridge) Event(ev ha.Event) {
 			return
 		}
 		b.enqueue(func(ctx context.Context) { b.stateChanged(ctx, sc) })
-	case ha.EventEntityRegistryUpdated, ha.EventDeviceRegistryUpdated, ha.EventLabelRegistryUpdated:
+	case ha.EventEntityRegistryUpdated:
+		// A remove takes the entity out of the registry for good
+		// (homeassistant/helpers/entity_registry.py:171-175, :1728-1775 at
+		// 2026.10.3): its endpoint number is forgotten, not kept. An
+		// update (disabled, hidden, renamed, unexposed) keeps it.
+		var u struct {
+			Action   string `json:"action"`
+			EntityID string `json:"entity_id"`
+		}
+		if err := json.Unmarshal(ev.Data, &u); err == nil && u.Action == "remove" && u.EntityID != "" {
+			b.enqueue(func(context.Context) { b.noteRemoved(u.EntityID) })
+		}
+		b.resyncSoon()
+	case ha.EventDeviceRegistryUpdated, ha.EventLabelRegistryUpdated:
 		// A label rename is an update with the same label_id
 		// (helpers/label_registry.py:183-224): the re-sync resolves the
 		// names again.
 		b.resyncSoon()
 	}
+}
+
+// noteRemoved records the stable key of an entity removed from the
+// registry, read from the last snapshot (the new one no longer has its
+// entry), for the next sync to forget. It runs on the worker.
+//
+// Home Assistant keeps a removed entry's id in deleted_entities and gives
+// it back when the entity is created again
+// (homeassistant/helpers/entity_registry.py:1728-1775, :1624 at
+// 2026.10.3), so without Forget a re-added entity would get its old
+// number from go-fabric's store; with it, it gets a fresh one, as a new
+// device would (node.Aggregator.Forget).
+func (b *Bridge) noteRemoved(entityID string) {
+	b.mu.Lock()
+	snap := b.last
+	b.mu.Unlock()
+	if k := removedKey(snap, entityID); k != nil {
+		b.forget[entityID] = k
+	}
+}
+
+// removedKey is the stable key go-hamapping gives entityID's endpoint
+// (its device's UID, "/", the registry entry id; see mapOptions and
+// hamapping's Plan.options), or nil when s has no registry entry for it.
+func removedKey(s *Snapshot, entityID string) device.SourceKey {
+	if s == nil {
+		return nil
+	}
+	for i := range s.Entities {
+		r := &s.Entities[i]
+		if r.EntityID != entityID || r.ID == "" {
+			continue
+		}
+		md := adapt.OwnDevice(entityID, "")
+		for j := range s.Devices {
+			if r.DeviceID != "" && s.Devices[j].ID == r.DeviceID {
+				areas := map[string]string{}
+				for _, a := range s.Areas {
+					areas[a.AreaID] = a.Name
+				}
+				md = adapt.Device(&s.Devices[j], areas)
+			}
+		}
+		return device.StringKey(md.UID() + "/" + r.ID)
+	}
+	return nil
 }
 
 // resyncSoon schedules one sync after the debounce; events within it
@@ -623,11 +688,35 @@ func (b *Bridge) sync(ctx context.Context) {
 			closing = append(closing, old)
 		}
 	}
+	// An entity removed from the registry is forgotten instead of
+	// removed; one that is back in the plan already (re-added within the
+	// debounce) keeps its endpoint.
+	live := map[string]bool{}
+	for _, g := range next {
+		for _, k := range g.keys {
+			live[k.String()] = true
+		}
+	}
+	forgetting := map[string]string{}
+	for id, k := range b.forget {
+		if !live[k.String()] {
+			forgetting[k.String()] = id
+		}
+	}
+	b.forget = map[string]device.SourceKey{}
+	forgotten := map[string]bool{}
+	drop := func(bt *node.Batch, k device.SourceKey) error {
+		if _, ok := forgetting[k.String()]; ok {
+			forgotten[k.String()] = true
+			return bt.Forget(k)
+		}
+		return bt.Remove(k)
+	}
 	err = b.n.Aggregator().Batch(ctx, func(bt *node.Batch) error {
 		var errs []error
 		for _, g := range removed {
 			for _, k := range g.keys {
-				errs = append(errs, bt.Remove(k))
+				errs = append(errs, drop(bt, k))
 			}
 		}
 		for _, g := range replaced {
@@ -646,8 +735,15 @@ func (b *Bridge) sync(ctx context.Context) {
 			}
 			for _, k := range old.keys {
 				if oldKeys[k] {
-					errs = append(errs, bt.Remove(k))
+					errs = append(errs, drop(bt, k))
 				}
+			}
+		}
+		// A removed entity the bridge did not serve (disabled, hidden,
+		// unexposed): its stored number is freed all the same.
+		for k := range forgetting {
+			if !forgotten[k] {
+				errs = append(errs, bt.Forget(device.StringKey(k)))
 			}
 		}
 		for _, g := range added {
@@ -659,6 +755,9 @@ func (b *Bridge) sync(ctx context.Context) {
 	})
 	if err != nil {
 		b.log.Error("bridge.batch", slog.String("error", err.Error()))
+	}
+	for _, k := range slices.Sorted(maps.Keys(forgetting)) {
+		b.log.Info("bridge.forget", slog.String("entity", forgetting[k]), slog.String("key", k))
 	}
 	for _, g := range closing {
 		g.plan.Close()
