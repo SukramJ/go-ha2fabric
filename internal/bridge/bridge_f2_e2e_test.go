@@ -4,6 +4,7 @@
 package bridge_test
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/SukramJ/go-ha2fabric/internal/expose"
@@ -79,5 +80,20 @@ func TestRemovedEntityIsForgotten(t *testing.T) {
 	})
 	if got, _ := e.endpoint("light.kitchen"); got == light {
 		t.Fatalf("the re-added light got its old number %d", light)
+	}
+}
+
+// TestLabelWithAComma: a label named "Living, dining" is one value of the
+// labels list field (go-fabric-ui v0.1.3 Item.Lists), not two; the display
+// field keeps the joined names (issue #10, the owner's decision on F1 Q2).
+func TestLabelWithAComma(t *testing.T) {
+	e, u := newUI(t)
+	e.commission()
+	e.ha.UpdateLabel("matter", "Living, dining")
+	e.eventually("the renamed label is listed", func() bool {
+		return slices.Equal(u.items(t)["sensor.outdoor"].Lists["labels"], []string{"Living, dining"})
+	})
+	if it := u.items(t)["sensor.outdoor"]; it.Fields["labels"] != "Living, dining" {
+		t.Fatalf("display field %q", it.Fields["labels"])
 	}
 }

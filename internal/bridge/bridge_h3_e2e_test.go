@@ -175,6 +175,7 @@ type item struct {
 	Enabled bool   `json:"enabled"`
 	Source  string `json:"source"`
 	Fields  map[string]string
+	Lists   map[string][]string `json:"lists"`
 	Verdict struct {
 		State string `json:"state"`
 	} `json:"verdict"`

@@ -39,7 +39,7 @@ The web interface: the `fabricui` handlers and the built bundle embedded in
 the module (Svelte 5 pages compiled at go-fabric-ui's release; no Node.js
 in this build).
 
-- Source: <https://github.com/SukramJ/go-fabric-ui>, pinned `v0.1.2`.
+- Source: <https://github.com/SukramJ/go-fabric-ui>, pinned `v0.1.3`.
 - Copyright (C) 2026 SukramJ. Apache License 2.0; the bundle's own
   notices travel in its `THIRD-PARTY-NOTICES.md`.
 - Decision: go-fabric concept v9 — one UI for the family's daemons
