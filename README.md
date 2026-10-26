@@ -19,7 +19,7 @@ Twin of [`go-hamapping`](https://github.com/SukramJ/go-hamapping); both are buil
 setup (pure Go, `CGO_ENABLED=0`, Apache-2.0 with a contributor licence
 agreement, the same guards in CI).
 
-> **Status: 0.2.1.** The daemon and its Home Assistant add-on run; a real
+> **Status: 0.2.2.** The daemon and its Home Assistant add-on run; a real
 > pairing with Apple Home is the owner's manual step before the release is
 > announced. The design is in [`CONCEPT.md`](CONCEPT.md).
 
@@ -57,7 +57,7 @@ See go-fabric's README, section "Not certified".
 - **Reachability.** An `unavailable` or `unknown` entity is unreachable;
   while Home Assistant is away, every endpoint is.
 - **The family's web UI** ([go-fabric-ui](https://github.com/SukramJ/go-fabric-ui)
-  `v0.1.0`, through Ingress in the add-on): health, the pairing code and the
+  `v0.1.2`, through Ingress in the add-on): health, the pairing code and the
   commissioning window, the fabrics, the endpoints, diagnostics, and the
   entity selection — every candidate entity with its labels, the layer of
   the rule that decided and go-hamapping's verdict, with per-entity
