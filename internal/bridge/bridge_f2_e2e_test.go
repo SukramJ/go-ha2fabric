@@ -40,10 +40,13 @@ func TestRemovedEntityIsForgotten(t *testing.T) {
 
 	// Removed, then created again with the same registry id: a fresh
 	// number, as a new device would get.
+	// The sync after the removal is awaited: an entity re-created within
+	// the debounce keeps its endpoint (docs/operations.md).
+	synced := e.br.Status().LastSync
 	e.ha.RemoveEntity("switch.coffee")
-	e.eventually("the removed plug is gone", func() bool {
-		_, ok := e.dev.EndpointOf(key)
-		return !ok
+	e.eventually("the removal is synced", func() bool {
+		_, ok := e.endpoint("switch.coffee")
+		return !ok && e.br.Status().LastSync.After(synced)
 	})
 	e.ha.RestoreEntity("switch.coffee")
 	e.eventually("the re-added plug is back", func() bool {
@@ -69,7 +72,7 @@ func TestRemovedEntityIsForgotten(t *testing.T) {
 		_, ok := e.endpoint("light.kitchen")
 		return !ok
 	})
-	synced := e.br.Status().LastSync
+	synced = e.br.Status().LastSync
 	e.ha.RemoveEntity("light.kitchen")
 	e.eventually("the removal is synced", func() bool { return e.br.Status().LastSync.After(synced) })
 	e.ha.RestoreEntity("light.kitchen")
