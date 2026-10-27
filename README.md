@@ -137,7 +137,7 @@ environment only and never logged or stored.
 | `PASSCODE` | `20202021` | Setup passcode; trivial ones are refused. Change it. |
 | `DISCRIMINATOR` | `3840` | 12-bit discriminator. |
 | `VENDOR_ID`, `PRODUCT_ID` | `0xFFF1`, `0x8001` | The CSA test vendor and product. |
-| `LABEL` | `go-ha2fabric` | The bridge's node label (at most 32 bytes). |
+| `LABEL` | `Matter Bridge` | The bridge's node label (at most 32 bytes). |
 | `STORE_PATH` | `ha2fabric.db`; add-on `/data/ha2fabric.db` | The node's SQLite store. |
 | `EXPOSE_ASSIST` | `true` | Follow Home Assistant's expose-to-Assist setting. |
 | `INCLUDE`, `EXCLUDE` | empty | Entity ids or globs. |

@@ -6,6 +6,37 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-27
+
+go-fabric-ui `v0.2.2`: the web UI looks like Home Assistant from the first
+frame.
+
+### Changed
+
+- The web UI follows Home Assistant's theme without a flash of the wrong
+  palette: inside the Ingress panel the first frame already carries Home
+  Assistant's colours and light/dark mode; a theme switch is followed live,
+  including a variable a theme stops defining; the label on a primary
+  button uses the theme's `--text-primary-color`; checkboxes and
+  scrollbars take the theme's colours; the tab row no longer shows a
+  scrollbar. Opened outside Home Assistant it uses Home Assistant's default
+  light or dark palette by the system setting.
+- go-fabric-ui `v0.1.3` → `v0.2.2`. It brings two indirect modules,
+  github.com/oapi-codegen/runtime (Apache-2.0) and
+  github.com/apapsch/go-jsonmerge/v2 (MIT), recorded in
+  `THIRD-PARTY-NOTICES.md`.
+- The add-on's side panel is titled **Matter Bridge** (`panel_title`),
+  instead of the slug `go-ha2fabric`.
+- The default bridge label (`label` option, `LABEL`) is `Matter Bridge`,
+  the name controllers show for the bridge. Only the default changes: an
+  add-on whose configuration was saved keeps the label stored there; one
+  that never saved its configuration runs on the add-on's defaults (the
+  Supervisor merges the saved options over them) and takes the new label
+  after the update, as does a daemon started without `LABEL`. Either way a
+  store created under the old label keeps its UniqueID (go-fabric pins it
+  at the first boot), so paired controllers keep the same bridge; a
+  controller may show the new name.
+
 ## [0.2.3] - 2026-10-26
 
 The F1 follow-ups (brief F2, issue #10): go-fabric-ui `v0.1.3`.

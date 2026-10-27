@@ -39,7 +39,7 @@ The web interface: the `fabricui` handlers and the built bundle embedded in
 the module (Svelte 5 pages compiled at go-fabric-ui's release; no Node.js
 in this build).
 
-- Source: <https://github.com/SukramJ/go-fabric-ui>, pinned `v0.1.3`.
+- Source: <https://github.com/SukramJ/go-fabric-ui>, pinned `v0.2.2`.
 - Copyright (C) 2026 SukramJ. Apache License 2.0; the bundle's own
   notices travel in its `THIRD-PARTY-NOTICES.md`.
 - Decision: go-fabric concept v9 — one UI for the family's daemons
@@ -78,5 +78,11 @@ Through go-fabric: filippo.io/nistec (BSD-3-Clause), the pure-Go SQLite
 driver modernc.org/sqlite and its modernc.org modules (BSD-3-Clause),
 github.com/grandcat/zeroconf (MIT), github.com/miekg/dns (BSD-3-Clause),
 golang.org/x/net and golang.org/x/sys (BSD-3-Clause), github.com/google/uuid
-(BSD-3-Clause) and the others go-fabric's notices list. `go mod graph`
-is the complete list.
+(BSD-3-Clause) and the others go-fabric's notices list.
+
+Through go-fabric-ui (since its `v0.2.x` controller API, pinned here from
+go-ha2fabric 0.3.0): github.com/oapi-codegen/runtime (Apache-2.0), the
+runtime of the generated API types, and github.com/apapsch/go-jsonmerge/v2
+(MIT), which it uses. Decision: taken with the go-fabric-ui `v0.2.2` bump
+for its Home Assistant theme fixes (2026-10-27). `go mod graph` is the
+complete list.
