@@ -3,11 +3,11 @@ module github.com/SukramJ/go-ha2fabric
 go 1.27.3
 
 require (
-	github.com/SukramJ/go-fabric v0.13.3
-	github.com/SukramJ/go-fabric-ui v0.2.2
+	github.com/SukramJ/go-fabric v0.13.6
+	github.com/SukramJ/go-fabric-ui v0.2.3
 	github.com/SukramJ/go-ha-catalog v0.3.2-0.20261024093528-d9582e022b8f
 	github.com/SukramJ/go-hamapping v0.2.1
-	github.com/SukramJ/go-hamqtt v0.38.0
+	github.com/SukramJ/go-hamqtt v0.39.0
 	github.com/coder/websocket v1.8.15
 )
 

@@ -6,6 +6,23 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-27
+
+Dependency release: go-fabric `v0.13.6`, go-fabric-ui `v0.2.3`, go-hamqtt
+`v0.39.0`.
+
+### Changed
+
+- go-fabric `v0.13.3` → `v0.13.6`. For this bridge: the OTA provider's
+  Operate ACL entry no longer emits an AccessControlEntryChanged event
+  (the node installs it as a local change, as matter.js does). The other
+  additions (network-infrastructure and camera cluster servers, the
+  `ble/esphome` sub-module) are not composed by this bridge.
+- go-fabric-ui `v0.2.2` → `v0.2.3` (build-tooling updates; the bundle is
+  byte-identical).
+- go-hamqtt `v0.38.0` → `v0.39.0` (new lawn-mower discovery fields; go-mqtt
+  `v1.7.0` underneath). No change for the bridge.
+
 ## [0.3.0] - 2026-10-27
 
 go-fabric-ui `v0.2.2`: the web UI looks like Home Assistant from the first
