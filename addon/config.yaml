@@ -43,7 +43,7 @@ backup: cold
 ingress: true
 ingress_port: 8486
 panel_icon: mdi:bridge
-panel_title: go-ha2fabric
+panel_title: Matter Bridge
 
 options:
   port: 5540
@@ -51,7 +51,7 @@ options:
   discriminator: 3840
   vendor_id: 65521
   product_id: 32769
-  label: go-ha2fabric
+  label: Matter Bridge
   expose_assist: true
   include: []
   exclude: []

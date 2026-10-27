@@ -43,7 +43,7 @@ const (
 	DefaultDiscriminator = 3840
 	DefaultVendorID      = 0xFFF1
 	DefaultProductID     = 0x8001
-	DefaultLabel         = "go-ha2fabric"
+	DefaultLabel         = "Matter Bridge"
 	DefaultWebListen     = "127.0.0.1:8099"
 	DefaultStoreFile     = "ha2fabric.db"
 	// AddonStorePath is the store in the add-on's persistent /data.

@@ -6,6 +6,20 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- The add-on's side panel is titled **Matter Bridge** (`panel_title`),
+  instead of the slug `go-ha2fabric`.
+- The default bridge label (`label` option, `LABEL`) is `Matter Bridge`,
+  the name controllers show for the bridge. Only the default changes: an
+  add-on whose configuration was saved keeps the label stored there; one
+  that never saved its configuration runs on the add-on's defaults (the
+  Supervisor merges the saved options over them) and takes the new label
+  after the update, as does a daemon started without `LABEL`. Either way a
+  store created under the old label keeps its UniqueID (go-fabric pins it
+  at the first boot), so paired controllers keep the same bridge; a
+  controller may show the new name.
+
 ## [0.2.3] - 2026-10-26
 
 The F1 follow-ups (brief F2, issue #10): go-fabric-ui `v0.1.3`.

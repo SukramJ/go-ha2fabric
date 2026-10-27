@@ -63,7 +63,7 @@ modes are not mapped.
 | `discriminator` | int | `3840` | 12-bit discriminator (0 to 4095). |
 | `vendor_id` | int | `65521` | Vendor id (0xFFF1, the CSA test vendor). |
 | `product_id` | int | `32769` | Product id (0x8001). |
-| `label` | str | `go-ha2fabric` | The bridge's name as controllers show it (at most 32 bytes). |
+| `label` | str | `Matter Bridge` | The bridge's name as controllers show it (at most 32 bytes). |
 | `expose_assist` | bool | `true` | Serve the entities exposed to Assist. |
 | `include` | list | `[]` | Entity ids or globs always served. |
 | `exclude` | list | `[]` | Entity ids or globs never served. |
