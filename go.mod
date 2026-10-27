@@ -4,7 +4,7 @@ go 1.27.3
 
 require (
 	github.com/SukramJ/go-fabric v0.13.3
-	github.com/SukramJ/go-fabric-ui v0.1.3
+	github.com/SukramJ/go-fabric-ui v0.2.2
 	github.com/SukramJ/go-ha-catalog v0.3.2-0.20261024093528-d9582e022b8f
 	github.com/SukramJ/go-hamapping v0.2.1
 	github.com/SukramJ/go-hamqtt v0.38.0
@@ -13,6 +13,7 @@ require (
 
 require (
 	filippo.io/nistec v0.0.4 // indirect
+	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
@@ -20,6 +21,7 @@ require (
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/miekg/dns v1.1.73 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
+	github.com/oapi-codegen/runtime v1.7.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	golang.org/x/net v0.61.0 // indirect
 	golang.org/x/sys v0.49.0 // indirect

@@ -5,6 +5,15 @@ tracks the project release; the project's
 [changelog.md](https://github.com/SukramJ/go-ha2fabric/blob/main/changelog.md)
 has the details.
 
+## 0.3.0
+
+- The side panel is called **Matter Bridge**, and so is the default bridge
+  label. If you never saved the add-on's configuration, controllers may
+  show the new name after the update; the bridge stays the same and nothing
+  has to be paired again. A saved label is kept.
+- The web UI follows your Home Assistant theme from the first moment,
+  including light and dark mode and custom themes.
+
 ## 0.2.3
 
 - An entity deleted from Home Assistant gets a fresh endpoint number when

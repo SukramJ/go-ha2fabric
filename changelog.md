@@ -6,8 +6,25 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-27
+
+go-fabric-ui `v0.2.2`: the web UI looks like Home Assistant from the first
+frame.
+
 ### Changed
 
+- The web UI follows Home Assistant's theme without a flash of the wrong
+  palette: inside the Ingress panel the first frame already carries Home
+  Assistant's colours and light/dark mode; a theme switch is followed live,
+  including a variable a theme stops defining; the label on a primary
+  button uses the theme's `--text-primary-color`; checkboxes and
+  scrollbars take the theme's colours; the tab row no longer shows a
+  scrollbar. Opened outside Home Assistant it uses Home Assistant's default
+  light or dark palette by the system setting.
+- go-fabric-ui `v0.1.3` → `v0.2.2`. It brings two indirect modules,
+  github.com/oapi-codegen/runtime (Apache-2.0) and
+  github.com/apapsch/go-jsonmerge/v2 (MIT), recorded in
+  `THIRD-PARTY-NOTICES.md`.
 - The add-on's side panel is titled **Matter Bridge** (`panel_title`),
   instead of the slug `go-ha2fabric`.
 - The default bridge label (`label` option, `LABEL`) is `Matter Bridge`,
