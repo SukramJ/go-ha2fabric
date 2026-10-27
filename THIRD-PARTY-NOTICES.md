@@ -17,7 +17,7 @@ The Matter side: the `node` facade, the device kit (`device`), `contract`,
 `eligibility` and the generated `<cluster>def` packages; in tests its
 in-process controller (`fabrictest`).
 
-- Source: <https://github.com/SukramJ/go-fabric>, pinned `v0.13.3`.
+- Source: <https://github.com/SukramJ/go-fabric>, pinned `v0.13.6`.
 - Copyright (C) 2026 SukramJ. Apache License 2.0; its own notices
   (matter.js, filippo.io/nistec, modernc.org/sqlite, …) travel in its
   `THIRD-PARTY-NOTICES.md` and `licenses/`.
@@ -39,7 +39,7 @@ The web interface: the `fabricui` handlers and the built bundle embedded in
 the module (Svelte 5 pages compiled at go-fabric-ui's release; no Node.js
 in this build).
 
-- Source: <https://github.com/SukramJ/go-fabric-ui>, pinned `v0.2.2`.
+- Source: <https://github.com/SukramJ/go-fabric-ui>, pinned `v0.2.3`.
 - Copyright (C) 2026 SukramJ. Apache License 2.0; the bundle's own
   notices travel in its `THIRD-PARTY-NOTICES.md`.
 - Decision: go-fabric concept v9 — one UI for the family's daemons
@@ -50,7 +50,7 @@ in this build).
 The vocabulary go-hamapping reads: `model.Device`, `model.Entity`,
 `model.State`, `model.Command`.
 
-- Source: <https://github.com/SukramJ/go-hamqtt>, pinned `v0.38.0`.
+- Source: <https://github.com/SukramJ/go-hamqtt>, pinned `v0.39.0`.
 - Copyright (c) 2026 SukramJ. MIT License.
 
 ### go-ha-catalog — MIT
