@@ -5,6 +5,11 @@ tracks the project release; the project's
 [changelog.md](https://github.com/SukramJ/go-ha2fabric/blob/main/changelog.md)
 has the details.
 
+## 0.3.2
+
+- Library updates (go-fabric 0.14.0, go-fabric-ui 0.2.4); nothing changes
+  in use.
+
 ## 0.3.1
 
 - Library updates (go-fabric 0.13.6, go-fabric-ui 0.2.3, go-hamqtt 0.39.0);
