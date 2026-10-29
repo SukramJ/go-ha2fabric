@@ -6,6 +6,24 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-10-29
+
+Dependency release: go-fabric `v0.14.0`, go-fabric-ui `v0.2.4`.
+
+### Changed
+
+- go-fabric `v0.13.6` → `v0.14.0`. The bridge builds and its tests pass
+  without a code change: none of the breaks in between (`core.Binding`'s
+  entry type, `camera.SessionKey`, `jfadef.CommissionerReach`, the removed
+  `controller/thread`) touches what it composes. For this bridge: the
+  node answers TimeSynchronization's SetUTCTime with connectedhomeip's
+  statuses instead of accepting every request (the clock is still not
+  set). The node's session intervals stay the Matter defaults. The
+  camera, Thread Border Router, Joint Fabric, TLS and
+  AmbientContextSensing servers it adds are not composed by this bridge.
+- go-fabric-ui `v0.2.3` → `v0.2.4` (the go-fabric `v0.14.0` build and the
+  exported `NodeObservers`, which this bridge does not use).
+
 ## [0.3.1] - 2026-10-27
 
 Dependency release: go-fabric `v0.13.6`, go-fabric-ui `v0.2.3`, go-hamqtt
