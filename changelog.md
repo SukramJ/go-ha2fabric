@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `ha2fabric.fabrics` at start: the number of fabrics the store holds, and
+  per fabric its index, vendor id and label; with none, a hint that no
+  controller has paired or the store was lost. Until now an empty store
+  showed only through the commissioning window it opens. `docs/operations.md`
+  says how a lost store comes back (the add-on's backup) and what a new
+  pairing means instead.
+
 ## [0.3.3] - 2026-10-30
 
 Dependency release: go-fabric `v0.15.1`, go-fabric-ui `v0.2.5`.
