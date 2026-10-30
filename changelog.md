@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.4] - 2026-10-30
+
+The store's fabrics in the log at start, and what a lost store means.
+
 ### Added
 
 - `ha2fabric.fabrics` at start: the number of fabrics the store holds, and
