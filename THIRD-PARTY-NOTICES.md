@@ -17,7 +17,7 @@ The Matter side: the `node` facade, the device kit (`device`), `contract`,
 `eligibility` and the generated `<cluster>def` packages; in tests its
 in-process controller (`fabrictest`).
 
-- Source: <https://github.com/SukramJ/go-fabric>, pinned `v0.15.2`.
+- Source: <https://github.com/SukramJ/go-fabric>, pinned `v0.15.3`.
 - Copyright (C) 2026 SukramJ. Apache License 2.0; its own notices
   (matter.js, filippo.io/nistec, modernc.org/sqlite, …) travel in its
   `THIRD-PARTY-NOTICES.md` and `licenses/`.
@@ -39,7 +39,7 @@ The web interface: the `fabricui` handlers and the built bundle embedded in
 the module (Svelte 5 pages compiled at go-fabric-ui's release; no Node.js
 in this build).
 
-- Source: <https://github.com/SukramJ/go-fabric-ui>, pinned `v0.2.6`.
+- Source: <https://github.com/SukramJ/go-fabric-ui>, pinned `v0.2.7`.
 - Copyright (C) 2026 SukramJ. Apache License 2.0; the bundle's own
   notices travel in its `THIRD-PARTY-NOTICES.md`.
 - Decision: go-fabric concept v9 — one UI for the family's daemons
