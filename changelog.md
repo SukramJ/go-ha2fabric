@@ -6,6 +6,32 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-10-30
+
+Dependency release: go-fabric `v0.15.1`, go-fabric-ui `v0.2.5`.
+
+### Changed
+
+- go-fabric `v0.14.0` → `v0.15.1`. The bridge builds and its tests pass
+  without a code change. go-fabric v0.15.0 serves each endpoint's surface
+  (device types, clusters, features, the global lists) as a value under
+  node-level policies (its ADR 0030): a specification level, opt-ins for
+  the features it implements ahead of matter.js, and controller profiles,
+  all in `node.Config.Surface`, which this bridge leaves at its zero value
+  — nothing it composes changes, and go-hamapping's plans select no
+  ahead-of-matter.js feature. What this bridge gains: when an endpoint
+  comes back after a restart with a different surface (a feature or
+  cluster that was not there before), the node raises its and the root's
+  ConfigurationVersion in one change and bumps the changed clusters'
+  data versions, so a paired controller reloads it; before, such a change
+  was silent on the wire. v0.15.1: a bridged endpoint whose device has no
+  name keeps its Descriptor (this bridge always names its devices); three
+  race-job test flakes fixed in go-fabric.
+- go-fabric-ui `v0.2.4` → `v0.2.5`: the selection page hides items whose
+  verdict is unmappable — here an entity go-hamapping has no plan for, or
+  one without a state — until the toggle above the list shows them, with
+  their reason as before.
+
 ## [0.3.2] - 2026-10-29
 
 Dependency release: go-fabric `v0.14.0`, go-fabric-ui `v0.2.4`.

@@ -5,6 +5,14 @@ tracks the project release; the project's
 [changelog.md](https://github.com/SukramJ/go-ha2fabric/blob/main/changelog.md)
 has the details.
 
+## 0.3.3
+
+- Library updates (go-fabric 0.15.1, go-fabric-ui 0.2.5). The selection
+  page hides entities that cannot be mapped to an endpoint; a toggle above
+  the list shows them again. A device whose exposed clusters or features
+  change across a restart is announced to paired controllers through its
+  ConfigurationVersion, so they reload it instead of showing stale data.
+
 ## 0.3.2
 
 - Library updates (go-fabric 0.14.0, go-fabric-ui 0.2.4); nothing changes
