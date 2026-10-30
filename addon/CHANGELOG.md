@@ -5,6 +5,14 @@ tracks the project release; the project's
 [changelog.md](https://github.com/SukramJ/go-ha2fabric/blob/main/changelog.md)
 has the details.
 
+## 0.3.4
+
+- The log shows at start how many controllers are paired
+  (`ha2fabric.fabrics count=…`). A start with `count=0` and an open
+  commissioning window means no controller has paired or the store was
+  lost; restoring the add-on from a backup taken while paired brings the
+  pairing back.
+
 ## 0.3.3
 
 - Library updates (go-fabric 0.15.1, go-fabric-ui 0.2.5). The selection
