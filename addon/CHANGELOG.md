@@ -5,6 +5,12 @@ tracks the project release; the project's
 [changelog.md](https://github.com/SukramJ/go-ha2fabric/blob/main/changelog.md)
 has the details.
 
+## 0.3.7
+
+- Library updates (go-fabric 0.15.4, go-fabric-ui 0.2.8). The Surface tab
+  learns of every surface change the node makes, including reassemblies the
+  host runs on its own, and shows the root endpoint.
+
 ## 0.3.6
 
 - Library updates (go-fabric 0.15.3, go-fabric-ui 0.2.7). The node's surface
