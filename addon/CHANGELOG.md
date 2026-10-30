@@ -5,6 +5,12 @@ tracks the project release; the project's
 [changelog.md](https://github.com/SukramJ/go-ha2fabric/blob/main/changelog.md)
 has the details.
 
+## 0.3.5
+
+- Library updates (go-fabric 0.15.2, go-fabric-ui 0.2.6). The status page shows
+  the node's surface policies: specification level, controller profiles and
+  enabled extensions.
+
 ## 0.3.4
 
 - The log shows at start how many controllers are paired
