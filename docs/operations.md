@@ -26,6 +26,13 @@ keys unencrypted), back it up only with the daemon stopped (the add-on
 sets `backup: cold`, so the Supervisor stops it for a backup), and never
 run two copies of one store.
 
+A store that has lost its fabrics shows at start as `ha2fabric.fabrics
+count=0` with the commissioning window open (`commissioning.own_window.open`),
+although the entities are still listed. Restoring the add-on from a backup
+taken while it was paired brings the store and with it the pairing back; the
+entities keep their endpoint numbers. Pairing again instead gives the bridge
+a new fabric, and every controller sees a new device.
+
 `selection.json` is `{"version": 1, "entities": {"<entity_id>": {"enabled":
 true, "name": "…"}}}`, written atomically (a temporary file, then a rename)
 and read at start. A file that does not parse is renamed to
@@ -111,6 +118,7 @@ The lines to know:
 
 | Message | Level | Meaning |
 | --- | --- | --- |
+| `ha2fabric.fabrics` | info | The fabrics the store holds, at start: `count`, and per fabric its index, vendor id and label. `count=0` means no controller has paired — or the store was lost; see Files. |
 | `ha2fabric.pairing` | info | The manual code and the QR payload, at start. |
 | `ha.connected` / `ha.disconnected` | info / warn | The Home Assistant connection. |
 | `bridge.synced` | info | A sync: candidates, devices, endpoints added, replaced, removed. |

@@ -114,7 +114,7 @@ func TestRun(t *testing.T) {
 	if code := <-done; code != 0 {
 		t.Fatalf("exit %d\n%s", code, logs.String())
 	}
-	for _, want := range []string{"ha2fabric.pairing", "manual_code=", "bridge.synced"} {
+	for _, want := range []string{"ha2fabric.fabrics", "count=0", "ha2fabric.pairing", "manual_code=", "bridge.synced"} {
 		if !strings.Contains(logs.String(), want) {
 			t.Errorf("no %q in the log", want)
 		}

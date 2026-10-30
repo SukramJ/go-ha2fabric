@@ -4,6 +4,8 @@
 package bridge
 
 import (
+	"context"
+	"fmt"
 	"log/slog"
 
 	"github.com/SukramJ/go-fabric/node"
@@ -51,6 +53,29 @@ func NodeConfig(c *config.Config, logger *slog.Logger) node.Config {
 		Health: node.Health{Interval: node.DefaultProbeInterval},
 		Logger: logger,
 	}
+}
+
+// LogFabrics writes the fabrics the store holds at start — their count,
+// and per fabric the index, the vendor and the label — so an empty or lost
+// store is visible in the log itself and not only through the commissioning
+// window it opens (2026-10-30: a lost store was diagnosed from the pairing
+// hint alone). With no fabric the line says what that means and how a
+// store comes back.
+func LogFabrics(ctx context.Context, n *node.Node, logger *slog.Logger) {
+	infos, err := n.FabricInfos(ctx)
+	if err != nil {
+		logger.Warn("ha2fabric.fabrics", slog.String("error", err.Error()))
+		return
+	}
+	attrs := []any{slog.Int("count", len(infos))}
+	for _, f := range infos {
+		attrs = append(attrs, slog.Group(fmt.Sprintf("fabric_%d", f.FabricIndex),
+			slog.Int("vendor_id", int(f.VendorID)), slog.String("label", f.Label)))
+	}
+	if len(infos) == 0 {
+		attrs = append(attrs, slog.String("hint", "no controller has paired, so the commissioning window opens; a store lost with its fabrics comes back from the add-on's backup (docs/operations.md, Files)"))
+	}
+	logger.Info("ha2fabric.fabrics", attrs...)
 }
 
 // LogPairing writes the pairing codes to the log (cookbook §7).

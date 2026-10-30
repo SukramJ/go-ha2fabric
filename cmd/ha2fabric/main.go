@@ -88,6 +88,7 @@ func run(ctx context.Context, args []string, env config.Env, stdout, stderr io.W
 		logger.Error("ha2fabric.node_start", slog.String("error", err.Error()))
 		return 1
 	}
+	bridge.LogFabrics(ctx, n, logger)
 	bridge.LogPairing(n, logger)
 	br := bridge.New(n, client, bridge.Options{
 		Rule: cfg.Exposure(), Logger: logger, Selection: sel,
