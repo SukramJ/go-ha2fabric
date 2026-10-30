@@ -6,6 +6,21 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.6] - 2026-10-30
+
+Dependency release: go-fabric `v0.15.3`, go-fabric-ui `v0.2.7`.
+
+### Changed
+
+- go-fabric `v0.15.2` → `v0.15.3`: `surface.Warn`, the verdict of a policy that
+  keeps an element and flags it; a controller profile's Reported or Inherited
+  row is a `Warn` decision. Nothing composed changes.
+- go-fabric-ui `v0.2.6` → `v0.2.7`: the node's surface report gets its own page
+  (`GET /node/surface`: effective surface per endpoint, decisions, withheld
+  elements, announced changes), a Surface tab in the shell, the stream event
+  `surface_changed` and a marker on the Endpoints page for an endpoint whose
+  surface changed; the status page counts warnings by the `Warn` verdict.
+
 ## [0.3.5] - 2026-10-30
 
 Dependency release: go-fabric `v0.15.2`, go-fabric-ui `v0.2.6`.
