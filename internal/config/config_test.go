@@ -58,6 +58,23 @@ func TestWebAdmin(t *testing.T) {
 	}
 }
 
+func TestCamera(t *testing.T) {
+	base := map[string]string{"HA_URL": "ws://a/api/websocket", "HA_TOKEN": "t"}
+	c, err := Load([]string{"--store-path", t.TempDir() + "/s.db"}, MapEnv(base), io.Discard)
+	if err != nil || c.Camera {
+		t.Fatalf("default: %+v %v", c, err)
+	}
+	base["CAMERA"] = "true"
+	c, err = Load([]string{"--store-path", t.TempDir() + "/s.db"}, MapEnv(base), io.Discard)
+	if err != nil || !c.Camera {
+		t.Fatalf("CAMERA=true: %+v %v", c, err)
+	}
+	c, err = Load([]string{"--store-path", t.TempDir() + "/s.db", "--camera=false"}, MapEnv(base), io.Discard)
+	if err != nil || c.Camera {
+		t.Fatalf("--camera=false: %+v %v", c, err)
+	}
+}
+
 func TestFlagsWin(t *testing.T) {
 	env := MapEnv(map[string]string{"HA_URL": "ws://a/api/websocket", "HA_TOKEN": "t", "LISTEN": ":6000", "LOG_LEVEL": "debug"})
 	c, err := Load([]string{"--listen", "[::]:5541", "--passcode", "34567890", "--discriminator", "0xABC", "--vendor-id", "65521", "--label", "Home", "--web-listen", "", "--dump-plan"}, env, io.Discard)
@@ -74,14 +91,14 @@ func TestValidation(t *testing.T) {
 		"HA_URL": "http://x", "LISTEN": "5540", "PASSCODE": "11111111", "DISCRIMINATOR": "5000", "VENDOR_ID": "0",
 		"PRODUCT_ID": "zz", "LABEL": strings.Repeat("x", 33), "STORE_PATH": "/no/such/dir/x.db", "INCLUDE": "light.[",
 		"EXPOSE_ASSIST": "perhaps", "LOG_LEVEL": "loud", "WEB_LISTEN": "localhost", "WEB_ALLOW": "nobody",
-		"WEB_ADMIN": "maybe",
+		"WEB_ADMIN": "maybe", "CAMERA": "sometimes",
 	})
 	_, err := Load([]string{"extra"}, env, io.Discard)
 	var ve *ValidationError
 	if !errors.As(err, &ve) {
 		t.Fatalf("%v", err)
 	}
-	for _, want := range []string{"unexpected arguments", "HA_URL must be", "HA_TOKEN is required", "LISTEN", "PASSCODE 11111111", "DISCRIMINATOR", "VENDOR_ID", "PRODUCT_ID", "LABEL is 33", "STORE_PATH", "INCLUDE/EXCLUDE", "EXPOSE_ASSIST", "LOG_LEVEL", "WEB_LISTEN", "WEB_ALLOW", "WEB_ADMIN"} {
+	for _, want := range []string{"unexpected arguments", "HA_URL must be", "HA_TOKEN is required", "LISTEN", "PASSCODE 11111111", "DISCRIMINATOR", "VENDOR_ID", "PRODUCT_ID", "LABEL is 33", "STORE_PATH", "INCLUDE/EXCLUDE", "EXPOSE_ASSIST", "LOG_LEVEL", "WEB_LISTEN", "WEB_ALLOW", "WEB_ADMIN", "CAMERA"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("no %q in %v", want, err)
 		}

@@ -71,7 +71,7 @@ func run(ctx context.Context, args []string, env config.Env, stdout, stderr io.W
 	if cfg.DumpPlan {
 		return dumpPlan(ctx, client, cfg, sel, stdout, logger)
 	}
-	logger.Info("ha2fabric.start", slog.String("version", version.String()), slog.String("ha_url", cfg.HAURL), slog.Bool("addon", cfg.Addon))
+	logger.Info("ha2fabric.start", slog.String("version", version.String()), slog.String("ha_url", cfg.HAURL), slog.Bool("addon", cfg.Addon), slog.Bool("camera", cfg.Camera))
 
 	// The cookbook's order (docs/guides/embed-in-a-daemon.md §6): the node
 	// starts before the backend runs and stops after it.
@@ -91,7 +91,7 @@ func run(ctx context.Context, args []string, env config.Env, stdout, stderr io.W
 	bridge.LogFabrics(ctx, n, logger)
 	bridge.LogPairing(n, logger)
 	br := bridge.New(n, client, bridge.Options{
-		Rule: cfg.Exposure(), Logger: logger, Selection: sel,
+		Rule: cfg.Exposure(), Logger: logger, Selection: sel, Camera: cfg.Camera,
 		OnChange: func(exposure []string, endpoints bool) {
 			if len(exposure) > 0 {
 				uiEvents.Publish(fabricui.Event{Type: fabricui.EventExposureChanged, Data: fabricui.ExposureEvent{Keys: exposure}})
@@ -209,7 +209,7 @@ func dumpPlan(ctx context.Context, client *ha.Client, cfg *config.Config, sel *s
 	for _, l := range rule.Unresolved(snap.LabelRegistry()) {
 		logger.Warn("ha2fabric.label_unresolved", slog.String("label", l))
 	}
-	verdicts := bridge.Dry(snap, rule, names)
+	verdicts := bridge.Dry(snap, rule, names, cfg.Camera)
 	for i := range verdicts {
 		v := &verdicts[i]
 		exposed := "no"

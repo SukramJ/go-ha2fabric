@@ -25,6 +25,8 @@ export STORE_PATH="/data/ha2fabric.db"
 
 # --- Exposure ---
 export EXPOSE_ASSIST="$(bashio::config 'expose_assist')"
+# Cameras are opt-in (docs/operations.md "Cameras (opt-in)").
+export CAMERA="$(bashio::config 'camera')"
 # Lists arrive one item per line; the daemon splits on newlines and commas
 # (label names keep their spaces).
 INCLUDE=""

@@ -30,6 +30,7 @@ import (
 	"maps"
 	"slices"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -78,6 +79,10 @@ type Options struct {
 	// changed the exposure (the entity ids whose decision moved) or the
 	// endpoints (added, replaced or removed devices).
 	OnChange func(exposure []string, endpoints bool)
+	// Camera maps camera entities (config.Config.Camera). Off, an
+	// exposed camera is skipped before go-hamapping sees it, with
+	// cameraOff as its verdict.
+	Camera bool
 }
 
 // Verdict is one candidate entity's line of the plan an operator reads:
@@ -158,6 +163,8 @@ type Bridge struct {
 	// Assistant's registry since the last sync, by entity id: the next
 	// sync forgets it instead of removing it ([Bridge.noteRemoved]).
 	forget map[string]device.SourceKey
+	// cameraLogged is set once the skipped cameras were logged.
+	cameraLogged bool
 
 	mu       sync.Mutex
 	states   map[string]*ha.State
@@ -431,11 +438,20 @@ type planned struct {
 	sig      string
 }
 
+// cameraOff is the verdict of an exposed camera while the camera option
+// is off.
+const cameraOff = "the camera option is off (CAMERA, add-on option camera)"
+
+// isCamera reports whether an entity id is of the camera domain.
+func isCamera(id string) bool { return strings.HasPrefix(id, "camera.") }
+
 // assess applies the exposure rule and groups the exposed entities by
 // device: the candidates' verdicts (go-hamapping's verdict left to the
 // caller) and the devices to plan. A candidate is every entity with a
 // state or a registry entry. names are the web UI's name overrides.
-func assess(s *Snapshot, rule expose.Rule, names map[string]string) ([]Verdict, []*planned) {
+// Without camera, an exposed camera is not planned; its verdict is
+// unmappable with cameraOff.
+func assess(s *Snapshot, rule expose.Rule, names map[string]string, camera bool) ([]Verdict, []*planned) {
 	reg := map[string]*ha.EntityEntry{}
 	for i := range s.Entities {
 		reg[s.Entities[i].EntityID] = &s.Entities[i]
@@ -504,6 +520,11 @@ func assess(s *Snapshot, rule expose.Rule, names map[string]string) ([]Verdict, 
 			verdicts = append(verdicts, v)
 			continue
 		}
+		if !camera && isCamera(id) {
+			v.State, v.Reason = eligibility.StateUnmappable.String(), cameraOff
+			verdicts = append(verdicts, v)
+			continue
+		}
 		var md *model.Device
 		var key string
 		if r != nil && r.DeviceID != "" && devs[r.DeviceID] != nil {
@@ -544,6 +565,24 @@ func assess(s *Snapshot, rule expose.Rule, names map[string]string) ([]Verdict, 
 		out = append(out, g)
 	}
 	return verdicts, out
+}
+
+// logCameraOff logs, once per start, the exposed cameras the camera
+// option left out.
+func (b *Bridge) logCameraOff(verdicts []Verdict) {
+	if b.cameraLogged {
+		return
+	}
+	n := 0
+	for i := range verdicts {
+		if verdicts[i].Reason == cameraOff {
+			n++
+		}
+	}
+	if n > 0 {
+		b.cameraLogged = true
+		b.log.Info("bridge.camera_disabled", slog.Int("skipped", n), slog.String("enable", "CAMERA=true or the add-on option camera"))
+	}
 }
 
 // describe is an entity's description as a comparable string: a change
@@ -607,8 +646,8 @@ func mapOptions(regs map[string]*ha.EntityEntry, names map[string]string) hamapp
 
 // Dry is the plan without a node: what --dump-plan prints. names are the
 // web UI's name overrides (nil: none).
-func Dry(s *Snapshot, rule expose.Rule, names map[string]string) []Verdict {
-	verdicts, groups := assess(s, rule, names)
+func Dry(s *Snapshot, rule expose.Rule, names map[string]string, camera bool) []Verdict {
+	verdicts, groups := assess(s, rule, names, camera)
 	for _, g := range groups {
 		_, mv := hamapping.Map(g.device, g.entities, mapOptions(g.regs, g.names))
 		mapVerdicts(verdicts, mv)
@@ -619,9 +658,9 @@ func Dry(s *Snapshot, rule expose.Rule, names map[string]string) []Verdict {
 // candidates is every entity's verdict as if the lists exposed it: the
 // verdict the web UI shows for an entity the rule leaves out. Disabled
 // and hidden entities stay out.
-func candidates(s *Snapshot, names map[string]string) map[string]*Verdict {
+func candidates(s *Snapshot, names map[string]string, camera bool) map[string]*Verdict {
 	out := map[string]*Verdict{}
-	vs := Dry(s, expose.Rule{Include: []string{"*"}}, names)
+	vs := Dry(s, expose.Rule{Include: []string{"*"}}, names, camera)
 	for i := range vs {
 		out[vs[i].EntityID] = &vs[i]
 	}
@@ -642,8 +681,9 @@ func (b *Bridge) sync(ctx context.Context) {
 	}
 	b.unit = snap.Config.TemperatureUnit()
 	rule, names := b.rule(), b.names()
-	verdicts, plannedGroups := assess(snap, rule, names)
-	all := candidates(snap, names)
+	verdicts, plannedGroups := assess(snap, rule, names, b.opts.Camera)
+	all := candidates(snap, names, b.opts.Camera)
+	b.logCameraOff(verdicts)
 	warnings, uiWarnings := b.warn(rule, snap.LabelRegistry())
 
 	b.mu.Lock()

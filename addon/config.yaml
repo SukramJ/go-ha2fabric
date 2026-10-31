@@ -53,6 +53,7 @@ options:
   product_id: 32769
   label: Matter Bridge
   expose_assist: true
+  camera: false
   include: []
   exclude: []
   include_labels: []
@@ -67,6 +68,7 @@ schema:
   product_id: int(1,65535)
   label: str
   expose_assist: bool
+  camera: bool
   include:
     - str
   exclude:

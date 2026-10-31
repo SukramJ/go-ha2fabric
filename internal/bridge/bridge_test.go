@@ -45,7 +45,7 @@ func byID(vs []bridge.Verdict) map[string]bridge.Verdict {
 // TestDryPlan is --dump-plan on the fixtures: every candidate with the
 // rule's word and go-hamapping's.
 func TestDryPlan(t *testing.T) {
-	v := byID(bridge.Dry(snapshot(t), expose.Rule{Assist: true, Include: []string{"sensor.outdoor"}, Exclude: []string{"fan.*"}}, nil))
+	v := byID(bridge.Dry(snapshot(t), expose.Rule{Assist: true, Include: []string{"sensor.outdoor"}, Exclude: []string{"fan.*"}}, nil, false))
 	for id, want := range map[string]struct {
 		exposed bool
 		why     string
@@ -98,8 +98,22 @@ func TestDryPlan(t *testing.T) {
 	// An entity with a registry entry and no state is no endpoint yet.
 	s := snapshot(t)
 	s.States = s.States[1:] // light.kitchen
-	if got := byID(bridge.Dry(s, expose.Rule{Assist: true}, nil))["light.kitchen"]; got.Exposed || !strings.HasSuffix(got.ExposeReason, "no state yet") {
+	if got := byID(bridge.Dry(s, expose.Rule{Assist: true}, nil, false))["light.kitchen"]; got.Exposed || !strings.HasSuffix(got.ExposeReason, "no state yet") {
 		t.Errorf("stateless light %+v", got)
+	}
+}
+
+// TestCameraOff: with the option off, an exposed camera is skipped
+// before go-hamapping, and says why.
+func TestCameraOff(t *testing.T) {
+	s := snapshot(t)
+	s.States = append(s.States, ha.State{EntityID: "camera.porch", State: "idle", Attributes: map[string]any{"supported_features": 2, "friendly_name": "Porch"}})
+	got := byID(bridge.Dry(s, expose.Rule{Include: []string{"camera.porch"}}, nil, false))["camera.porch"]
+	if !got.Exposed || got.State != "unmappable" || !strings.Contains(got.Reason, "CAMERA") || got.Row != "" {
+		t.Fatalf("camera off %+v", got)
+	}
+	if got := byID(bridge.Dry(s, expose.Rule{Include: []string{"camera.porch"}}, nil, true))["camera.porch"]; strings.Contains(got.Reason, "CAMERA") {
+		t.Fatalf("camera on %+v", got)
 	}
 }
 
@@ -114,6 +128,14 @@ func TestNodeConfig(t *testing.T) {
 	}
 	if nc.BasicInformation.NodeLabel != config.DefaultLabel || nc.Network.Listen != config.DefaultListen || nc.Store.Path != c.StorePath || nc.BasicInformation.SoftwareVersion == 0 {
 		t.Fatalf("node config %+v", nc)
+	}
+	if nc.Network.TCP.Incoming || nc.Network.TCP.Outgoing {
+		t.Fatalf("TCP without the camera: %+v", nc.Network.TCP)
+	}
+	c.Camera = true
+	nc = bridge.NodeConfig(c, nil)
+	if err := nc.Validate(); err != nil || !nc.Network.TCP.Incoming || nc.Network.TCP.Outgoing {
+		t.Fatalf("TCP with the camera: %+v %v", nc.Network.TCP, err)
 	}
 }
 

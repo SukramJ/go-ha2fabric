@@ -223,7 +223,7 @@ func (p provider) Preview(_ context.Context, updates []fabricui.Update) ([]fabri
 		return nil, err
 	}
 	rule, names := p.proposed(v, updates)
-	after := &view{snap: v.snap, verdicts: Dry(v.snap, rule, names), all: v.all, reg: v.reg, devs: v.devs, areas: v.areas, names: names}
+	after := &view{snap: v.snap, verdicts: Dry(v.snap, rule, names, p.b.opts.Camera), all: v.all, reg: v.reg, devs: v.devs, areas: v.areas, names: names}
 	touched := map[string]bool{}
 	for _, u := range updates {
 		touched[u.Key] = true
@@ -258,7 +258,7 @@ func (p provider) Apply(_ context.Context, updates []fabricui.Update) (int, erro
 		delete(base.Overrides, u.Key)
 	}
 	plain := map[string]bool{}
-	dry := Dry(v.snap, base, nil)
+	dry := Dry(v.snap, base, nil, p.b.opts.Camera)
 	for i := range dry {
 		plain[dry[i].EntityID] = dry[i].Exposed
 	}
