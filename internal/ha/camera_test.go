@@ -229,7 +229,7 @@ func TestClientImage(t *testing.T) {
 		t.Fatalf("requests %+v", rq)
 	}
 
-	var errs []error
+	errs := make([]error, 0, 5)
 	_, _, err = ha.New(ha.Options{URL: srv.URL(), Token: "wrong-secret"}).Image(ctx, "camera.front_door", 0, 0)
 	if !errors.Is(err, ha.ErrUnauthorized) || !strings.Contains(err.Error(), "401") {
 		t.Fatalf("a wrong token: %v", err)

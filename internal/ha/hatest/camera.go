@@ -49,23 +49,23 @@ type camera struct {
 	imageReqs    []ImageRequest
 }
 
-// SessionEvent, AnswerEvent, CandidateEvent and ErrorEvent are the event
-// objects camera/webrtc/offer pushes (camera/webrtc.py:40-90 at
-// 2026.10.3; a candidate's keys are webrtc-models 0.3.0's aliases,
-// webrtc_models/__init__.py:76-85).
+// SessionEvent is the session event camera/webrtc/offer pushes first
+// (camera/webrtc.py:56-60, 292 at 2026.10.3).
 func SessionEvent(id string) map[string]any {
 	return map[string]any{"type": "session", "session_id": id}
 }
 
-// AnswerEvent: see [SessionEvent].
+// AnswerEvent is the answer event (camera/webrtc.py:63-67 at 2026.10.3).
 func AnswerEvent(sdp string) map[string]any { return map[string]any{"type": "answer", "answer": sdp} }
 
-// CandidateEvent: see [SessionEvent].
+// CandidateEvent is a candidate event (camera/webrtc.py:70-82 at
+// 2026.10.3; the keys are webrtc-models 0.3.0's aliases,
+// webrtc_models/__init__.py:76-85).
 func CandidateEvent(candidate, mid string, index int) map[string]any {
 	return map[string]any{"type": "candidate", "candidate": map[string]any{"candidate": candidate, "sdpMid": mid, "sdpMLineIndex": index}}
 }
 
-// ErrorEvent: see [SessionEvent].
+// ErrorEvent is an error event (camera/webrtc.py:85-90 at 2026.10.3).
 func ErrorEvent(code, message string) map[string]any {
 	return map[string]any{"type": "error", "code": code, "message": message}
 }
@@ -106,29 +106,28 @@ func (s *Server) SetCameraOff(entityID string, off bool) {
 	s.cam.off[entityID] = off
 }
 
-// Offers, Candidates, Unsubscribed and ImageRequests return what the fake
-// recorded so far.
+// Offers returns the offers the fake received so far.
 func (s *Server) Offers() []Offer {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return slices.Clone(s.cam.offers)
 }
 
-// Candidates: see [Server.Offers].
+// Candidates returns the candidates the fake received so far.
 func (s *Server) Candidates() []Candidate {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return slices.Clone(s.cam.candidates)
 }
 
-// Unsubscribed: see [Server.Offers].
+// Unsubscribed returns the offer ids unsubscribed so far.
 func (s *Server) Unsubscribed() []int64 {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return slices.Clone(s.cam.unsubscribed)
 }
 
-// ImageRequests: see [Server.Offers].
+// ImageRequests returns the camera proxy requests served so far.
 func (s *Server) ImageRequests() []ImageRequest {
 	s.mu.Lock()
 	defer s.mu.Unlock()
