@@ -4,13 +4,15 @@
 // Package ha is the daemon's Home Assistant client: the WebSocket API
 // (https://developers.home-assistant.io/docs/api/websocket) with its auth
 // handshake, the id-tagged command envelope, ping keepalive, event
-// subscriptions and a reconnect with back-off. Every payload shape is
+// subscriptions, commands whose events follow their result
+// (camera/webrtc/offer), the camera proxy's still over HTTP, and a
+// reconnect with back-off. Every payload shape is
 // taken from Home Assistant core at the pinned release 2026.10.3; the
 // citations are file:line at that tag.
 //
 // The access token (a long-lived token stand-alone, SUPERVISOR_TOKEN in
 // the add-on) is held in memory only: it is sent in the auth message and
-// never logged.
+// as the camera proxy's Bearer header, and never logged.
 package ha
 
 import (
@@ -19,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -69,6 +72,9 @@ type Options struct {
 	MinBackoff, MaxBackoff time.Duration
 	// ReadLimit bounds one frame; 0 is DefaultReadLimit.
 	ReadLimit int64
+	// ImageLimit bounds a camera still ([Client.Image]); 0 is
+	// DefaultImageLimit.
+	ImageLimit int64
 	// Logger is the client's logger; nil is slog.Default().
 	Logger *slog.Logger
 }
@@ -92,6 +98,8 @@ type Handler interface {
 type Client struct {
 	opts Options
 	log  *slog.Logger
+
+	http *http.Client
 
 	mu   sync.Mutex
 	cur  *session
@@ -118,11 +126,17 @@ func New(opts Options) *Client {
 	if opts.ReadLimit <= 0 {
 		opts.ReadLimit = DefaultReadLimit
 	}
+	if opts.ImageLimit <= 0 {
+		opts.ImageLimit = DefaultImageLimit
+	}
 	log := opts.Logger
 	if log == nil {
 		log = slog.Default()
 	}
-	return &Client{opts: opts, log: log}
+	// The REST client is built once. The WebSocket dial takes the default
+	// HTTP client's settings (websocket.Dial with nil options); the REST
+	// side does the same, bounded by CallTimeout.
+	return &Client{opts: opts, log: log, http: &http.Client{Timeout: opts.CallTimeout}}
 }
 
 // Connected reports whether a connection is authenticated now.
@@ -172,6 +186,7 @@ type session struct {
 	mu      sync.Mutex
 	pending map[int64]chan Message
 	subs    map[int64]bool
+	streams map[int64]*Subscription
 	done    chan struct{}
 	err     error
 }
@@ -192,7 +207,7 @@ func (c *Client) serve(ctx context.Context, h Handler) (authed bool, err error) 
 		_ = ws.Close(websocket.StatusPolicyViolation, "auth")
 		return false, err
 	}
-	s := &session{ws: ws, pending: map[int64]chan Message{}, subs: map[int64]bool{}, done: make(chan struct{})}
+	s := &session{ws: ws, pending: map[int64]chan Message{}, subs: map[int64]bool{}, streams: map[int64]*Subscription{}, done: make(chan struct{})}
 	rctx, stop := context.WithCancel(ctx)
 	defer stop()
 	go c.read(rctx, s, h)
@@ -303,7 +318,15 @@ func (c *Client) read(ctx context.Context, s *session, h Handler) {
 			case TypeEvent:
 				s.mu.Lock()
 				ours := s.subs[m.ID]
+				stream := s.streams[m.ID]
 				s.mu.Unlock()
+				if stream != nil {
+					if !stream.deliver(m.Event) {
+						c.log.Warn("ha.subscription_overflow", slog.Int64("id", m.ID))
+						s.dropStream(m.ID, ErrSubscriptionOverflow)
+					}
+					continue
+				}
 				if !ours {
 					continue
 				}
@@ -341,6 +364,10 @@ func (s *session) fail(err error) {
 		delete(s.pending, id)
 		close(ch)
 	}
+	for id, sub := range s.streams {
+		delete(s.streams, id)
+		sub.close(fmt.Errorf("%w: %w", ErrDisconnected, err))
+	}
 	_ = s.ws.CloseNow()
 }
 
@@ -350,6 +377,12 @@ func (s *session) fail(err error) {
 // before the command is sent, so no event that follows its result is
 // dropped.
 func (s *session) call(ctx context.Context, cmd map[string]any, sub bool) (Message, error) {
+	return s.callWith(ctx, cmd, sub, nil)
+}
+
+// callWith is call that registers stream, when not nil, as the receiver
+// of the events of the command's id — before the command is sent.
+func (s *session) callWith(ctx context.Context, cmd map[string]any, sub bool, stream *Subscription) (Message, error) {
 	ch := make(chan Message, 1)
 	s.writeMu.Lock()
 	s.nextID++
@@ -366,6 +399,10 @@ func (s *session) call(ctx context.Context, cmd map[string]any, sub bool) (Messa
 	s.pending[id] = ch
 	if sub {
 		s.subs[id] = true
+	}
+	if stream != nil {
+		stream.id = id
+		s.streams[id] = stream
 	}
 	s.mu.Unlock()
 	b, err := json.Marshal(cmd)

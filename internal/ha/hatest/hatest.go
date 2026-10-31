@@ -5,7 +5,10 @@
 // tests: the auth handshake, the registry lists (entities, devices,
 // areas, labels), get_states, get_config,
 // homeassistant/expose_entity/list, subscribe_events with the events the
-// test raises, ping, and call_service recording. Its data is the recorded
+// test raises, ping, call_service recording, the camera's WebRTC
+// signalling (camera/webrtc/offer with scripted events,
+// camera/webrtc/candidate, unsubscribe_events) and the camera proxy's
+// still over HTTP. Its data is the recorded
 // fixtures under testdata/ha/ of the repository, each of which names the
 // Home Assistant core lines (tag 2026.10.3) whose shape it mirrors.
 package hatest
@@ -59,6 +62,8 @@ type Server struct {
 	OnCall func(ha.ServiceCall)
 	// Fail, when set, makes call_service fail with its error.
 	Fail func(ha.ServiceCall) *ha.Error
+
+	cam camera
 }
 
 type conn struct {
@@ -125,7 +130,10 @@ func New(tb testing.TB) *Server {
 	}
 	ex := decode[ha.Exposed](tb, "expose_entity_list.json")
 	s.exposed = ex.Entities
-	s.srv = httptest.NewServer(http.HandlerFunc(s.serve))
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/camera_proxy/{entity_id}", s.cameraProxy)
+	mux.HandleFunc("/", s.serve)
+	s.srv = httptest.NewServer(mux)
 	tb.Cleanup(func() {
 		s.Down()
 		s.srv.Close()
@@ -269,6 +277,10 @@ func (s *Server) command(ctx context.Context, c *conn, id int64, cmd map[string]
 		c.mu.Lock()
 		c.subs[et] = append(c.subs[et], id)
 		c.mu.Unlock()
+	case "camera/webrtc/offer", "camera/webrtc/candidate", "unsubscribe_events":
+		s.mu.Unlock()
+		s.cameraCommand(ctx, c, id, typ, cmd)
+		return
 	case "call_service":
 		sc := serviceCall(cmd)
 		s.calls = append(s.calls, sc)
