@@ -690,6 +690,62 @@
    "platform": "webostv",
    "translation_key": null,
    "unique_id": "webostv-media-player-living-tv"
+  },
+  {
+   "area_id": null,
+   "categories": {},
+   "config_entry_id": "ce-generic",
+   "config_subentry_id": null,
+   "created_at": 1761350400.0,
+   "device_id": null,
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "camera.front_door",
+   "has_entity_name": true,
+   "hidden_by": null,
+   "icon": null,
+   "id": "reg-camera-front-door",
+   "labels": [],
+   "modified_at": 1761350400.0,
+   "name": null,
+   "next_name_part": null,
+   "options": {
+    "conversation": {
+     "should_expose": true
+    }
+   },
+   "original_name": null,
+   "platform": "generic",
+   "translation_key": null,
+   "unique_id": "go2rtc-front"
+  },
+  {
+   "area_id": null,
+   "categories": {},
+   "config_entry_id": "ce-generic",
+   "config_subentry_id": null,
+   "created_at": 1761350400.0,
+   "device_id": null,
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "camera.doorbell_still",
+   "has_entity_name": true,
+   "hidden_by": null,
+   "icon": null,
+   "id": "reg-camera-doorbell-still",
+   "labels": [],
+   "modified_at": 1761350400.0,
+   "name": null,
+   "next_name_part": null,
+   "options": {
+    "conversation": {
+     "should_expose": true
+    }
+   },
+   "original_name": null,
+   "platform": "generic",
+   "translation_key": null,
+   "unique_id": "generic-doorbell"
   }
  ]
 }
