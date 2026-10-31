@@ -6,12 +6,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Home Assistant entities as a bridge for Matter controllers, in pure Go on go-fabric. Twin of `go-hamapping`; both are built on
 [go-fabric](https://github.com/SukramJ/go-fabric) and share its project
-setup. **State: 0.4.0** (brief H3, two follow-ups, the family bump F1 and its follow-ups F2, brief R1–R5): the daemon `cmd/ha2fabric` and its
+setup. **State: 0.5.0** (brief H3, two follow-ups, the family bump F1 and its follow-ups F2, brief R1–R5, brief R6): the daemon `cmd/ha2fabric` and its
 add-on. `CONCEPT.md` is the design, `docs/operations.md` the operator's
 page, `docs/by_design.md` the differences from matter-hub,
 `docs/reports/H2.md`, `H3.md`, `F1.md` and `F2.md` the waves' reports. Layout: `internal/ha`
 (the WebSocket client, `hatest` its fake on the fixtures in `testdata/ha/`),
 `internal/expose` (the exposure rule with labels and overrides),
+`internal/camera` (the camera host: the relay of WebRTC signalling and
+stills, the one importer of go-fabric's `cluster/camera`),
 `internal/selection` (the web UI's overrides file), `internal/adapt` (HA
 onto go-hamqtt's model, a command back to `call_service`),
 `internal/bridge` (the composition on go-fabric's node and go-hamapping's

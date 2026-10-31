@@ -17,8 +17,10 @@ import (
 	temperaturedef "github.com/SukramJ/go-fabric/cluster/spec/temperaturemeasurement"
 	"github.com/SukramJ/go-fabric/controller/client"
 	"github.com/SukramJ/go-fabric/fabrictest"
+	"github.com/SukramJ/go-fabric/node"
 
 	"github.com/SukramJ/go-ha2fabric/internal/bridge"
+	"github.com/SukramJ/go-ha2fabric/internal/camera"
 	"github.com/SukramJ/go-ha2fabric/internal/config"
 	"github.com/SukramJ/go-ha2fabric/internal/expose"
 	"github.com/SukramJ/go-ha2fabric/internal/ha"
@@ -49,6 +51,8 @@ type env struct {
 	br   *bridge.Bridge
 	cl   *ha.Client
 	pair *fabrictest.Pair
+	// tcp: the controller dials TCP (the camera env).
+	tcp bool
 }
 
 func newEnv(t *testing.T, rule expose.Rule, edit ...func(*bridge.Options)) *env {
@@ -56,22 +60,43 @@ func newEnv(t *testing.T, rule expose.Rule, edit ...func(*bridge.Options)) *env 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	t.Cleanup(cancel)
 	srv := hatest.New(t)
-	site := fabrictest.NewSite(t, fabrictest.Options{Clock: clock.System{}, Logger: logger()})
+	opts := bridge.Options{Rule: rule, Debounce: 20 * time.Millisecond, Logger: logger()}
+	for _, fn := range edit {
+		fn(&opts)
+	}
+	// A camera's offer is a large message, which the controller sends over
+	// TCP only (go-fabric cluster/camera/requestor_parity_matterjs_test.go:
+	// 465-480 at v0.15.5): the site runs on loopback sockets and the node
+	// accepts TCP, as the daemon's NodeConfig does with the camera on.
+	site := fabrictest.NewSite(t, fabrictest.Options{Clock: clock.System{}, Logger: logger(), Loopback: opts.Camera})
 	// The daemon's own node configuration on the site (go-fabric
 	// fabrictest.Site.AddNode, v0.12.1): the identity, the commissioning
 	// values and the health probe main.go hands node.New; the site puts in
 	// its network, clock, advertiser and a store (StorePath is empty).
-	dev := site.AddNode(bridge.NodeConfig(&config.Config{
-		Passcode: 20202021, Discriminator: 3840, VendorID: 0xFFF1, ProductID: 0x8000, Label: "go-ha2fabric",
-	}, logger()))
+	daemon := bridge.NodeConfig(&config.Config{
+		Passcode: 20202021, Discriminator: 3840, VendorID: 0xFFF1, ProductID: 0x8000, Label: "go-ha2fabric", Camera: opts.Camera,
+	}, logger())
+	var dev *fabrictest.Device
+	if opts.Camera {
+		// fabrictest's AddNode clears the program's TCP roles
+		// (fabrictest/device.go:314-316 at v0.15.5); a topology's Configure
+		// runs after the site's defaults (:297-299), so the camera env
+		// takes the daemon's identity and its TCP role through it.
+		dev = site.AddDevice(fabrictest.Topology{Configure: func(cfg *node.Config) {
+			cfg.Network.TCP = daemon.Network.TCP
+			cfg.Commissioning.Passcode, cfg.Commissioning.Discriminator = daemon.Commissioning.Passcode, daemon.Commissioning.Discriminator
+			cfg.ProductDescription, cfg.BasicInformation = daemon.ProductDescription, daemon.BasicInformation
+		}})
+	} else {
+		dev = site.AddNode(daemon)
+	}
 	cl := ha.New(ha.Options{
 		URL: srv.URL(), Token: hatest.Token, Logger: logger(),
 		Events:     []string{ha.EventStateChanged, ha.EventEntityRegistryUpdated, ha.EventDeviceRegistryUpdated, ha.EventLabelRegistryUpdated},
 		MinBackoff: 20 * time.Millisecond, MaxBackoff: 100 * time.Millisecond,
 	})
-	opts := bridge.Options{Rule: rule, Debounce: 20 * time.Millisecond, Logger: logger()}
-	for _, fn := range edit {
-		fn(&opts)
+	if opts.Camera && opts.CameraUpstream == nil {
+		opts.CameraUpstream = camera.HA(cl)
 	}
 	br := bridge.New(dev.Node(), cl, opts)
 	rctx, stop := context.WithCancel(ctx)
@@ -88,12 +113,14 @@ func newEnv(t *testing.T, rule expose.Rule, edit ...func(*bridge.Options)) *env 
 	case <-ctx.Done():
 		t.Fatal("no first sync")
 	}
-	return &env{t: t, ctx: ctx, ha: srv, site: site, dev: dev, br: br, cl: cl}
+	return &env{t: t, ctx: ctx, ha: srv, site: site, dev: dev, br: br, cl: cl, tcp: opts.Camera}
 }
 
 func (e *env) commission() {
 	e.t.Helper()
-	ctrl := e.site.AddController(fabrictest.ControllerOptions{})
+	var co fabrictest.ControllerOptions
+	co.TCP.Outgoing = e.tcp
+	ctrl := e.site.AddController(co)
 	pair, err := ctrl.Commission(e.ctx, e.dev, fabrictest.CommissionOptions{})
 	if err != nil {
 		e.t.Fatalf("commission: %v", err)

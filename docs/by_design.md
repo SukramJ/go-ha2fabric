@@ -125,3 +125,53 @@ go-ha2fabric rounds the `volume_set` value to two places
 (`internal/adapt/command.go`, the `volume_level` method), so a controller's
 level 200 is `0.79` and not `0.7874015…`; a step of one level (0.39 %)
 reaches Home Assistant as the nearest hundredth.
+
+## Cameras behind an option
+
+matter-hub exposes the cameras its camera plugin lists by entity id, a
+plugin it calls experimental (`backend/src/plugins/builtin/camera/camera-plugin.ts:16-20, 28-29,
+131-135`). go-ha2fabric maps every exposed camera with the `STREAM` feature
+(`camera/const.py:71-75` at 2026.10.3) through go-hamapping's camera row,
+but only with `CAMERA=true`, off by default: go-fabric's ecosystem gate
+keeps camera clusters out of host devices until a live test with Apple Home
+has passed (go-fabric `docs/guides/camera.md:414-425` at v0.15.5). The gate
+is go-fabric's rule, and a default that breaks it would ship an unverified
+device type to every user.
+
+## Signalling only
+
+matter-hub runs two WebRTC peer connections per session, one to Home
+Assistant and one to the controller, and forwards the media between them
+(`backend/src/plugins/builtin/camera/webrtc-bridge.ts:114-123`). go-ha2fabric relays the signalling only:
+the controller's offer goes to `camera/webrtc/offer`, Home Assistant's
+answer and candidates go back through go-fabric's `camera.Provider`
+signals, and the controller's peer connection is with Home Assistant's
+provider itself (`camera/webrtc.py:264-273`). The stream declaration is
+therefore nominal — one video, audio and snapshot stream, the values of
+go-hamapping's camera row and its caveat (`rows/camera.yaml` at v0.4.0) —
+since Home Assistant names no codec, resolution or frame rate
+(`camera/__init__.py:742-755`). A relay without a media stack needs no
+codec of its own and adds no hop to the stream.
+
+## SolicitOffer not served
+
+matter-hub accepts `SolicitOffer` and starts a session whose deferred offer
+it does not deliver yet (`backend/src/plugins/builtin/camera/webrtc-provider-server.ts:52-72`).
+go-ha2fabric refuses it: Home Assistant's WebRTC API takes the client's
+offer only (`camera/webrtc.py:252-258`), so the bridge has no offer of its
+own to give. The refusal carries INVALID_IN_STATE; go-fabric's kit answers
+FAILURE for any port error that is not an `im.StatusCodeError`
+(`cluster/camera/chime.go:293-299` at v0.15.5). chip's camera controller
+starts a live view with `ProvideOffer`
+(`examples/camera-controller/commands/liveview/LiveViewCommands.cpp:40` at
+1dc3b69ed5e), which is served.
+
+## ICE servers not relayed
+
+matter-hub uses the controller's ICE servers on its own controller-side
+peer (`backend/src/plugins/builtin/camera/webrtc-bridge.ts:418-444`). go-ha2fabric has no peer and does not
+pass them on: Home Assistant's provider uses its own, the configured ones
+and Home Assistant's STUN default (`camera/__init__.py:708-718`,
+`components/web_rtc/__init__.py:97-111`). `camera/webrtc/offer` takes only
+the entity and the SDP (`camera/webrtc.py:252-258`), so there is no field
+to carry them.

@@ -268,25 +268,37 @@ on the go-fabric lines):
   call, `Node.Peers()` is a seam without a facade route
   (`docs/guides/advanced-seams.md:37`). Filed as go-fabric #351.
 
-R6 is therefore not built in the R1–R5 run (owner decision 2026-10-31:
-build only on a green reading). Steps, in order, once go-fabric #351 is
-released:
+R6 was therefore not built in the R1–R5 run (owner decision 2026-10-31:
+build only on a green reading). go-fabric #351 shipped in v0.15.5, and R6
+was built the same day (brief R6, go-ha2fabric 0.5.0):
 
 - [x] **Read**: the three questions above are answered; see the finding.
-- [ ] **go-hamqtt**: a camera entity with a stream capability beyond
-  MQTT discovery. A question to that repository.
-- [ ] **go-hamapping**: a row kind that binds a port (`camera.ProviderPort`)
-  instead of a service call; the row format knows commands with a
-  payload only (`model.Command`: Method, Payload).
-- [ ] **go-fabric** (necessary, #351): the signalling route — the provider
+- [x] **go-hamqtt**: not needed — `Description.Extra` carries
+  `supported_features` (`internal/adapt/adapt.go:176-179`), which
+  go-hamapping's camera row reads for `STREAM`.
+- [x] **go-hamapping** v0.4.0: `ports: host` in the row format,
+  `Options.Ports`, the camera row (`rows/camera.yaml`).
+- [x] **go-fabric** v0.15.5 (#351): the signalling route — the provider
   invokes `Answer`, `IceCandidates` and `End` on the session's peer node,
   fabric and originating endpoint, as chip's provider manager does
   (`webrtc-provider-manager.cpp:1189-1242` at 1dc3b69ed5e). Sensible
   beside it: a kit default for a signalling-only camera that declares
   one opaque H264 video stream, beside `device/defaults_camera.go`.
-- [ ] **go-ha2fabric**: the WebRTC subscription handling in
-  `internal/ha`, the relay of offer, answer and candidates, snapshot via
-  the camera proxy for SnapshotStream.
+- [x] **go-ha2fabric** 0.5.0: the subscriptions and the camera proxy in
+  `internal/ha`, the relay in `internal/camera`, the option `CAMERA`
+  (off by default), TCP for the signals (`docs/operations.md`, Cameras).
+
+Left open:
+
+- The Apple Home live test — the condition to turn `CAMERA` on by default
+  (go-fabric `docs/guides/camera.md:414-425`); it also confirms the
+  Supervisor proxy path of the camera proxy and the controller's TCP
+  session.
+- A SnapshotCamera row for cameras without `STREAM` (go-hamapping).
+- `SolicitOffer`: Home Assistant takes the client's offer only
+  (`camera/webrtc.py:252-258`).
+- The controller's ICE servers (`docs/by_design.md`, ICE servers not
+  relayed).
 
 ## Not planned, with the reason
 

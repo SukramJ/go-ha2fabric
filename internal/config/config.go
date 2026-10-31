@@ -99,6 +99,13 @@ type Config struct {
 	// Ingress proxy is the administrator there.
 	WebAdmin bool
 
+	// Camera maps camera entities onto go-fabric's Camera device type and
+	// relays their WebRTC signalling (CAMERA, default false). It is off
+	// until a live test with Apple Home has passed: go-fabric's ecosystem
+	// gate keeps camera clusters out of host devices before that
+	// (go-fabric docs/guides/camera.md:414-425 at v0.15.5).
+	Camera bool
+
 	// DumpPlan prints every candidate entity's verdict and exits.
 	DumpPlan bool
 	// Version prints the version and exits.
@@ -171,6 +178,7 @@ func Load(args []string, env Env, out io.Writer) (*Config, error) {
 	web := str("web-listen", "WEB_LISTEN", DefaultWebListen, "web UI address; empty disables it")
 	allow := str("web-allow", "WEB_ALLOW", "", "client addresses allowed on the web UI (comma-separated); empty allows all")
 	webAdmin := str("web-admin", "WEB_ADMIN", "false", "stand-alone: let the web UI write and show the pairing code")
+	cam := str("camera", "CAMERA", "false", "map camera entities and relay their WebRTC signalling (opt-in)")
 	dump := fs.Bool("dump-plan", false, "print every candidate entity's verdict and exit")
 	ver := fs.Bool("version", false, "print the version and exit")
 	if err := fs.Parse(args); err != nil {
@@ -258,6 +266,11 @@ func Load(args []string, env Env, out io.Writer) (*Config, error) {
 		add("WEB_ADMIN must be true or false, got %q", *webAdmin)
 	} else {
 		c.WebAdmin = b
+	}
+	if b, err := strconv.ParseBool(*cam); err != nil {
+		add("CAMERA must be true or false, got %q", *cam)
+	} else {
+		c.Camera = b
 	}
 	if err := c.LogLevel.UnmarshalText([]byte(*level)); err != nil {
 		add("LOG_LEVEL must be debug, info, warn or error, got %q", *level)

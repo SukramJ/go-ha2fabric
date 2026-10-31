@@ -67,6 +67,12 @@
    },
    "media_player.living_tv": {
     "conversation": true
+   },
+   "camera.front_door": {
+    "conversation": true
+   },
+   "camera.doorbell_still": {
+    "conversation": true
    }
   }
  }

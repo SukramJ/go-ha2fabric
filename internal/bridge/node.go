@@ -31,10 +31,14 @@ const spake2Iterations = 1000
 // NodeConfig is the node's configuration from the daemon's (cookbook §2):
 // the listen address, the commissioning values, the identity with the
 // daemon's version, the store file, the daemon's logger and the health
-// probe; everything else is go-fabric's default.
+// probe; everything else is go-fabric's default. With the camera on, the
+// node also accepts Matter over TCP: a camera's signals carry an SDP,
+// which rarely fits one UDP message, and the node sends them over the
+// controller's TCP session (go-fabric docs/guides/camera.md:121-128,
+// bridge/tcp_listen.go:20-31 at v0.15.5).
 func NodeConfig(c *config.Config, logger *slog.Logger) node.Config {
 	return node.Config{
-		Network: node.Network{Listen: c.Listen},
+		Network: node.Network{Listen: c.Listen, TCP: node.TCPConfig{Incoming: c.Camera}},
 		Commissioning: node.Commissioning{
 			Passcode:        c.Passcode,
 			Discriminator:   c.Discriminator,

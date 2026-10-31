@@ -1,5 +1,5 @@
 {
- "_mirrors": "homeassistant/components/websocket_api/commands.py:369-385 (get_states) and homeassistant/core.py:1988-2014 (State._as_dict); attributes per homeassistant/helpers/entity.py:1115-1176 and the domains' state attributes (light/__init__.py:447-469,609-660 capability and state attributes, light/const.py:102-122, climate/const.py:114-136,169-191, cover/const.py:18-23, fan/const.py:26-31); the R1-R5 entities per sensor/const.py:192,268,512 (classes), button/__init__.py:101-106, event/__init__.py:178-206, select/__init__.py:108-122, climate/__init__.py:239-341, vacuum/__init__.py:156-173, valve/entity.py:71-105, water_heater/__init__.py:164-225, media_player/__init__.py:858-899 and the feature masks of climate/const.py:194-205, vacuum/const.py:53-69, valve/const.py:36-42, water_heater/const.py:61-67, media_player/const.py:196-221 @2026.10.3",
+ "_mirrors": "homeassistant/components/websocket_api/commands.py:369-385 (get_states) and homeassistant/core.py:1988-2014 (State._as_dict); attributes per homeassistant/helpers/entity.py:1115-1176 and the domains' state attributes (light/__init__.py:447-469,609-660 capability and state attributes, light/const.py:102-122, climate/const.py:114-136,169-191, cover/const.py:18-23, fan/const.py:26-31); the R1-R5 entities per sensor/const.py:192,268,512 (classes), button/__init__.py:101-106, event/__init__.py:178-206, select/__init__.py:108-122, climate/__init__.py:239-341, vacuum/__init__.py:156-173, valve/entity.py:71-105, water_heater/__init__.py:164-225, media_player/__init__.py:858-899 and the feature masks of climate/const.py:194-205, vacuum/const.py:53-69, valve/const.py:36-42, water_heater/const.py:61-67, media_player/const.py:196-221; the cameras per camera/__init__.py:380-390 (state idle), 410-416 and 110 (entity_picture), 610-627 (state_attributes: access_token) and camera/const.py:71-75 (STREAM = 2) @2026.10.3",
  "result": [
   {
    "entity_id": "light.kitchen",
@@ -534,6 +534,42 @@
    "last_updated": "2026-10-25T08:00:00.000000+00:00",
    "context": {
     "id": "01JB0000000000000000000111",
+    "parent_id": null,
+    "user_id": null
+   }
+  },
+  {
+   "entity_id": "camera.front_door",
+   "state": "idle",
+   "attributes": {
+    "access_token": "0000000000000000000000000000000000000000000000000000000000000001",
+    "entity_picture": "/api/camera_proxy/camera.front_door?token=0000000000000000000000000000000000000000000000000000000000000001",
+    "friendly_name": "Front door",
+    "supported_features": 2
+   },
+   "last_changed": "2026-10-25T08:00:00.000000+00:00",
+   "last_reported": "2026-10-25T08:00:00.000000+00:00",
+   "last_updated": "2026-10-25T08:00:00.000000+00:00",
+   "context": {
+    "id": "01JB0000000000000000000201",
+    "parent_id": null,
+    "user_id": null
+   }
+  },
+  {
+   "entity_id": "camera.doorbell_still",
+   "state": "idle",
+   "attributes": {
+    "access_token": "0000000000000000000000000000000000000000000000000000000000000002",
+    "entity_picture": "/api/camera_proxy/camera.doorbell_still?token=0000000000000000000000000000000000000000000000000000000000000002",
+    "friendly_name": "Doorbell still",
+    "supported_features": 0
+   },
+   "last_changed": "2026-10-25T08:00:00.000000+00:00",
+   "last_reported": "2026-10-25T08:00:00.000000+00:00",
+   "last_updated": "2026-10-25T08:00:00.000000+00:00",
+   "context": {
+    "id": "01JB0000000000000000000202",
     "parent_id": null,
     "user_id": null
    }
