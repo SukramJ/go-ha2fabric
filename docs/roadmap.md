@@ -123,19 +123,23 @@ things with caveats "not mapped in H1".
 
 Owner: go-hamapping.
 
-- [ ] **`switch` with `device_class: switch`** currently becomes
-  OnOffPlugInUnit like an outlet (`rows/switch.yaml:6-8`); Apple Home
-  shows a socket. Decide whether `device_class: switch` becomes
-  OnOffLight (matter-hub's choice is the reference to read) or an
-  OnOffPlugInUnit stays. One row either way; a decision for
-  `docs/by_design.md` of go-hamapping.
-- [ ] **Lock users and PINs**: the row serves Lock, Unlock, Open
-  (`rows/lock.yaml:25-27`). A Home Assistant lock that requires a `code`
-  cannot be driven. go-fabric's DoorLock has the user and credential
-  host methods (`CHANGELOG.md:174`); the mapping would carry one
-  credential the operator configures. Security-relevant: Fable work
-  (`CLAUDE.md` §Which model does which work), and the code never lands
-  in a log or the selection file.
+- [x] **`switch` with `device_class: switch`** stays an OnOffPlugInUnit
+  (`rows/switch.yaml:6-8`). Owner decision 2026-10-31: follow matter-hub,
+  which creates a plug-in unit for every `switch` and reads no
+  `device_class` (`packages/backend/src/matter/endpoints/legacy/switch/index.ts:13-22,
+  34-68` at `664575a`). Documented in go-hamapping's `docs/by_design.md`
+  (wave R1–R5).
+- [x] **Lock users and PINs**: closed without a code of our own (owner
+  decision 2026-10-31). Home Assistant keeps a per-lock default code in
+  the entity registry's lock options and inserts it when a `lock`,
+  `unlock` or `open` call carries none (`lock/__init__.py:113-133,
+  280-295` at 2026.10.3); the daemon's calls carry none
+  (`internal/adapt/command.go:43, 62-67`), so the operator sets the code
+  in Home Assistant. `docs/operations.md` §Locks with a code says where.
+  A code never passes through this daemon, its logs or its selection
+  file. Matter-side PIN credentials (matter-hub stores the controller's
+  PIN and forwards it as `data.code`, `behaviors/lock-server.ts:841-870`)
+  stay out of scope.
 
 ## R5 — New domains with a kit device type
 
@@ -184,21 +188,46 @@ only for a convenience default. The facts:
 - go-hamqtt's model has no camera with a stream; go-ha-catalog's MQTT
   `camera` is an image topic (`data/mqtt.json`, `image_topic`).
 
-Steps:
+Finding of 2026-10-31 (`notes/reads/read-r6-camera.md`, owner-verified
+on the go-fabric lines):
 
-- [ ] **Read** (Sonnet, then owner-verified): whether controllers use
-  ProvideOffer or SolicitOffer (SolicitOffer has no Home Assistant
-  counterpart); whether chip's AllocateVideoStream validation accepts a
-  placeholder stream declaration; whether the specification mandates a
-  codec. All three **unverified** today.
+- chip's camera controller starts a live view with ProvideOffer
+  (`examples/camera-controller/commands/liveview/LiveViewCommands.cpp:40`,
+  checkout 1dc3b69ed5e); the specification makes both SolicitOffer and
+  ProvideOffer mandatory on the provider (`WebRTC_Provider.xml:88, 199`).
+  A relay can serve ProvideOffer and refuse SolicitOffer.
+- chip's AllocateVideoStream validation reads only the request's ranges
+  and the declared stream usages, no sensor parameters
+  (`CameraAVStreamManagementCluster.cpp:2066-2141`); go-fabric checks
+  the same (`cluster/camera/avstream.go:708-731`). A placeholder stream
+  declaration is possible.
+- H264 is the mandatory codec (`CameraAVStreamManagement.xml:173-185`,
+  data model 1.7); Home Assistant's go2rtc provider produces it
+  (`homeassistant/components/go2rtc/__init__.py:414`).
+- **Blocker:** go-fabric has no facade route for the camera to invoke
+  `Answer`, `IceCandidates` and `End` on the controller's
+  WebRtcTransportRequestor. `docs/guides/camera.md:38-58` covers the
+  requestor side only, `cluster/camera/provider.go` has no outbound
+  call, `Node.Peers()` is a seam without a facade route
+  (`docs/guides/advanced-seams.md:37`). An issue text for go-fabric is
+  drafted (see the R1–R5 report); the owner files it.
+
+R6 is therefore not built in the R1–R5 run (owner decision 2026-10-31:
+build only on a green reading). Steps, in order, once go-fabric has the
+route:
+
+- [x] **Read**: the three questions above are answered; see the finding.
 - [ ] **go-hamqtt**: a camera entity with a stream capability beyond
   MQTT discovery. A question to that repository.
 - [ ] **go-hamapping**: a row kind that binds a port (`camera.ProviderPort`)
   instead of a service call; the row format knows commands with a
   payload only (`model.Command`: Method, Payload).
-- [ ] **go-fabric** (sensible, not necessary): a kit default for a
-  signalling-only camera that declares one opaque video stream and
-  fills it from the SDP answer, beside `device/defaults_camera.go`.
+- [ ] **go-fabric** (necessary): the signalling route — the provider
+  invokes `Answer`, `IceCandidates` and `End` on the session's peer node,
+  fabric and originating endpoint, as chip's provider manager does
+  (`webrtc-provider-manager.cpp:1189-1242` at 1dc3b69ed5e). Sensible
+  beside it: a kit default for a signalling-only camera that declares
+  one opaque H264 video stream, beside `device/defaults_camera.go`.
 - [ ] **go-ha2fabric**: the WebRTC subscription handling in
   `internal/ha`, the relay of offer, answer and candidates, snapshot via
   the camera proxy for SnapshotStream.

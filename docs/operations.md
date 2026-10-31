@@ -150,6 +150,20 @@ one to an entity or a device (`entity_registry_updated`,
 debounce. The order: disabled, hidden, the web UI's override, `EXCLUDE`
 and `EXCLUDE_LABELS`, `INCLUDE` and `INCLUDE_LABELS`, Assist.
 
+## Locks with a code
+
+The daemon calls `lock.lock`, `lock.unlock` and `lock.open` without a
+`code`. A lock whose integration requires one is driven through Home
+Assistant's own setting: open the lock entity's settings in Home
+Assistant and enter the default code; Home Assistant stores it in the
+entity registry's lock options and inserts it into every call that
+carries none (`homeassistant/components/lock/__init__.py:113-133,
+280-295` at 2026.10.3). Without a stored code such a call fails in Home
+Assistant with "The code for <entity> doesn't match pattern
+<code_format>" (`lock/strings.json:106`), and the daemon logs
+`bridge.call_service_failed`. No code passes through the daemon, its
+log or its selection file.
+
 ## The web UI
 
 go-fabric-ui's interface (`v0.1.2`) at `WEB_LISTEN`, in the add-on through
