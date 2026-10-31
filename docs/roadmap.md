@@ -299,6 +299,14 @@ Left open:
   (`camera/webrtc.py:252-258`).
 - The controller's ICE servers (`docs/by_design.md`, ICE servers not
   relayed).
+- Sessions end on a Home Assistant reconnect; they are not re-subscribed.
+- Two questions to go-fabric, noted here by owner decision (2026-10-31, no
+  issue): `bridge.ErrPayloadTooLarge` is visible only in `bridge`, so
+  `internal/camera` imports that package for the one error (a re-export
+  from `cluster/camera` would end it); the kit's port error mapping keeps
+  only an `im.StatusCodeError` (`cluster/camera/chime.go:293-299` at
+  v0.15.5), so a `contract.StatusError` from a port answers FAILURE and
+  `SolicitOffer` cannot answer INVALID_IN_STATE.
 
 ## Not planned, with the reason
 
