@@ -266,12 +266,11 @@ on the go-fabric lines):
   WebRtcTransportRequestor. `docs/guides/camera.md:38-58` covers the
   requestor side only, `cluster/camera/provider.go` has no outbound
   call, `Node.Peers()` is a seam without a facade route
-  (`docs/guides/advanced-seams.md:37`). An issue text for go-fabric is
-  drafted (see the R1–R5 report); the owner files it.
+  (`docs/guides/advanced-seams.md:37`). Filed as go-fabric #351.
 
 R6 is therefore not built in the R1–R5 run (owner decision 2026-10-31:
-build only on a green reading). Steps, in order, once go-fabric has the
-route:
+build only on a green reading). Steps, in order, once go-fabric #351 is
+released:
 
 - [x] **Read**: the three questions above are answered; see the finding.
 - [ ] **go-hamqtt**: a camera entity with a stream capability beyond
@@ -279,7 +278,7 @@ route:
 - [ ] **go-hamapping**: a row kind that binds a port (`camera.ProviderPort`)
   instead of a service call; the row format knows commands with a
   payload only (`model.Command`: Method, Payload).
-- [ ] **go-fabric** (necessary): the signalling route — the provider
+- [ ] **go-fabric** (necessary, #351): the signalling route — the provider
   invokes `Answer`, `IceCandidates` and `End` on the session's peer node,
   fabric and originating endpoint, as chip's provider manager does
   (`webrtc-provider-manager.cpp:1189-1242` at 1dc3b69ed5e). Sensible
