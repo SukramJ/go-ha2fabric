@@ -227,6 +227,10 @@ func TestService(t *testing.T) {
 	heaterNoOnOff := state("water_heater.a", "off", map[string]any{"supported_features": 3.0, "operation_list": []any{"off", "eco"}})
 	heaterNoOffMode := state("water_heater.a", "eco", map[string]any{"supported_features": 11.0, "operation_list": []any{"eco"}})
 	muted := state("media_player.a", "on", map[string]any{"is_volume_muted": true})
+	// vacuum/const.py:53-69: STOP 8, RETURN_HOME 16, STATE 4096, START 8192.
+	vacuumHome := state("vacuum.a", "cleaning", map[string]any{"supported_features": 12316.0})
+	vacuumStop := state("vacuum.a", "cleaning", map[string]any{"supported_features": 12296.0})
+	vacuumBare := state("vacuum.a", "cleaning", map[string]any{"supported_features": 12288.0})
 	for _, c := range []struct {
 		cmd  model.Command
 		cur  *ha.State
@@ -265,7 +269,8 @@ func TestService(t *testing.T) {
 		{cmd("button.a", hamapping.MethodPress, "PRESS"), nil, ha.ServiceCall{Domain: "button", Service: "press", EntityID: "button.a"}},
 		{cmd("select.a", hamapping.MethodSelectOption, "Movie night"), nil, ha.ServiceCall{Domain: "select", Service: "select_option", EntityID: "select.a", Data: map[string]any{"option": "Movie night"}}},
 		{cmd("vacuum.a", hamapping.MethodRunMode, "1"), nil, ha.ServiceCall{Domain: "vacuum", Service: "start", EntityID: "vacuum.a"}},
-		{cmd("vacuum.a", hamapping.MethodRunMode, "0"), nil, ha.ServiceCall{Domain: "vacuum", Service: "return_to_base", EntityID: "vacuum.a"}},
+		{cmd("vacuum.a", hamapping.MethodRunMode, "0"), vacuumHome, ha.ServiceCall{Domain: "vacuum", Service: "return_to_base", EntityID: "vacuum.a"}},
+		{cmd("vacuum.a", hamapping.MethodRunMode, "0"), vacuumStop, ha.ServiceCall{Domain: "vacuum", Service: "stop", EntityID: "vacuum.a"}},
 		{cmd("vacuum.a", hamapping.MethodPause, "PAUSE"), nil, ha.ServiceCall{Domain: "vacuum", Service: "pause", EntityID: "vacuum.a"}},
 		{cmd("vacuum.a", hamapping.MethodResume, "START"), nil, ha.ServiceCall{Domain: "vacuum", Service: "start", EntityID: "vacuum.a"}},
 		{cmd("vacuum.a", hamapping.MethodGoHome, "RETURN_TO_BASE"), nil, ha.ServiceCall{Domain: "vacuum", Service: "return_to_base", EntityID: "vacuum.a"}},
@@ -323,6 +328,10 @@ func TestService(t *testing.T) {
 		if _, err := adapt.Service(c, nil); !errors.Is(err, adapt.ErrCommand) {
 			t.Errorf("%+v: %v", c, err)
 		}
+	}
+	// A vacuum with neither RETURN_HOME nor STOP has no service for Idle.
+	if _, err := adapt.Service(cmd("vacuum.a", hamapping.MethodRunMode, "0"), vacuumBare); !errors.Is(err, adapt.ErrCommand) {
+		t.Errorf("vacuum idle without return_to_base or stop: %v", err)
 	}
 	// A water heater with neither ON_OFF nor an operation mode to turn
 	// on to, nor an "off" mode to turn off to.

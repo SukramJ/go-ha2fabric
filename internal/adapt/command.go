@@ -172,10 +172,18 @@ func Service(cmd model.Command, cur *ha.State) (ha.ServiceCall, error) {
 		}
 	case domain == "vacuum" && cmd.Method == hamapping.MethodRunMode:
 		// Row vacuum/robotic_vacuum_cleaner: run mode 0 Idle, 1 Cleaning;
-		// vacuum/services.py:104-121 start, return_to_base.
+		// vacuum/services.py:104-109 start. Idle is return_to_base where
+		// the vacuum has RETURN_HOME (:116-121), else stop where it has
+		// STOP (:144-147); the bits are vacuum/const.py:53-69.
 		switch payload {
 		case "0":
-			return call("return_to_base", nil)
+			features, _ := toInt(attrs["supported_features"])
+			switch {
+			case features&vacuumReturnHome != 0:
+				return call("return_to_base", nil)
+			case features&vacuumStop != 0:
+				return call("stop", nil)
+			}
 		case "1":
 			return call("start", nil)
 		}
@@ -206,6 +214,12 @@ func Service(cmd model.Command, cur *ha.State) (ha.ServiceCall, error) {
 	}
 	return ha.ServiceCall{}, fmt.Errorf("%w: %s method %q payload %q", ErrCommand, id, cmd.Method, payload)
 }
+
+// VacuumEntityFeature.STOP and RETURN_HOME (vacuum/const.py:53-69).
+const (
+	vacuumStop       = 8
+	vacuumReturnHome = 16
+)
 
 // waterHeaterOnOff is WaterHeaterEntityFeature.ON_OFF
 // (water_heater/const.py:61-67).

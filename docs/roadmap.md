@@ -146,6 +146,11 @@ things with caveats "not mapped in H1".
   FAN_MODE, TURN_ON and TURN_OFF: a RoomAirConditioner with FanControl
   (`fan_mode`) and OnOff (`turn_on`, `turn_off`). Without turn_on and
   turn_off the fan modes stay a caveat.
+- [ ] **AC FanMode Off**: the air conditioner's FanMode Off write sends
+  `set_fan_mode off`, which Home Assistant refuses unless `off` is in
+  `fan_modes` (`climate/__init__.py:470-488` at 2026.10.3); the
+  `air_conditioner` row should gate the Off write on `fan_modes`
+  containing `off` or map it to `turn_off`. Owner: go-hamapping.
 - [~] **Swing modes**: no Matter counterpart in go-fabric's kit; stays a
   caveat with the reason.
   Still a caveat in go-hamapping v0.3.0 / go-ha2fabric 0.4.0
