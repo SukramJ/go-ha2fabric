@@ -6,6 +6,18 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- go-fabric `v0.15.5`: the camera's signals to the controller's requestor
+  (`camera.Provider.Offer`, `Answer`, `IceCandidates`, `End`; go-fabric #351,
+  the blocker of roadmap R6), colour conversions with the same values on
+  arm64 as on amd64 (the add-on's aarch64 image), and test fixes.
+- The add-on's side panel is titled **Matter Server** (`panel_title` in
+  `addon/config.yaml`); the bridge label controllers show stays `Matter Bridge`.
+  The Supervisor reads the title from `config.yaml` only (contributors
+  reference, apps/configuration: "The title of the app in the sidebar"), so
+  there is no option for it.
+
 ## [0.4.0] - 2026-10-31
 
 The roadmap rows R1–R5 (brief R1–R5): the entities go-hamapping `v0.3.0`

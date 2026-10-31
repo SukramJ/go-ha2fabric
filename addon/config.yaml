@@ -43,7 +43,7 @@ backup: cold
 ingress: true
 ingress_port: 8486
 panel_icon: mdi:bridge
-panel_title: Matter Bridge
+panel_title: Matter Server
 
 options:
   port: 5540

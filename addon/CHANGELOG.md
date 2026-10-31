@@ -5,6 +5,10 @@ tracks the project release; the project's
 [changelog.md](https://github.com/SukramJ/go-ha2fabric/blob/main/changelog.md)
 has the details.
 
+## Unreleased
+
+- The side panel is titled **Matter Server**.
+
 ## 0.4.0
 
 - More Home Assistant entities reach your controller (go-hamapping 0.3.0):
