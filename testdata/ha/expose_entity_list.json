@@ -31,6 +31,42 @@
    },
    "light.attic": {
     "conversation": true
+   },
+   "sensor.office_co2": {
+    "conversation": true
+   },
+   "sensor.mains_frequency": {
+    "conversation": true
+   },
+   "sensor.garden_flow": {
+    "conversation": true
+   },
+   "button.router_restart": {
+    "conversation": true
+   },
+   "event.hall_remote": {
+    "conversation": true
+   },
+   "select.hall_scene": {
+    "conversation": true
+   },
+   "climate.bedroom_ac": {
+    "conversation": true
+   },
+   "vacuum.robo": {
+    "conversation": true
+   },
+   "valve.garden": {
+    "conversation": true
+   },
+   "water_heater.boiler": {
+    "conversation": true
+   },
+   "media_player.kitchen_speaker": {
+    "conversation": true
+   },
+   "media_player.living_tv": {
+    "conversation": true
    }
   }
  }

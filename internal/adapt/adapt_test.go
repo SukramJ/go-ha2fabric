@@ -77,6 +77,24 @@ func TestEntitiesMeetTheirRows(t *testing.T) {
 		{"fan presets", state("fan.b", "on", map[string]any{"percentage": 50.0, "preset_modes": []any{"auto", "sleep"}, "supported_features": 9.0}), "fan/fan", eligibility.StatePartial},
 		{"button", state("button.a", "unknown", map[string]any{}), "button/plug", eligibility.StateMappable},
 		{"media player", state("media_player.tv", "off", map[string]any{}), "media_player/unmapped", eligibility.StateUnmappable},
+		// The rows of go-hamapping v0.3.0 (R1-R5), on the fixtures' shapes.
+		{"frequency", state("sensor.hz", "50.02", map[string]any{"device_class": "frequency", "unit_of_measurement": "Hz", "state_class": "measurement"}), "sensor/frequency", eligibility.StateMappable},
+		{"flow", state("sensor.flow", "12.5", map[string]any{"device_class": "volume_flow_rate", "unit_of_measurement": "L/min", "state_class": "measurement"}), "sensor/volume_flow_rate", eligibility.StateMappable},
+		{"button pressed", state("button.r", "2026-10-24T22:00:00.000000+00:00", map[string]any{"device_class": "restart"}), "button/plug", eligibility.StateMappable},
+		{"event", state("event.e", "2026-10-25T07:59:00.000+00:00", map[string]any{"event_types": []any{"press", "long_press"}, "event_type": "press", "device_class": "button"}), "event/generic_switch", eligibility.StatePartial},
+		{"select", state("select.s", "Evening", map[string]any{"options": []any{"Day", "Evening", "Movie night"}}), "select/mode_select", eligibility.StateMappable},
+		{"air conditioner", state("climate.ac", "cool", map[string]any{
+			"hvac_modes": []any{"off", "cool", "heat", "heat_cool"}, "min_temp": 16.0, "max_temp": 30.0, "fan_modes": []any{"low", "medium", "high", "auto"}, "preset_modes": []any{"eco", "comfort"},
+			"current_temperature": 24.5, "temperature": 22.0, "fan_mode": "auto", "preset_mode": "comfort", "supported_features": 409.0,
+		}), "climate/air_conditioner", eligibility.StatePartial},
+		{"vacuum", state("vacuum.v", "docked", map[string]any{"supported_features": 12316.0}), "vacuum/robotic_vacuum_cleaner", eligibility.StatePartial},
+		{"vacuum without start", state("vacuum.w", "docked", map[string]any{"supported_features": 4096.0}), "vacuum/unmapped", eligibility.StateUnmappable},
+		{"valve", state("valve.v", "closed", map[string]any{"is_closed": true, "device_class": "water", "supported_features": 3.0}), "valve/water_valve", eligibility.StateMappable},
+		{"water heater", state("water_heater.w", "eco", map[string]any{
+			"min_temp": 40.0, "max_temp": 65.0, "operation_list": []any{"off", "eco", "performance"}, "current_temperature": 52.0, "temperature": 55.0, "operation_mode": "eco", "supported_features": 11.0,
+		}), "water_heater/thermostat", eligibility.StatePartial},
+		{"speaker", state("media_player.s", "playing", map[string]any{"volume_level": 0.5, "is_volume_muted": false, "device_class": "speaker", "supported_features": 396.0}), "media_player/speaker", eligibility.StateMappable},
+		{"tv", state("media_player.t", "on", map[string]any{"volume_level": 0.2, "is_volume_muted": false, "device_class": "tv", "supported_features": 21897.0}), "media_player/video_player", eligibility.StatePartial},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			e := entity(c.st.EntityID, c.st)

@@ -66,6 +66,19 @@ func TestDryPlan(t *testing.T) {
 		"sensor.processor_use":      {false, "not exposed to Assist and not included", "", ""},
 		"sensor.outdoor":            {true, "included by sensor.outdoor", "sensor/temperature", "mappable"},
 		"sensor.legacy_yaml":        {false, "not exposed to Assist and not included", "", ""},
+		// The rows of go-hamapping v0.3.0 (R1-R5).
+		"sensor.office_co2":            {true, "exposed to Assist", "sensor/carbon_dioxide", "mappable"},
+		"sensor.mains_frequency":       {true, "exposed to Assist", "sensor/frequency", "mappable"},
+		"sensor.garden_flow":           {true, "exposed to Assist", "sensor/volume_flow_rate", "mappable"},
+		"button.router_restart":        {true, "exposed to Assist", "button/plug", "mappable"},
+		"event.hall_remote":            {true, "exposed to Assist", "event/generic_switch", "partially_mappable"},
+		"select.hall_scene":            {true, "exposed to Assist", "select/mode_select", "mappable"},
+		"climate.bedroom_ac":           {true, "exposed to Assist", "climate/air_conditioner", "partially_mappable"},
+		"vacuum.robo":                  {true, "exposed to Assist", "vacuum/robotic_vacuum_cleaner", "partially_mappable"},
+		"valve.garden":                 {true, "exposed to Assist", "valve/water_valve", "mappable"},
+		"water_heater.boiler":          {true, "exposed to Assist", "water_heater/thermostat", "partially_mappable"},
+		"media_player.kitchen_speaker": {true, "exposed to Assist", "media_player/speaker", "mappable"},
+		"media_player.living_tv":       {true, "exposed to Assist", "media_player/video_player", "partially_mappable"},
 	} {
 		got, ok := v[id]
 		if !ok {

@@ -396,6 +396,318 @@
    "serial_number": null,
    "sw_version": "1.104.2",
    "via_device_id": null
+  },
+  {
+   "area_id": null,
+   "configuration_url": null,
+   "config_entries": [
+    "ce-fritz"
+   ],
+   "config_entries_subentries": {
+    "ce-fritz": [
+     null
+    ]
+   },
+   "config_entry_id": "ce-fritz",
+   "config_subentry_id": null,
+   "connections": [],
+   "created_at": 1761350400.0,
+   "disabled_by": null,
+   "entry_type": null,
+   "hw_version": null,
+   "id": "dev-fritz-1",
+   "identifiers": [
+    [
+     "fritz",
+     "fritz-1"
+    ]
+   ],
+   "labels": [],
+   "manufacturer": "AVM",
+   "model": "FRITZ!Box 7590",
+   "model_id": null,
+   "modified_at": 1761350400.0,
+   "name_by_user": null,
+   "name": "Router",
+   "next_name_part": null,
+   "parent_device_id": null,
+   "primary_config_entry": "ce-fritz",
+   "serial_number": null,
+   "sw_version": null,
+   "via_device_id": null
+  },
+  {
+   "area_id": null,
+   "configuration_url": null,
+   "config_entries": [
+    "ce-hue"
+   ],
+   "config_entries_subentries": {
+    "ce-hue": [
+     null
+    ]
+   },
+   "config_entry_id": "ce-hue",
+   "config_subentry_id": null,
+   "connections": [],
+   "created_at": 1761350400.0,
+   "disabled_by": null,
+   "entry_type": null,
+   "hw_version": null,
+   "id": "dev-hue-4",
+   "identifiers": [
+    [
+     "hue",
+     "00:17:88:01:0a:0b:0c:10-02"
+    ]
+   ],
+   "labels": [],
+   "manufacturer": "Signify Netherlands B.V.",
+   "model": "RWL022",
+   "model_id": null,
+   "modified_at": 1761350400.0,
+   "name_by_user": null,
+   "name": "Hall remote",
+   "next_name_part": null,
+   "parent_device_id": null,
+   "primary_config_entry": "ce-hue",
+   "serial_number": null,
+   "sw_version": null,
+   "via_device_id": null
+  },
+  {
+   "area_id": null,
+   "configuration_url": null,
+   "config_entries": [
+    "ce-daikin"
+   ],
+   "config_entries_subentries": {
+    "ce-daikin": [
+     null
+    ]
+   },
+   "config_entry_id": "ce-daikin",
+   "config_subentry_id": null,
+   "connections": [],
+   "created_at": 1761350400.0,
+   "disabled_by": null,
+   "entry_type": null,
+   "hw_version": null,
+   "id": "dev-daikin-1",
+   "identifiers": [
+    [
+     "daikin",
+     "daikin-1"
+    ]
+   ],
+   "labels": [],
+   "manufacturer": "Daikin",
+   "model": "FTXM25R",
+   "model_id": null,
+   "modified_at": 1761350400.0,
+   "name_by_user": null,
+   "name": "Bedroom AC",
+   "next_name_part": null,
+   "parent_device_id": null,
+   "primary_config_entry": "ce-daikin",
+   "serial_number": null,
+   "sw_version": null,
+   "via_device_id": null
+  },
+  {
+   "area_id": null,
+   "configuration_url": null,
+   "config_entries": [
+    "ce-roborock"
+   ],
+   "config_entries_subentries": {
+    "ce-roborock": [
+     null
+    ]
+   },
+   "config_entry_id": "ce-roborock",
+   "config_subentry_id": null,
+   "connections": [],
+   "created_at": 1761350400.0,
+   "disabled_by": null,
+   "entry_type": null,
+   "hw_version": null,
+   "id": "dev-roborock-1",
+   "identifiers": [
+    [
+     "roborock",
+     "roborock-1"
+    ]
+   ],
+   "labels": [],
+   "manufacturer": "Roborock",
+   "model": "S8",
+   "model_id": null,
+   "modified_at": 1761350400.0,
+   "name_by_user": null,
+   "name": "Robo",
+   "next_name_part": null,
+   "parent_device_id": null,
+   "primary_config_entry": "ce-roborock",
+   "serial_number": null,
+   "sw_version": null,
+   "via_device_id": null
+  },
+  {
+   "area_id": null,
+   "configuration_url": null,
+   "config_entries": [
+    "ce-gardena"
+   ],
+   "config_entries_subentries": {
+    "ce-gardena": [
+     null
+    ]
+   },
+   "config_entry_id": "ce-gardena",
+   "config_subentry_id": null,
+   "connections": [],
+   "created_at": 1761350400.0,
+   "disabled_by": null,
+   "entry_type": null,
+   "hw_version": null,
+   "id": "dev-gardena-1",
+   "identifiers": [
+    [
+     "gardena_bluetooth",
+     "gardena-1"
+    ]
+   ],
+   "labels": [],
+   "manufacturer": "Gardena",
+   "model": "Water Control Bluetooth",
+   "model_id": null,
+   "modified_at": 1761350400.0,
+   "name_by_user": null,
+   "name": "Garden valve",
+   "next_name_part": null,
+   "parent_device_id": null,
+   "primary_config_entry": "ce-gardena",
+   "serial_number": null,
+   "sw_version": null,
+   "via_device_id": null
+  },
+  {
+   "area_id": null,
+   "configuration_url": null,
+   "config_entries": [
+    "ce-vaillant"
+   ],
+   "config_entries_subentries": {
+    "ce-vaillant": [
+     null
+    ]
+   },
+   "config_entry_id": "ce-vaillant",
+   "config_subentry_id": null,
+   "connections": [],
+   "created_at": 1761350400.0,
+   "disabled_by": null,
+   "entry_type": null,
+   "hw_version": null,
+   "id": "dev-vaillant-1",
+   "identifiers": [
+    [
+     "vaillant",
+     "vaillant-1"
+    ]
+   ],
+   "labels": [],
+   "manufacturer": "Vaillant",
+   "model": "uniSTOR",
+   "model_id": null,
+   "modified_at": 1761350400.0,
+   "name_by_user": null,
+   "name": "Boiler",
+   "next_name_part": null,
+   "parent_device_id": null,
+   "primary_config_entry": "ce-vaillant",
+   "serial_number": null,
+   "sw_version": null,
+   "via_device_id": null
+  },
+  {
+   "area_id": "kitchen",
+   "configuration_url": null,
+   "config_entries": [
+    "ce-sonos"
+   ],
+   "config_entries_subentries": {
+    "ce-sonos": [
+     null
+    ]
+   },
+   "config_entry_id": "ce-sonos",
+   "config_subentry_id": null,
+   "connections": [],
+   "created_at": 1761350400.0,
+   "disabled_by": null,
+   "entry_type": null,
+   "hw_version": null,
+   "id": "dev-sonos-1",
+   "identifiers": [
+    [
+     "sonos",
+     "RINCON_1"
+    ]
+   ],
+   "labels": [],
+   "manufacturer": "Sonos",
+   "model": "One",
+   "model_id": null,
+   "modified_at": 1761350400.0,
+   "name_by_user": null,
+   "name": "Kitchen speaker",
+   "next_name_part": null,
+   "parent_device_id": null,
+   "primary_config_entry": "ce-sonos",
+   "serial_number": null,
+   "sw_version": null,
+   "via_device_id": null
+  },
+  {
+   "area_id": "living_room",
+   "configuration_url": null,
+   "config_entries": [
+    "ce-webostv"
+   ],
+   "config_entries_subentries": {
+    "ce-webostv": [
+     null
+    ]
+   },
+   "config_entry_id": "ce-webostv",
+   "config_subentry_id": null,
+   "connections": [],
+   "created_at": 1761350400.0,
+   "disabled_by": null,
+   "entry_type": null,
+   "hw_version": null,
+   "id": "dev-webos-1",
+   "identifiers": [
+    [
+     "webostv",
+     "webos-1"
+    ]
+   ],
+   "labels": [],
+   "manufacturer": "LG",
+   "model": "OLED55C3",
+   "model_id": null,
+   "modified_at": 1761350400.0,
+   "name_by_user": null,
+   "name": "Living room TV",
+   "next_name_part": null,
+   "parent_device_id": null,
+   "primary_config_entry": "ce-webostv",
+   "serial_number": null,
+   "sw_version": null,
+   "via_device_id": null
   }
  ]
 }
