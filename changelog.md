@@ -6,6 +6,46 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-31
+
+The roadmap rows R1–R5 (brief R1–R5): the entities go-hamapping `v0.3.0`
+maps now reach a controller, and a controller's commands on them reach
+Home Assistant.
+
+### Added
+
+- Sensors: carbon dioxide, carbon monoxide, PM1, PM2.5, PM10, volatile
+  organic compounds, nitrogen dioxide, ozone and radon as an air quality
+  sensor; apparent power, reactive power, frequency and power factor as an
+  electrical sensor; volume flow rate as a flow sensor; moisture as a soil
+  sensor; a `cold` binary sensor as a water freeze detector.
+- `button`: an on/off plug whose On presses the button (`button.press`).
+- `event`: a generic switch; every new event is a short press.
+- `select`: a mode select with the entity's options; choosing a mode calls
+  `select.select_option`.
+- `climate` with fan modes, turn on and turn off: a room air conditioner —
+  power (`climate.turn_on`, `climate.turn_off`), the thermostat, the fan
+  mode (`climate.set_fan_mode`) and the current humidity.
+- `vacuum` with start: a robotic vacuum cleaner — idle or cleaning
+  (`vacuum.start`, `vacuum.return_to_base`), pause, resume and go home
+  (`vacuum.pause`, `vacuum.start`, `vacuum.return_to_base`).
+- `valve`: a water valve — open and close (`valve.open_valve`,
+  `valve.close_valve`).
+- `water_heater`: a heating-only thermostat — off and on
+  (`water_heater.set_operation_mode`, or `water_heater.turn_on` /
+  `turn_off` where the heater has them) and the target temperature
+  (`water_heater.set_temperature`); the limits from `min_temp` and
+  `max_temp` in the installation's unit.
+- `media_player`: a TV is a video player (power, play, pause, stop, the
+  volume and power keys); every other player a speaker (power or mute,
+  and the volume as a level: `media_player.volume_set`, rounded to two
+  places — `docs/by_design.md` "Volume as a level").
+
+### Changed
+
+- go-hamapping `v0.2.1` → `v0.3.0`: the rows above, each with what it
+  leaves out as a caveat (`docs/roadmap.md` R1–R5).
+
 ## [0.3.7] - 2026-10-30
 
 Dependency release: go-fabric `v0.15.4`, go-fabric-ui `v0.2.8`.

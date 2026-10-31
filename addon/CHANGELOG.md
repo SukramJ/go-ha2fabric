@@ -5,6 +5,14 @@ tracks the project release; the project's
 [changelog.md](https://github.com/SukramJ/go-ha2fabric/blob/main/changelog.md)
 has the details.
 
+## 0.4.0
+
+- More Home Assistant entities reach your controller (go-hamapping 0.3.0):
+  air quality, electrical, flow and soil sensors, buttons, event entities,
+  selects, air conditioners with fan modes, robot vacuums, water valves,
+  water heaters, speakers and TVs. Their controls call the matching Home
+  Assistant actions.
+
 ## 0.3.7
 
 - Library updates (go-fabric 0.15.4, go-fabric-ui 0.2.8). The Surface tab

@@ -1,5 +1,5 @@
 {
- "_mirrors": "homeassistant/components/websocket_api/commands.py:369-385 (get_states) and homeassistant/core.py:1988-2014 (State._as_dict); attributes per homeassistant/helpers/entity.py:1115-1176 and the domains' state attributes (light/__init__.py:447-469,609-660 capability and state attributes, light/const.py:102-122, climate/const.py:114-136,169-191, cover/const.py:18-23, fan/const.py:26-31) @2026.10.3",
+ "_mirrors": "homeassistant/components/websocket_api/commands.py:369-385 (get_states) and homeassistant/core.py:1988-2014 (State._as_dict); attributes per homeassistant/helpers/entity.py:1115-1176 and the domains' state attributes (light/__init__.py:447-469,609-660 capability and state attributes, light/const.py:102-122, climate/const.py:114-136,169-191, cover/const.py:18-23, fan/const.py:26-31); the R1-R5 entities per sensor/const.py:192,268,512 (classes), button/__init__.py:101-106, event/__init__.py:178-206, select/__init__.py:108-122, climate/__init__.py:239-341, vacuum/__init__.py:156-173, valve/entity.py:71-105, water_heater/__init__.py:164-225, media_player/__init__.py:858-899 and the feature masks of climate/const.py:194-205, vacuum/const.py:53-69, valve/const.py:36-42, water_heater/const.py:61-67, media_player/const.py:196-221 @2026.10.3",
  "result": [
   {
    "entity_id": "light.kitchen",
@@ -283,6 +283,257 @@
    "last_updated": "2026-10-25T08:00:00.000000+00:00",
    "context": {
     "id": "01JB0000000000000000000008",
+    "parent_id": null,
+    "user_id": null
+   }
+  },
+  {
+   "entity_id": "sensor.office_co2",
+   "state": "612",
+   "attributes": {
+    "state_class": "measurement",
+    "unit_of_measurement": "ppm",
+    "device_class": "carbon_dioxide",
+    "friendly_name": "Office CO2"
+   },
+   "last_changed": "2026-10-25T08:00:00.000000+00:00",
+   "last_reported": "2026-10-25T08:00:00.000000+00:00",
+   "last_updated": "2026-10-25T08:00:00.000000+00:00",
+   "context": {
+    "id": "01JB0000000000000000000100",
+    "parent_id": null,
+    "user_id": null
+   }
+  },
+  {
+   "entity_id": "sensor.mains_frequency",
+   "state": "50.02",
+   "attributes": {
+    "state_class": "measurement",
+    "unit_of_measurement": "Hz",
+    "device_class": "frequency",
+    "friendly_name": "Mains frequency"
+   },
+   "last_changed": "2026-10-25T08:00:00.000000+00:00",
+   "last_reported": "2026-10-25T08:00:00.000000+00:00",
+   "last_updated": "2026-10-25T08:00:00.000000+00:00",
+   "context": {
+    "id": "01JB0000000000000000000101",
+    "parent_id": null,
+    "user_id": null
+   }
+  },
+  {
+   "entity_id": "sensor.garden_flow",
+   "state": "12.5",
+   "attributes": {
+    "state_class": "measurement",
+    "unit_of_measurement": "L/min",
+    "device_class": "volume_flow_rate",
+    "friendly_name": "Garden flow"
+   },
+   "last_changed": "2026-10-25T08:00:00.000000+00:00",
+   "last_reported": "2026-10-25T08:00:00.000000+00:00",
+   "last_updated": "2026-10-25T08:00:00.000000+00:00",
+   "context": {
+    "id": "01JB0000000000000000000102",
+    "parent_id": null,
+    "user_id": null
+   }
+  },
+  {
+   "entity_id": "button.router_restart",
+   "state": "2026-10-24T22:00:00.000000+00:00",
+   "attributes": {
+    "device_class": "restart",
+    "friendly_name": "Router Restart"
+   },
+   "last_changed": "2026-10-25T08:00:00.000000+00:00",
+   "last_reported": "2026-10-25T08:00:00.000000+00:00",
+   "last_updated": "2026-10-25T08:00:00.000000+00:00",
+   "context": {
+    "id": "01JB0000000000000000000103",
+    "parent_id": null,
+    "user_id": null
+   }
+  },
+  {
+   "entity_id": "event.hall_remote",
+   "state": "2026-10-25T07:59:00.000+00:00",
+   "attributes": {
+    "event_types": [
+     "press",
+     "long_press"
+    ],
+    "event_type": "press",
+    "device_class": "button",
+    "friendly_name": "Hall remote"
+   },
+   "last_changed": "2026-10-25T08:00:00.000000+00:00",
+   "last_reported": "2026-10-25T08:00:00.000000+00:00",
+   "last_updated": "2026-10-25T08:00:00.000000+00:00",
+   "context": {
+    "id": "01JB0000000000000000000104",
+    "parent_id": null,
+    "user_id": null
+   }
+  },
+  {
+   "entity_id": "select.hall_scene",
+   "state": "Evening",
+   "attributes": {
+    "options": [
+     "Day",
+     "Evening",
+     "Movie night"
+    ],
+    "friendly_name": "Hall scene"
+   },
+   "last_changed": "2026-10-25T08:00:00.000000+00:00",
+   "last_reported": "2026-10-25T08:00:00.000000+00:00",
+   "last_updated": "2026-10-25T08:00:00.000000+00:00",
+   "context": {
+    "id": "01JB0000000000000000000105",
+    "parent_id": null,
+    "user_id": null
+   }
+  },
+  {
+   "entity_id": "climate.bedroom_ac",
+   "state": "cool",
+   "attributes": {
+    "hvac_modes": [
+     "off",
+     "cool",
+     "heat",
+     "heat_cool"
+    ],
+    "min_temp": 16,
+    "max_temp": 30,
+    "target_temp_step": 1,
+    "fan_modes": [
+     "low",
+     "medium",
+     "high",
+     "auto"
+    ],
+    "preset_modes": [
+     "eco",
+     "comfort"
+    ],
+    "current_temperature": 24.5,
+    "temperature": 22,
+    "fan_mode": "auto",
+    "hvac_action": "cooling",
+    "preset_mode": "comfort",
+    "friendly_name": "Bedroom AC",
+    "supported_features": 409
+   },
+   "last_changed": "2026-10-25T08:00:00.000000+00:00",
+   "last_reported": "2026-10-25T08:00:00.000000+00:00",
+   "last_updated": "2026-10-25T08:00:00.000000+00:00",
+   "context": {
+    "id": "01JB0000000000000000000106",
+    "parent_id": null,
+    "user_id": null
+   }
+  },
+  {
+   "entity_id": "vacuum.robo",
+   "state": "docked",
+   "attributes": {
+    "friendly_name": "Robo",
+    "supported_features": 12316
+   },
+   "last_changed": "2026-10-25T08:00:00.000000+00:00",
+   "last_reported": "2026-10-25T08:00:00.000000+00:00",
+   "last_updated": "2026-10-25T08:00:00.000000+00:00",
+   "context": {
+    "id": "01JB0000000000000000000107",
+    "parent_id": null,
+    "user_id": null
+   }
+  },
+  {
+   "entity_id": "valve.garden",
+   "state": "closed",
+   "attributes": {
+    "is_closed": true,
+    "device_class": "water",
+    "friendly_name": "Garden valve",
+    "supported_features": 3
+   },
+   "last_changed": "2026-10-25T08:00:00.000000+00:00",
+   "last_reported": "2026-10-25T08:00:00.000000+00:00",
+   "last_updated": "2026-10-25T08:00:00.000000+00:00",
+   "context": {
+    "id": "01JB0000000000000000000108",
+    "parent_id": null,
+    "user_id": null
+   }
+  },
+  {
+   "entity_id": "water_heater.boiler",
+   "state": "eco",
+   "attributes": {
+    "min_temp": 40,
+    "max_temp": 65,
+    "operation_list": [
+     "off",
+     "eco",
+     "performance"
+    ],
+    "current_temperature": 52,
+    "temperature": 55,
+    "target_temp_high": null,
+    "target_temp_low": null,
+    "operation_mode": "eco",
+    "friendly_name": "Boiler",
+    "supported_features": 11
+   },
+   "last_changed": "2026-10-25T08:00:00.000000+00:00",
+   "last_reported": "2026-10-25T08:00:00.000000+00:00",
+   "last_updated": "2026-10-25T08:00:00.000000+00:00",
+   "context": {
+    "id": "01JB0000000000000000000109",
+    "parent_id": null,
+    "user_id": null
+   }
+  },
+  {
+   "entity_id": "media_player.kitchen_speaker",
+   "state": "playing",
+   "attributes": {
+    "volume_level": 0.5,
+    "is_volume_muted": false,
+    "device_class": "speaker",
+    "friendly_name": "Kitchen speaker",
+    "supported_features": 396
+   },
+   "last_changed": "2026-10-25T08:00:00.000000+00:00",
+   "last_reported": "2026-10-25T08:00:00.000000+00:00",
+   "last_updated": "2026-10-25T08:00:00.000000+00:00",
+   "context": {
+    "id": "01JB0000000000000000000110",
+    "parent_id": null,
+    "user_id": null
+   }
+  },
+  {
+   "entity_id": "media_player.living_tv",
+   "state": "on",
+   "attributes": {
+    "volume_level": 0.2,
+    "is_volume_muted": false,
+    "device_class": "tv",
+    "friendly_name": "Living room TV",
+    "supported_features": 21897
+   },
+   "last_changed": "2026-10-25T08:00:00.000000+00:00",
+   "last_reported": "2026-10-25T08:00:00.000000+00:00",
+   "last_updated": "2026-10-25T08:00:00.000000+00:00",
+   "context": {
+    "id": "01JB0000000000000000000111",
     "parent_id": null,
     "user_id": null
    }

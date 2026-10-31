@@ -126,8 +126,9 @@ func Entity(in Input) *model.Basic {
 	if in.Name != "" {
 		d.Name = model.Localized{Default: in.Name}
 	}
-	if domain == "climate" {
-		// climate/__init__.py:296-316: the temperatures are shown in the
+	if domain == "climate" || domain == "water_heater" {
+		// climate/__init__.py:296-316, water_heater/__init__.py:164-200
+		// (show_temp, :29): the temperatures are shown in the
 		// installation's unit.
 		d.Unit = model.Unit(in.TemperatureUnit)
 	}
@@ -213,6 +214,15 @@ func description(domain string, attrs map[string]any) map[string]any {
 		// fan/const.py:31 preset_modes; row fan/fan: extra.preset_modes.
 		if m := strings_(attrs["preset_modes"]); len(m) > 0 {
 			ex["preset_modes"] = m
+		}
+	case "water_heater":
+		// water_heater/__init__.py:164-182 (capability attributes min_temp,
+		// max_temp, operation_list with OPERATION_MODE). Row
+		// water_heater/thermostat: extra.min_temp, extra.max_temp.
+		copyNum(ex, "min_temp", attrs, "min_temp")
+		copyNum(ex, "max_temp", attrs, "max_temp")
+		if m := strings_(attrs["operation_list"]); len(m) > 0 {
+			ex["operation_list"] = m
 		}
 	}
 	return ex

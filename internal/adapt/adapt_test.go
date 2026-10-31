@@ -56,7 +56,7 @@ func TestEntitiesMeetTheirRows(t *testing.T) {
 		{"energy", state("sensor.kwh", "1.5", map[string]any{"device_class": "energy", "unit_of_measurement": "kWh", "state_class": "total_increasing"}), "sensor/energy", eligibility.StateMappable},
 		{"battery alone", state("sensor.b", "80", map[string]any{"device_class": "battery", "unit_of_measurement": "%"}), "sensor/battery", eligibility.StatePartial},
 		{"no device class", state("sensor.cpu", "4", map[string]any{"unit_of_measurement": "%"}), "sensor/no_device_class", eligibility.StateUnmappable},
-		{"co2", state("sensor.co2", "400", map[string]any{"device_class": "carbon_dioxide", "unit_of_measurement": "ppm"}), "sensor/no_device_type", eligibility.StateUnmappable},
+		{"co2", state("sensor.co2", "400", map[string]any{"device_class": "carbon_dioxide", "unit_of_measurement": "ppm"}), "sensor/carbon_dioxide", eligibility.StateMappable},
 		{"door", state("binary_sensor.d", "off", map[string]any{"device_class": "door"}), "binary_sensor/contact", eligibility.StateMappable},
 		{"motion", state("binary_sensor.m", "on", map[string]any{"device_class": "motion"}), "binary_sensor/motion", eligibility.StateMappable},
 		{"occupancy", state("binary_sensor.o", "on", map[string]any{"device_class": "occupancy"}), "binary_sensor/occupancy", eligibility.StateMappable},
@@ -75,8 +75,26 @@ func TestEntitiesMeetTheirRows(t *testing.T) {
 		{"lock open", state("lock.b", "locked", map[string]any{"supported_features": 1.0}), "lock/door_lock", eligibility.StatePartial},
 		{"fan", state("fan.a", "on", map[string]any{"percentage": 50.0, "oscillating": false, "supported_features": 51.0}), "fan/fan", eligibility.StateMappable},
 		{"fan presets", state("fan.b", "on", map[string]any{"percentage": 50.0, "preset_modes": []any{"auto", "sleep"}, "supported_features": 9.0}), "fan/fan", eligibility.StatePartial},
-		{"button", state("button.a", "unknown", map[string]any{}), "button/unmapped", eligibility.StateUnmappable},
-		{"media player", state("media_player.tv", "off", map[string]any{}), "", eligibility.StateUnmappable},
+		{"button", state("button.a", "unknown", map[string]any{}), "button/plug", eligibility.StateMappable},
+		{"media player", state("media_player.tv", "off", map[string]any{}), "media_player/unmapped", eligibility.StateUnmappable},
+		// The rows of go-hamapping v0.3.0 (R1-R5), on the fixtures' shapes.
+		{"frequency", state("sensor.hz", "50.02", map[string]any{"device_class": "frequency", "unit_of_measurement": "Hz", "state_class": "measurement"}), "sensor/frequency", eligibility.StateMappable},
+		{"flow", state("sensor.flow", "12.5", map[string]any{"device_class": "volume_flow_rate", "unit_of_measurement": "L/min", "state_class": "measurement"}), "sensor/volume_flow_rate", eligibility.StateMappable},
+		{"button pressed", state("button.r", "2026-10-24T22:00:00.000000+00:00", map[string]any{"device_class": "restart"}), "button/plug", eligibility.StateMappable},
+		{"event", state("event.e", "2026-10-25T07:59:00.000+00:00", map[string]any{"event_types": []any{"press", "long_press"}, "event_type": "press", "device_class": "button"}), "event/generic_switch", eligibility.StatePartial},
+		{"select", state("select.s", "Evening", map[string]any{"options": []any{"Day", "Evening", "Movie night"}}), "select/mode_select", eligibility.StateMappable},
+		{"air conditioner", state("climate.ac", "cool", map[string]any{
+			"hvac_modes": []any{"off", "cool", "heat", "heat_cool"}, "min_temp": 16.0, "max_temp": 30.0, "fan_modes": []any{"low", "medium", "high", "auto"}, "preset_modes": []any{"eco", "comfort"},
+			"current_temperature": 24.5, "temperature": 22.0, "fan_mode": "auto", "preset_mode": "comfort", "supported_features": 409.0,
+		}), "climate/air_conditioner", eligibility.StatePartial},
+		{"vacuum", state("vacuum.v", "docked", map[string]any{"supported_features": 12316.0}), "vacuum/robotic_vacuum_cleaner", eligibility.StatePartial},
+		{"vacuum without start", state("vacuum.w", "docked", map[string]any{"supported_features": 4096.0}), "vacuum/unmapped", eligibility.StateUnmappable},
+		{"valve", state("valve.v", "closed", map[string]any{"is_closed": true, "device_class": "water", "supported_features": 3.0}), "valve/water_valve", eligibility.StateMappable},
+		{"water heater", state("water_heater.w", "eco", map[string]any{
+			"min_temp": 40.0, "max_temp": 65.0, "operation_list": []any{"off", "eco", "performance"}, "current_temperature": 52.0, "temperature": 55.0, "operation_mode": "eco", "supported_features": 11.0,
+		}), "water_heater/thermostat", eligibility.StatePartial},
+		{"speaker", state("media_player.s", "playing", map[string]any{"volume_level": 0.5, "is_volume_muted": false, "device_class": "speaker", "supported_features": 396.0}), "media_player/speaker", eligibility.StateMappable},
+		{"tv", state("media_player.t", "on", map[string]any{"volume_level": 0.2, "is_volume_muted": false, "device_class": "tv", "supported_features": 21897.0}), "media_player/video_player", eligibility.StatePartial},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			e := entity(c.st.EntityID, c.st)
@@ -153,9 +171,17 @@ func TestEntityDescription(t *testing.T) {
 	if cl.Desc().Unit != "°F" || !slices.Equal(cl.Desc().Extra["modes"].([]string), []string{"off", "heat"}) || cl.Desc().Extra["fan_modes"] != nil || cl.Desc().Extra["preset_modes"] == nil || cl.Desc().Extra["temp_step"] != 1.0 {
 		t.Fatalf("climate %+v", cl.Desc())
 	}
-	// A select's options and a number's bounds.
-	sel := adapt.Entity(adapt.Input{EntityID: "number.n", Device: dev, State: state("number.n", "3", map[string]any{"options": []any{"a", "b"}, "min": 1.0, "max": 9.0, "step": 0.5})})
-	if sel.Desc().Options == nil || len(sel.Desc().Options.Codes) != 2 || *sel.Desc().Min != 1 || *sel.Desc().Max != 9 || *sel.Desc().Step != 0.5 {
+	// A water heater takes the installation's unit, its bounds and its
+	// operation list.
+	wh := adapt.Entity(adapt.Input{EntityID: "water_heater.a", Device: dev, TemperatureUnit: "°C", State: state("water_heater.a", "eco", map[string]any{
+		"min_temp": 43.3, "max_temp": 60.0, "operation_list": []any{"off", "eco", "performance"}, "supported_features": 11.0,
+	})})
+	if wd := wh.Desc(); wd.Unit != "°C" || wd.Extra["min_temp"] != 43.3 || wd.Extra["max_temp"] != 60.0 || !slices.Equal(wd.Extra["operation_list"].([]string), []string{"off", "eco", "performance"}) {
+		t.Fatalf("water heater %+v", wd)
+	}
+	// A select's options, in Home Assistant's order, and a number's bounds.
+	sel := adapt.Entity(adapt.Input{EntityID: "number.n", Device: dev, State: state("number.n", "3", map[string]any{"options": []any{"b", "a"}, "min": 1.0, "max": 9.0, "step": 0.5})})
+	if sel.Desc().Options == nil || !slices.Equal(sel.Desc().Options.Codes, []string{"b", "a"}) || *sel.Desc().Min != 1 || *sel.Desc().Max != 9 || *sel.Desc().Step != 0.5 {
 		t.Fatalf("options/bounds %+v", sel.Desc())
 	}
 }
@@ -195,6 +221,16 @@ func cmd(id, method, payload string) model.Command {
 
 func TestService(t *testing.T) {
 	climate := state("climate.a", "heat_cool", map[string]any{"target_temp_low": 19.0, "target_temp_high": 24.0})
+	// water_heater/const.py:61-67: TARGET_TEMPERATURE 1, OPERATION_MODE 2,
+	// ON_OFF 8.
+	heater := state("water_heater.a", "eco", map[string]any{"supported_features": 11.0, "operation_list": []any{"off", "eco", "performance"}})
+	heaterNoOnOff := state("water_heater.a", "off", map[string]any{"supported_features": 3.0, "operation_list": []any{"off", "eco"}})
+	heaterNoOffMode := state("water_heater.a", "eco", map[string]any{"supported_features": 11.0, "operation_list": []any{"eco"}})
+	muted := state("media_player.a", "on", map[string]any{"is_volume_muted": true})
+	// vacuum/const.py:53-69: STOP 8, RETURN_HOME 16, STATE 4096, START 8192.
+	vacuumHome := state("vacuum.a", "cleaning", map[string]any{"supported_features": 12316.0})
+	vacuumStop := state("vacuum.a", "cleaning", map[string]any{"supported_features": 12296.0})
+	vacuumBare := state("vacuum.a", "cleaning", map[string]any{"supported_features": 12288.0})
 	for _, c := range []struct {
 		cmd  model.Command
 		cur  *ha.State
@@ -226,6 +262,40 @@ func TestService(t *testing.T) {
 		{cmd("climate.a", "temperature", "21.5"), nil, ha.ServiceCall{Domain: "climate", Service: "set_temperature", EntityID: "climate.a", Data: map[string]any{"temperature": 21.5}}},
 		{cmd("climate.a", "temperature_low", "18"), climate, ha.ServiceCall{Domain: "climate", Service: "set_temperature", EntityID: "climate.a", Data: map[string]any{"target_temp_low": 18.0, "target_temp_high": 24.0}}},
 		{cmd("climate.a", "temperature_high", "25"), climate, ha.ServiceCall{Domain: "climate", Service: "set_temperature", EntityID: "climate.a", Data: map[string]any{"target_temp_high": 25.0, "target_temp_low": 19.0}}},
+		{cmd("climate.a", hamapping.MethodMode, "dry"), nil, ha.ServiceCall{Domain: "climate", Service: "set_hvac_mode", EntityID: "climate.a", Data: map[string]any{"hvac_mode": "dry"}}},
+		{cmd("climate.a", hamapping.MethodFanMode, "medium"), nil, ha.ServiceCall{Domain: "climate", Service: "set_fan_mode", EntityID: "climate.a", Data: map[string]any{"fan_mode": "medium"}}},
+		{cmd("climate.a", hamapping.MethodTurnOn, "ON"), nil, ha.ServiceCall{Domain: "climate", Service: "turn_on", EntityID: "climate.a"}},
+		{cmd("climate.a", hamapping.MethodTurnOff, "OFF"), nil, ha.ServiceCall{Domain: "climate", Service: "turn_off", EntityID: "climate.a"}},
+		{cmd("button.a", hamapping.MethodPress, "PRESS"), nil, ha.ServiceCall{Domain: "button", Service: "press", EntityID: "button.a"}},
+		{cmd("select.a", hamapping.MethodSelectOption, "Movie night"), nil, ha.ServiceCall{Domain: "select", Service: "select_option", EntityID: "select.a", Data: map[string]any{"option": "Movie night"}}},
+		{cmd("vacuum.a", hamapping.MethodRunMode, "1"), nil, ha.ServiceCall{Domain: "vacuum", Service: "start", EntityID: "vacuum.a"}},
+		{cmd("vacuum.a", hamapping.MethodRunMode, "0"), vacuumHome, ha.ServiceCall{Domain: "vacuum", Service: "return_to_base", EntityID: "vacuum.a"}},
+		{cmd("vacuum.a", hamapping.MethodRunMode, "0"), vacuumStop, ha.ServiceCall{Domain: "vacuum", Service: "stop", EntityID: "vacuum.a"}},
+		{cmd("vacuum.a", hamapping.MethodPause, "PAUSE"), nil, ha.ServiceCall{Domain: "vacuum", Service: "pause", EntityID: "vacuum.a"}},
+		{cmd("vacuum.a", hamapping.MethodResume, "START"), nil, ha.ServiceCall{Domain: "vacuum", Service: "start", EntityID: "vacuum.a"}},
+		{cmd("vacuum.a", hamapping.MethodGoHome, "RETURN_TO_BASE"), nil, ha.ServiceCall{Domain: "vacuum", Service: "return_to_base", EntityID: "vacuum.a"}},
+		{cmd("valve.a", hamapping.MethodOpenValve, "OPEN"), nil, ha.ServiceCall{Domain: "valve", Service: "open_valve", EntityID: "valve.a"}},
+		{cmd("valve.a", hamapping.MethodCloseValve, "CLOSE"), nil, ha.ServiceCall{Domain: "valve", Service: "close_valve", EntityID: "valve.a"}},
+		{cmd("water_heater.a", hamapping.MethodOperationMode, "off"), heater, ha.ServiceCall{Domain: "water_heater", Service: "set_operation_mode", EntityID: "water_heater.a", Data: map[string]any{"operation_mode": "off"}}},
+		{cmd("water_heater.a", hamapping.MethodOperationMode, "on"), heater, ha.ServiceCall{Domain: "water_heater", Service: "turn_on", EntityID: "water_heater.a"}},
+		{cmd("water_heater.a", hamapping.MethodOperationMode, "on"), heaterNoOnOff, ha.ServiceCall{Domain: "water_heater", Service: "set_operation_mode", EntityID: "water_heater.a", Data: map[string]any{"operation_mode": "eco"}}},
+		{cmd("water_heater.a", hamapping.MethodOperationMode, "off"), heaterNoOffMode, ha.ServiceCall{Domain: "water_heater", Service: "turn_off", EntityID: "water_heater.a"}},
+		{cmd("water_heater.a", hamapping.MethodTemperature, "55.5"), nil, ha.ServiceCall{Domain: "water_heater", Service: "set_temperature", EntityID: "water_heater.a", Data: map[string]any{"temperature": 55.5}}},
+		{cmd("media_player.a", hamapping.MethodTurnOn, "ON"), nil, ha.ServiceCall{Domain: "media_player", Service: "turn_on", EntityID: "media_player.a"}},
+		{cmd("media_player.a", hamapping.MethodTurnOff, "OFF"), nil, ha.ServiceCall{Domain: "media_player", Service: "turn_off", EntityID: "media_player.a"}},
+		{cmd("media_player.a", hamapping.MethodVolumeMute, "true"), nil, ha.ServiceCall{Domain: "media_player", Service: "volume_mute", EntityID: "media_player.a", Data: map[string]any{"is_volume_muted": true}}},
+		{cmd("media_player.a", hamapping.MethodVolumeMute, "false"), nil, ha.ServiceCall{Domain: "media_player", Service: "volume_mute", EntityID: "media_player.a", Data: map[string]any{"is_volume_muted": false}}},
+		{cmd("media_player.a", hamapping.MethodVolumeLevel, "127"), nil, ha.ServiceCall{Domain: "media_player", Service: "volume_set", EntityID: "media_player.a", Data: map[string]any{"volume_level": 0.5}}},
+		{cmd("media_player.a", hamapping.MethodVolumeLevel, "254"), nil, ha.ServiceCall{Domain: "media_player", Service: "volume_set", EntityID: "media_player.a", Data: map[string]any{"volume_level": 1.0}}},
+		{cmd("media_player.a", hamapping.MethodVolumeLevel, "200"), nil, ha.ServiceCall{Domain: "media_player", Service: "volume_set", EntityID: "media_player.a", Data: map[string]any{"volume_level": 0.79}}},
+		{cmd("media_player.a", hamapping.MethodMediaPlay, "PLAY"), nil, ha.ServiceCall{Domain: "media_player", Service: "media_play", EntityID: "media_player.a"}},
+		{cmd("media_player.a", hamapping.MethodMediaPause, "PAUSE"), nil, ha.ServiceCall{Domain: "media_player", Service: "media_pause", EntityID: "media_player.a"}},
+		{cmd("media_player.a", hamapping.MethodMediaStop, "STOP"), nil, ha.ServiceCall{Domain: "media_player", Service: "media_stop", EntityID: "media_player.a"}},
+		{cmd("media_player.a", hamapping.MethodKey, "65"), nil, ha.ServiceCall{Domain: "media_player", Service: "volume_up", EntityID: "media_player.a"}},
+		{cmd("media_player.a", hamapping.MethodKey, "66"), nil, ha.ServiceCall{Domain: "media_player", Service: "volume_down", EntityID: "media_player.a"}},
+		{cmd("media_player.a", hamapping.MethodKey, "67"), muted, ha.ServiceCall{Domain: "media_player", Service: "volume_mute", EntityID: "media_player.a", Data: map[string]any{"is_volume_muted": false}}},
+		{cmd("media_player.a", hamapping.MethodKey, "67"), nil, ha.ServiceCall{Domain: "media_player", Service: "volume_mute", EntityID: "media_player.a", Data: map[string]any{"is_volume_muted": true}}},
+		{cmd("media_player.a", hamapping.MethodKey, "64"), nil, ha.ServiceCall{Domain: "media_player", Service: "toggle", EntityID: "media_player.a"}},
 	} {
 		got, err := adapt.Service(c.cmd, c.cur)
 		if err != nil || !reflect.DeepEqual(got, c.want) {
@@ -241,11 +311,37 @@ func TestService(t *testing.T) {
 		cmd("fan.a", "direction", "sideways"),
 		cmd("fan.a", "oscillation", "maybe"),
 		cmd("media_player.a", "", "ON"),
+		cmd("climate.a", hamapping.MethodFanMode, ""),
+		cmd("climate.a", hamapping.MethodPresetMode, "eco"),
+		cmd("select.a", hamapping.MethodSelectOption, ""),
+		cmd("vacuum.a", hamapping.MethodRunMode, "2"),
+		cmd("water_heater.a", hamapping.MethodOperationMode, "on"),
+		cmd("water_heater.a", hamapping.MethodOperationMode, "eco"),
+		cmd("water_heater.a", hamapping.MethodTemperature, "hot"),
+		cmd("media_player.a", hamapping.MethodVolumeMute, "maybe"),
+		cmd("media_player.a", hamapping.MethodVolumeLevel, "loud"),
+		cmd("media_player.a", hamapping.MethodKey, "68"),
+		cmd("media_player.a", hamapping.MethodKey, "x"),
+		cmd("button.a", hamapping.MethodTurnOn, "ON"),
 		{},
 	} {
 		if _, err := adapt.Service(c, nil); !errors.Is(err, adapt.ErrCommand) {
 			t.Errorf("%+v: %v", c, err)
 		}
+	}
+	// A vacuum with neither RETURN_HOME nor STOP has no service for Idle.
+	if _, err := adapt.Service(cmd("vacuum.a", hamapping.MethodRunMode, "0"), vacuumBare); !errors.Is(err, adapt.ErrCommand) {
+		t.Errorf("vacuum idle without return_to_base or stop: %v", err)
+	}
+	// A water heater with neither ON_OFF nor an operation mode to turn
+	// on to, nor an "off" mode to turn off to.
+	bare := state("water_heater.a", "off", map[string]any{"supported_features": 3.0, "operation_list": []any{"off"}})
+	if _, err := adapt.Service(cmd("water_heater.a", hamapping.MethodOperationMode, "on"), bare); !errors.Is(err, adapt.ErrCommand) {
+		t.Errorf("water heater on without a mode: %v", err)
+	}
+	bare = state("water_heater.a", "eco", map[string]any{"supported_features": 3.0, "operation_list": []any{"eco"}})
+	if _, err := adapt.Service(cmd("water_heater.a", hamapping.MethodOperationMode, "off"), bare); !errors.Is(err, adapt.ErrCommand) {
+		t.Errorf("water heater off without a mode: %v", err)
 	}
 }
 

@@ -354,6 +354,342 @@
    "platform": "template",
    "translation_key": null,
    "unique_id": "tmpl-outdoor"
+  },
+  {
+   "area_id": null,
+   "categories": {},
+   "config_entry_id": "ce-template",
+   "config_subentry_id": null,
+   "created_at": 1761350400.0,
+   "device_id": null,
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.office_co2",
+   "has_entity_name": true,
+   "hidden_by": null,
+   "icon": null,
+   "id": "reg-sensor-office-co2",
+   "labels": [],
+   "modified_at": 1761350400.0,
+   "name": "Office CO2",
+   "next_name_part": null,
+   "options": {
+    "conversation": {
+     "should_expose": true
+    }
+   },
+   "original_name": null,
+   "platform": "template",
+   "translation_key": null,
+   "unique_id": "template-sensor-office-co2"
+  },
+  {
+   "area_id": null,
+   "categories": {},
+   "config_entry_id": "ce-template",
+   "config_subentry_id": null,
+   "created_at": 1761350400.0,
+   "device_id": null,
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.mains_frequency",
+   "has_entity_name": true,
+   "hidden_by": null,
+   "icon": null,
+   "id": "reg-sensor-mains-frequency",
+   "labels": [],
+   "modified_at": 1761350400.0,
+   "name": "Mains frequency",
+   "next_name_part": null,
+   "options": {
+    "conversation": {
+     "should_expose": true
+    }
+   },
+   "original_name": null,
+   "platform": "template",
+   "translation_key": null,
+   "unique_id": "template-sensor-mains-frequency"
+  },
+  {
+   "area_id": null,
+   "categories": {},
+   "config_entry_id": "ce-template",
+   "config_subentry_id": null,
+   "created_at": 1761350400.0,
+   "device_id": null,
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.garden_flow",
+   "has_entity_name": true,
+   "hidden_by": null,
+   "icon": null,
+   "id": "reg-sensor-garden-flow",
+   "labels": [],
+   "modified_at": 1761350400.0,
+   "name": "Garden flow",
+   "next_name_part": null,
+   "options": {
+    "conversation": {
+     "should_expose": true
+    }
+   },
+   "original_name": null,
+   "platform": "template",
+   "translation_key": null,
+   "unique_id": "template-sensor-garden-flow"
+  },
+  {
+   "area_id": null,
+   "categories": {},
+   "config_entry_id": "ce-fritz",
+   "config_subentry_id": null,
+   "created_at": 1761350400.0,
+   "device_id": "dev-fritz-1",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "button.router_restart",
+   "has_entity_name": true,
+   "hidden_by": null,
+   "icon": null,
+   "id": "reg-button-router-restart",
+   "labels": [],
+   "modified_at": 1761350400.0,
+   "name": null,
+   "next_name_part": null,
+   "options": {
+    "conversation": {
+     "should_expose": true
+    }
+   },
+   "original_name": "Restart",
+   "platform": "fritz",
+   "translation_key": null,
+   "unique_id": "fritz-button-router-restart"
+  },
+  {
+   "area_id": null,
+   "categories": {},
+   "config_entry_id": "ce-hue",
+   "config_subentry_id": null,
+   "created_at": 1761350400.0,
+   "device_id": "dev-hue-4",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "event.hall_remote",
+   "has_entity_name": true,
+   "hidden_by": null,
+   "icon": null,
+   "id": "reg-event-hall-remote",
+   "labels": [],
+   "modified_at": 1761350400.0,
+   "name": null,
+   "next_name_part": null,
+   "options": {
+    "conversation": {
+     "should_expose": true
+    }
+   },
+   "original_name": null,
+   "platform": "hue",
+   "translation_key": null,
+   "unique_id": "hue-event-hall-remote"
+  },
+  {
+   "area_id": null,
+   "categories": {},
+   "config_entry_id": "ce-template",
+   "config_subentry_id": null,
+   "created_at": 1761350400.0,
+   "device_id": null,
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "select.hall_scene",
+   "has_entity_name": true,
+   "hidden_by": null,
+   "icon": null,
+   "id": "reg-select-hall-scene",
+   "labels": [],
+   "modified_at": 1761350400.0,
+   "name": "Hall scene",
+   "next_name_part": null,
+   "options": {
+    "conversation": {
+     "should_expose": true
+    }
+   },
+   "original_name": null,
+   "platform": "template",
+   "translation_key": null,
+   "unique_id": "template-select-hall-scene"
+  },
+  {
+   "area_id": null,
+   "categories": {},
+   "config_entry_id": "ce-daikin",
+   "config_subentry_id": null,
+   "created_at": 1761350400.0,
+   "device_id": "dev-daikin-1",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "climate.bedroom_ac",
+   "has_entity_name": true,
+   "hidden_by": null,
+   "icon": null,
+   "id": "reg-climate-bedroom-ac",
+   "labels": [],
+   "modified_at": 1761350400.0,
+   "name": null,
+   "next_name_part": null,
+   "options": {
+    "conversation": {
+     "should_expose": true
+    }
+   },
+   "original_name": null,
+   "platform": "daikin",
+   "translation_key": null,
+   "unique_id": "daikin-climate-bedroom-ac"
+  },
+  {
+   "area_id": null,
+   "categories": {},
+   "config_entry_id": "ce-roborock",
+   "config_subentry_id": null,
+   "created_at": 1761350400.0,
+   "device_id": "dev-roborock-1",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "vacuum.robo",
+   "has_entity_name": true,
+   "hidden_by": null,
+   "icon": null,
+   "id": "reg-vacuum-robo",
+   "labels": [],
+   "modified_at": 1761350400.0,
+   "name": null,
+   "next_name_part": null,
+   "options": {
+    "conversation": {
+     "should_expose": true
+    }
+   },
+   "original_name": null,
+   "platform": "roborock",
+   "translation_key": null,
+   "unique_id": "roborock-vacuum-robo"
+  },
+  {
+   "area_id": null,
+   "categories": {},
+   "config_entry_id": "ce-gardena",
+   "config_subentry_id": null,
+   "created_at": 1761350400.0,
+   "device_id": "dev-gardena-1",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "valve.garden",
+   "has_entity_name": true,
+   "hidden_by": null,
+   "icon": null,
+   "id": "reg-valve-garden",
+   "labels": [],
+   "modified_at": 1761350400.0,
+   "name": null,
+   "next_name_part": null,
+   "options": {
+    "conversation": {
+     "should_expose": true
+    }
+   },
+   "original_name": null,
+   "platform": "gardena_bluetooth",
+   "translation_key": null,
+   "unique_id": "gardena_bluetooth-valve-garden"
+  },
+  {
+   "area_id": null,
+   "categories": {},
+   "config_entry_id": "ce-vaillant",
+   "config_subentry_id": null,
+   "created_at": 1761350400.0,
+   "device_id": "dev-vaillant-1",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "water_heater.boiler",
+   "has_entity_name": true,
+   "hidden_by": null,
+   "icon": null,
+   "id": "reg-water-heater-boiler",
+   "labels": [],
+   "modified_at": 1761350400.0,
+   "name": null,
+   "next_name_part": null,
+   "options": {
+    "conversation": {
+     "should_expose": true
+    }
+   },
+   "original_name": null,
+   "platform": "vaillant",
+   "translation_key": null,
+   "unique_id": "vaillant-water-heater-boiler"
+  },
+  {
+   "area_id": null,
+   "categories": {},
+   "config_entry_id": "ce-sonos",
+   "config_subentry_id": null,
+   "created_at": 1761350400.0,
+   "device_id": "dev-sonos-1",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "media_player.kitchen_speaker",
+   "has_entity_name": true,
+   "hidden_by": null,
+   "icon": null,
+   "id": "reg-media-player-kitchen-speaker",
+   "labels": [],
+   "modified_at": 1761350400.0,
+   "name": null,
+   "next_name_part": null,
+   "options": {
+    "conversation": {
+     "should_expose": true
+    }
+   },
+   "original_name": null,
+   "platform": "sonos",
+   "translation_key": null,
+   "unique_id": "sonos-media-player-kitchen-speaker"
+  },
+  {
+   "area_id": null,
+   "categories": {},
+   "config_entry_id": "ce-webostv",
+   "config_subentry_id": null,
+   "created_at": 1761350400.0,
+   "device_id": "dev-webos-1",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "media_player.living_tv",
+   "has_entity_name": true,
+   "hidden_by": null,
+   "icon": null,
+   "id": "reg-media-player-living-tv",
+   "labels": [],
+   "modified_at": 1761350400.0,
+   "name": null,
+   "next_name_part": null,
+   "options": {
+    "conversation": {
+     "should_expose": true
+    }
+   },
+   "original_name": null,
+   "platform": "webostv",
+   "translation_key": null,
+   "unique_id": "webostv-media-player-living-tv"
   }
  ]
 }

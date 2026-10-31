@@ -30,8 +30,10 @@ const (
 var facade = map[string]bool{"node": true, "device": true, "contract": true, "eligibility": true}
 
 // testOnly are the go-fabric packages a test may import besides: the
-// in-process controller, its path helpers and the wall clock.
-var testOnly = map[string]bool{"fabrictest": true, "controller/client": true, "clock": true}
+// in-process controller, its path helpers, the wall clock and the
+// scalar values a controller's attribute write carries (cluster/spec
+// value.go Uint8, which fabrictest.Write takes as a spec.Encodable).
+var testOnly = map[string]bool{"fabrictest": true, "controller/client": true, "clock": true, "cluster/spec": true}
 
 // layers are the module's own import rules: a package may import only the
 // module packages its entry lists.
@@ -194,6 +196,7 @@ func TestGuardRefuses(t *testing.T) {
 		{"fabrictest", true},
 		{"controller/client", true},
 		{"clock", true},
+		{"cluster/spec", true},
 	} {
 		if !facadeImport(c.dep, c.test) {
 			t.Errorf("%s may be imported (test %v)", c.dep, c.test)

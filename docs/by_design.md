@@ -112,3 +112,16 @@ add-on options and only the web UI's per-entity overrides in a file it
 owns, `/data/selection.json` (go-fabric concept v9 decision 0.4), written
 atomically beside the node's store, so the add-on's cold backup holds both
 and the options stay the single place for the rule.
+
+## Volume as a level
+
+A speaker's `volume_level` (0 to 1, `media_player/services.py:182-192` at
+2026.10.3) is LevelControl's CurrentLevel 0 to 254 (go-fabric
+`cluster/spec/levelcontrol/values.go:14-44`, `LevelFromUnit` and
+`UnitFromLevel`), as matter-hub maps it
+(`matter/behaviors/speaker-level-control-server.ts:37-40, 55-59, 85-96,
+165-166`). One difference: matter-hub sends `level / 254` as it is;
+go-ha2fabric rounds the `volume_set` value to two places
+(`internal/adapt/command.go`, the `volume_level` method), so a controller's
+level 200 is `0.79` and not `0.7874015…`; a step of one level (0.39 %)
+reaches Home Assistant as the nearest hundredth.
