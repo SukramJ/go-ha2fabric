@@ -65,6 +65,7 @@ modes are not mapped.
 | `product_id` | int | `32769` | Product id (0x8001). |
 | `label` | str | `Matter Bridge` | The bridge's name as controllers show it (at most 32 bytes). |
 | `expose_assist` | bool | `true` | Serve the entities exposed to Assist. |
+| `camera` | bool | `false` | Serve cameras with a live stream (opt-in, not yet tested with Apple Home). The bridge relays the WebRTC signalling to Home Assistant (go2rtc) and also accepts Matter over TCP on its port. |
 | `include` | list | `[]` | Entity ids or globs always served. |
 | `exclude` | list | `[]` | Entity ids or globs never served. |
 | `include_labels` | list | `[]` | Home Assistant labels (name or id) whose entities are served. |

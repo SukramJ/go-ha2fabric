@@ -50,10 +50,12 @@ again on every connection.
 | What | Default | Notes |
 | --- | --- | --- |
 | UDP `LISTEN` | `:5540` | Every Matter message. The add-on's `port` option sets it; change it when another Matter node on the same host uses 5540. |
+| TCP `LISTEN` | off; on with `CAMERA` | Matter over TCP on the same port, for a camera's signals (Cameras, below; go-fabric `docs/guides/operations.md:54, 58` at v0.15.5). |
 | UDP 5353, `224.0.0.251`, `ff02::fb` | — | mDNS, below. |
 | IPv6 on the LAN | required | Matter's operational network is IPv6. |
 | TCP `WEB_LISTEN` | `127.0.0.1:8099`; add-on `0.0.0.0:8486`, image `0.0.0.0:8099` | The web UI. Empty disables it. |
 | Outbound WebSocket | `HA_URL`; add-on `ws://supervisor/core/websocket` | Home Assistant's WebSocket API. |
+| Outbound HTTP | derived from `HA_URL` | The camera proxy's stills, only with `CAMERA` (Cameras, below). |
 
 **Host networking.** Controllers find the bridge over mDNS and talk to it
 over UDP on the LAN, so the daemon needs the host's network: the add-on
@@ -92,7 +94,8 @@ The daemon reaches Home Assistant as an administrator:
   (`auth/permissions/events.py:30-49`).
 
 Either token is read from the environment only — there is no flag for it,
-so it never shows in the process list — sent in the WebSocket auth message,
+so it never shows in the process list — sent in the WebSocket auth message
+(and, with `CAMERA`, as the camera proxy's `Authorization: Bearer` header),
 and never logged or written to disk. The daemon only reads Home Assistant
 and calls the services of the entities it serves; it never writes the
 exposure settings or the registries.
@@ -106,6 +109,8 @@ exposure settings or the registries.
 | `config/entity_registry/list`, `config/device_registry/list`, `config/area_registry/list`, `config/label_registry/list`, `get_states`, `get_config`, `homeassistant/expose_entity/list` | each connection and each registry change | `config/entity_registry.py:39-64`, `config/device_registry.py:75-101`, `config/area_registry.py:23-37`, `config/label_registry.py:53-67`, `websocket_api/commands.py:369-385, 658-666`, `homeassistant/exposed_entities.py:414-442` |
 | `call_service` | a controller's command | `websocket_api/commands.py:266-295` |
 | `ping` | every 30 s | `websocket_api/commands.py:730-736` |
+| `camera/webrtc/offer`, `camera/webrtc/candidate`, `unsubscribe_events` | a controller's camera session, with `CAMERA` | `camera/webrtc.py:252-303, 333-348`, `websocket_api/commands.py:246-263` |
+| `GET /api/camera_proxy/<entity_id>` (HTTP) | a controller's snapshot, with `CAMERA` | `camera/__init__.py:782-838` |
 
 A connection that drops is retried with a back-off from one second to one
 minute; after each reconnect the daemon reads everything again.
@@ -130,6 +135,13 @@ The lines to know:
 | `bridge.selection_applied` | info | The web UI stored overrides. |
 | `bridge.forget` | info | An entity removed from Home Assistant's registry: its endpoint number is forgotten (`entity`, `key`); created again, it gets a fresh one. |
 | `selection.corrupt` | warn | `selection.json` did not parse and was moved aside; also on the web UI's status page. |
+| `bridge.camera_disabled` | info | Once per start: exposed cameras skipped because `CAMERA` is off (`skipped`). |
+| `camera.session` / `camera.session_ended` | info | A controller opened or ended a camera session (`entity_id`, `session`). |
+| `camera.ha_error` | warn | Home Assistant reported an error for a session (`code`, `message`, e.g. `go2rtc_webrtc_offer_failed`); the session ends. |
+| `camera.signal_too_large` | error | A signal with an SDP did not fit the controller's UDP session; the session ends. See Cameras. |
+| `camera.signal_failed` | warn | A signal did not reach the controller (`command`, `error`); the session ends. |
+| `camera.snapshot_failed` | warn | A controller's snapshot failed at the camera proxy (`error`: off, refused, too large). |
+| `camera.session_lost` | info | The Home Assistant connection dropped; its camera sessions ended with it. |
 
 ## Labels
 
@@ -163,6 +175,65 @@ Assistant with "The code for <entity> doesn't match pattern
 <code_format>" (`lock/strings.json:106`), and the daemon logs
 `bridge.call_service_failed`. No code passes through the daemon, its
 log or its selection file.
+
+## Cameras (opt-in)
+
+With `CAMERA=true` (the add-on option `camera`) a camera entity with the
+`STREAM` feature (`camera/const.py:71-75` at 2026.10.3) becomes a Matter
+Camera (device type 0x0142) through go-hamapping's camera row; a camera
+without it stays unmapped. The option is **off by default**: go-fabric's
+ecosystem gate keeps camera clusters out of host devices until a live test
+with Apple Home has passed (go-fabric `docs/guides/camera.md:414-425` at
+v0.15.5), and the daemon follows it until that test is recorded.
+
+What the daemon does — signalling only:
+
+- A controller's `ProvideOffer` goes to Home Assistant as
+  `camera/webrtc/offer`; Home Assistant's answer and ICE candidates go
+  back to the controller's WebRtcTransportRequestor as `Answer` and
+  `IceCandidates`, one per candidate as they arrive; the controller's
+  candidates go to `camera/webrtc/candidate`; `EndSession` unsubscribes the
+  offer, which closes Home Assistant's session
+  (`camera/webrtc.py:252-303, 333-348`, `websocket_api/commands.py:246-263`).
+- Home Assistant's WebRTC provider — go2rtc, or a camera integration with
+  native WebRTC — produces the stream and talks to the controller directly
+  (`camera/__init__.py:742-755`); no media passes through the daemon.
+- A controller's `CaptureSnapshot` is the camera proxy's still,
+  `GET /api/camera_proxy/<entity_id>` with the token as a Bearer header
+  (`camera/__init__.py:782-838`, `http/auth.py:226-230`); a camera that is
+  off answers 503 there and the snapshot fails.
+
+**TCP.** A signal carries an SDP, which rarely fits one UDP message (1178
+bytes of payload); go-fabric sends it over the controller's TCP session
+and refuses it on a UDP session (go-fabric `docs/guides/camera.md:121-128`).
+With `CAMERA` on, the node therefore accepts Matter over TCP on its port;
+let TCP 5540 through a firewall. A controller that reached the bridge over
+UDP cannot receive the answer: the log says `camera.signal_too_large` and
+the session ends.
+
+**The live test must confirm one thing in the add-on.** The camera proxy's
+URL is derived from the WebSocket URL: `ws` becomes `http` (`wss` `https`),
+the path's `websocket` is dropped and `api` follows. Stand-alone,
+`ws://host:8123/api/websocket` gives `http://host:8123/api/camera_proxy/…`;
+in the add-on, `ws://supervisor/core/websocket` gives
+`http://supervisor/core/api/camera_proxy/…`, the Supervisor's proxy of the
+core API. A 401 or a connection error in `camera.snapshot_failed` means
+this derivation is wrong for the installation.
+
+Limits:
+
+- `SolicitOffer` is refused: Home Assistant takes the client's offer only
+  (`camera/webrtc.py:252-258`). go-fabric's kit answers FAILURE for it.
+- The controller's ICE servers are not relayed; Home Assistant's provider
+  uses its own (`camera/__init__.py:708-718`).
+- The stream declaration is nominal: Home Assistant names no codec,
+  resolution or frame rate (`camera/__init__.py:742-755`); the daemon
+  allocates one video, one audio and one snapshot stream and changes
+  nothing on a controller's parameters.
+- A still is at most 64000 bytes (go-fabric's large-message bound) and
+  Home Assistant scales a JPEG down only, by fixed factors
+  (`camera/img_util.py:18-36`): a controller that asks for a large
+  resolution of a large camera may get no snapshot.
 
 ## The web UI
 
