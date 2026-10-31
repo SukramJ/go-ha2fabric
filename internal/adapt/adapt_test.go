@@ -153,9 +153,17 @@ func TestEntityDescription(t *testing.T) {
 	if cl.Desc().Unit != "°F" || !slices.Equal(cl.Desc().Extra["modes"].([]string), []string{"off", "heat"}) || cl.Desc().Extra["fan_modes"] != nil || cl.Desc().Extra["preset_modes"] == nil || cl.Desc().Extra["temp_step"] != 1.0 {
 		t.Fatalf("climate %+v", cl.Desc())
 	}
-	// A select's options and a number's bounds.
-	sel := adapt.Entity(adapt.Input{EntityID: "number.n", Device: dev, State: state("number.n", "3", map[string]any{"options": []any{"a", "b"}, "min": 1.0, "max": 9.0, "step": 0.5})})
-	if sel.Desc().Options == nil || len(sel.Desc().Options.Codes) != 2 || *sel.Desc().Min != 1 || *sel.Desc().Max != 9 || *sel.Desc().Step != 0.5 {
+	// A water heater takes the installation's unit, its bounds and its
+	// operation list.
+	wh := adapt.Entity(adapt.Input{EntityID: "water_heater.a", Device: dev, TemperatureUnit: "°C", State: state("water_heater.a", "eco", map[string]any{
+		"min_temp": 43.3, "max_temp": 60.0, "operation_list": []any{"off", "eco", "performance"}, "supported_features": 11.0,
+	})})
+	if wd := wh.Desc(); wd.Unit != "°C" || wd.Extra["min_temp"] != 43.3 || wd.Extra["max_temp"] != 60.0 || !slices.Equal(wd.Extra["operation_list"].([]string), []string{"off", "eco", "performance"}) {
+		t.Fatalf("water heater %+v", wd)
+	}
+	// A select's options, in Home Assistant's order, and a number's bounds.
+	sel := adapt.Entity(adapt.Input{EntityID: "number.n", Device: dev, State: state("number.n", "3", map[string]any{"options": []any{"b", "a"}, "min": 1.0, "max": 9.0, "step": 0.5})})
+	if sel.Desc().Options == nil || !slices.Equal(sel.Desc().Options.Codes, []string{"b", "a"}) || *sel.Desc().Min != 1 || *sel.Desc().Max != 9 || *sel.Desc().Step != 0.5 {
 		t.Fatalf("options/bounds %+v", sel.Desc())
 	}
 }
