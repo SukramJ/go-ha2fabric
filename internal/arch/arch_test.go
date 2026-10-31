@@ -3,8 +3,9 @@
 
 // Package arch holds the module's architecture guard (brief H2, hard rule
 // 1): go-fabric is used through its facade only — node, device, contract,
-// eligibility and the <cluster>def packages under cluster/spec/ — and the
-// daemon's own packages keep their layers. Tests may import fabrictest,
+// eligibility and the <cluster>def packages under cluster/spec/; the
+// camera host alone also cluster/camera and bridge — and the daemon's own
+// packages keep their layers. Tests may import fabrictest,
 // the controller's client paths and clock besides. It is go-fabric's
 // script/archcheck as a test, in the form of go-fabric-server's
 // internal/arch.
@@ -35,6 +36,17 @@ var facade = map[string]bool{"node": true, "device": true, "contract": true, "el
 // value.go Uint8, which fabrictest.Write takes as a spec.Encodable).
 var testOnly = map[string]bool{"fabrictest": true, "controller/client": true, "clock": true, "cluster/spec": true}
 
+// cameraOnly are the go-fabric packages internal/camera alone may import
+// besides the facade: cluster/camera, whose *camera.Provider carries the
+// camera's signals to the controller (go-fabric docs/guides/camera.md:
+// 84-87 at v0.15.5) and whose ErrUnknownSession the relay retries on, and
+// bridge for bridge.ErrPayloadTooLarge, the one error a signal over a
+// UDP session returns (:121-128). No other package reaches them.
+var cameraOnly = map[string]bool{"cluster/camera": true, "bridge": true}
+
+// cameraPkg is the package cameraOnly is for.
+const cameraPkg = "internal/camera"
+
 // layers are the module's own import rules: a package may import only the
 // module packages its entry lists.
 var layers = map[string][]string{
@@ -44,8 +56,9 @@ var layers = map[string][]string{
 	"internal/ha":        {},
 	"internal/ha/hatest": {"internal/ha"},
 	"internal/adapt":     {"internal/ha"},
+	"internal/camera":    {"internal/ha"},
 	"internal/config":    {"internal/expose"},
-	"internal/bridge":    {"internal/ha", "internal/adapt", "internal/expose", "internal/config", "internal/selection", "internal/version"},
+	"internal/bridge":    {"internal/ha", "internal/adapt", "internal/camera", "internal/expose", "internal/config", "internal/selection", "internal/version"},
 	"internal/web":       {},
 	"internal/arch":      {},
 	"cmd/ha2fabric":      {"internal/bridge", "internal/config", "internal/ha", "internal/selection", "internal/version", "internal/web"},
@@ -55,6 +68,7 @@ var layers = map[string][]string{
 var testLayers = map[string][]string{
 	"internal/ha":     {"internal/ha/hatest"},
 	"internal/bridge": {"internal/ha/hatest"},
+	"internal/camera": {"internal/ha/hatest"},
 	"cmd/ha2fabric":   {"internal/ha/hatest"},
 }
 
@@ -73,9 +87,9 @@ func isDef(rel string) bool {
 	return strings.HasPrefix(rel, "cluster/spec/") && !strings.Contains(strings.TrimPrefix(rel, "cluster/spec/"), "/")
 }
 
-// facadeImport reports whether a file may import go-fabric's dep.
-func facadeImport(dep string, isTest bool) bool {
-	return facade[dep] || isDef(dep) || isTest && testOnly[dep]
+// facadeImport reports whether a file of pkg may import go-fabric's dep.
+func facadeImport(pkg, dep string, isTest bool) bool {
+	return facade[dep] || isDef(dep) || isTest && testOnly[dep] || pkg == cameraPkg && cameraOnly[dep]
 }
 
 func TestImports(t *testing.T) {
@@ -111,7 +125,7 @@ func TestImports(t *testing.T) {
 			p, _ := strconv.Unquote(imp.Path.Value)
 			switch {
 			case strings.HasPrefix(p, goFabric):
-				if !facadeImport(strings.TrimPrefix(p, goFabric), isTest) {
+				if !facadeImport(pkg, strings.TrimPrefix(p, goFabric), isTest) {
 					t.Errorf("%s imports %s: below go-fabric's facade", where, p)
 				}
 			case p == module || strings.HasPrefix(p, module+"/"):
@@ -179,8 +193,10 @@ func TestGuardRefuses(t *testing.T) {
 		{"controller/client", false},
 		{"controller", true},
 		{"secure/setup", true},
+		{"cluster/camera", false},
+		{"cluster/camera", true},
 	} {
-		if facadeImport(c.dep, c.test) {
+		if facadeImport("internal/bridge", c.dep, c.test) {
 			t.Errorf("%s may not be imported (test %v)", c.dep, c.test)
 		}
 	}
@@ -198,9 +214,12 @@ func TestGuardRefuses(t *testing.T) {
 		{"clock", true},
 		{"cluster/spec", true},
 	} {
-		if !facadeImport(c.dep, c.test) {
+		if !facadeImport("internal/bridge", c.dep, c.test) {
 			t.Errorf("%s may be imported (test %v)", c.dep, c.test)
 		}
+	}
+	if !facadeImport(cameraPkg, "cluster/camera", false) || !facadeImport(cameraPkg, "bridge", false) || facadeImport(cameraPkg, "im", false) {
+		t.Error("the camera package's rule")
 	}
 	if allowedThirdParty("gopkg.in/yaml.v3") || !allowedThirdParty("github.com/SukramJ/go-hamqtt/model") || allowedThirdParty("github.com/SukramJ/go-hamqtt/discovery") {
 		t.Error("third-party list")
