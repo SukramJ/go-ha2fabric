@@ -209,7 +209,7 @@ func newHost(t *testing.T, up camera.Upstream) (*camera.Host, *bytes.Buffer) {
 		Logger:        slog.New(slog.NewTextHandler(&lockedWriter{w: &logs}, &slog.HandlerOptions{Level: slog.LevelDebug})),
 		RetryInterval: time.Millisecond,
 	})
-	t.Cleanup(h.Close)
+	t.Cleanup(func() { h.Close(context.Background()) })
 	return h, &logs
 }
 
@@ -426,7 +426,7 @@ func TestSignalWaitsForAttach(t *testing.T) {
 	up := &upstream{script: func(s *stream) { s.push(map[string]any{"type": "answer", "answer": "a"}) }}
 	var logs bytes.Buffer
 	h := camera.New(entity, up, camera.Options{Logger: slog.New(slog.NewTextHandler(&lockedWriter{w: &logs}, nil)), RetryInterval: 20 * time.Millisecond})
-	defer h.Close()
+	defer h.Close(context.Background())
 	if _, err := h.ProvideOffer(context.Background(), offer(8)); err != nil {
 		t.Fatal(err)
 	}
@@ -509,8 +509,8 @@ func TestClose(t *testing.T) {
 	if _, err := h.ProvideOffer(context.Background(), offer(2)); err != nil {
 		t.Fatal(err)
 	}
-	h.Close()
-	h.Close()
+	h.Close(context.Background())
+	h.Close(context.Background())
 	if len(sig.seen()) != 2 || !strings.HasSuffix(sig.seen()[0], " 12") || up.stream(0).unsubscribed() != 1 || up.stream(1).unsubscribed() != 1 {
 		t.Fatalf("signals %q", sig.seen())
 	}
@@ -518,7 +518,7 @@ func TestClose(t *testing.T) {
 		t.Fatalf("an offer after Close: %v", err)
 	}
 	// A host never attached closes without signals.
-	camera.New(entity, up, camera.Options{}).Close()
+	camera.New(entity, up, camera.Options{}).Close(context.Background())
 }
 
 func TestRefusedCommandsAndNominalStreams(t *testing.T) {

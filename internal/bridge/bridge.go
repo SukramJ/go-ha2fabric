@@ -43,6 +43,7 @@ import (
 	"github.com/SukramJ/go-hamqtt/model"
 
 	"github.com/SukramJ/go-ha2fabric/internal/adapt"
+	"github.com/SukramJ/go-ha2fabric/internal/camera"
 	"github.com/SukramJ/go-ha2fabric/internal/expose"
 	"github.com/SukramJ/go-ha2fabric/internal/ha"
 	"github.com/SukramJ/go-ha2fabric/internal/selection"
@@ -83,6 +84,10 @@ type Options struct {
 	// exposed camera is skipped before go-hamapping sees it, with
 	// cameraOff as its verdict.
 	Camera bool
+	// CameraUpstream is Home Assistant's side of the camera relay
+	// (camera.HA of the client). Without it a camera has no host ports
+	// and go-hamapping skips its row.
+	CameraUpstream camera.Upstream
 }
 
 // Verdict is one candidate entity's line of the plan an operator reads:
@@ -136,6 +141,8 @@ type group struct {
 	verdicts []hamapping.Verdict
 	devices  []*device.Device
 	keys     []device.SourceKey
+	// cameras are the entities whose camera host the build attached.
+	cameras map[string]bool
 }
 
 // Bridge is the composition. Its work — syncs, states, reachability —
@@ -165,6 +172,10 @@ type Bridge struct {
 	forget map[string]device.SourceKey
 	// cameraLogged is set once the skipped cameras were logged.
 	cameraLogged bool
+	// hosts are the camera hosts by entity id: made when go-hamapping
+	// asks for an entity's ports, closed when no built device of the
+	// entity carries them any more.
+	hosts map[string]*camera.Host
 
 	mu       sync.Mutex
 	states   map[string]*ha.State
@@ -215,6 +226,10 @@ func (b *Bridge) Run(ctx context.Context) error {
 			b.mu.Unlock()
 			for _, g := range b.groups {
 				g.plan.Close()
+			}
+			for id, h := range b.hosts {
+				h.Close(ctx)
+				delete(b.hosts, id)
 			}
 			return nil
 		case fn := <-b.work:
@@ -449,9 +464,9 @@ func isCamera(id string) bool { return strings.HasPrefix(id, "camera.") }
 // device: the candidates' verdicts (go-hamapping's verdict left to the
 // caller) and the devices to plan. A candidate is every entity with a
 // state or a registry entry. names are the web UI's name overrides.
-// Without camera, an exposed camera is not planned; its verdict is
+// Without cameras, an exposed camera is not planned; its verdict is
 // unmappable with cameraOff.
-func assess(s *Snapshot, rule expose.Rule, names map[string]string, camera bool) ([]Verdict, []*planned) {
+func assess(s *Snapshot, rule expose.Rule, names map[string]string, cameras bool) ([]Verdict, []*planned) {
 	reg := map[string]*ha.EntityEntry{}
 	for i := range s.Entities {
 		reg[s.Entities[i].EntityID] = &s.Entities[i]
@@ -520,7 +535,7 @@ func assess(s *Snapshot, rule expose.Rule, names map[string]string, camera bool)
 			verdicts = append(verdicts, v)
 			continue
 		}
-		if !camera && isCamera(id) {
+		if !cameras && isCamera(id) {
 			v.State, v.Reason = eligibility.StateUnmappable.String(), cameraOff
 			verdicts = append(verdicts, v)
 			continue
@@ -629,8 +644,9 @@ func deviceName(d *ha.DeviceEntry) string {
 // names are the web UI's name overrides: an overridden entity's node label
 // is the name as typed, without the device name (hamapping.Options.Name,
 // verbatim; the owner's decision on H3 Q3, a name typed in a UI is final).
-func mapOptions(regs map[string]*ha.EntityEntry, names map[string]string) hamapping.Options {
+func mapOptions(regs map[string]*ha.EntityEntry, names map[string]string, ports func(model.Entity) any) hamapping.Options {
 	return hamapping.Options{
+		Ports: ports,
 		StableKey: func(e model.Entity) string {
 			if r := regs[e.Key()]; r != nil {
 				return r.ID
@@ -646,10 +662,10 @@ func mapOptions(regs map[string]*ha.EntityEntry, names map[string]string) hamapp
 
 // Dry is the plan without a node: what --dump-plan prints. names are the
 // web UI's name overrides (nil: none).
-func Dry(s *Snapshot, rule expose.Rule, names map[string]string, camera bool) []Verdict {
-	verdicts, groups := assess(s, rule, names, camera)
+func Dry(s *Snapshot, rule expose.Rule, names map[string]string, cameras bool) []Verdict {
+	verdicts, groups := assess(s, rule, names, cameras)
 	for _, g := range groups {
-		_, mv := hamapping.Map(g.device, g.entities, mapOptions(g.regs, g.names))
+		_, mv := hamapping.Map(g.device, g.entities, mapOptions(g.regs, g.names, dryPorts(cameras)))
 		mapVerdicts(verdicts, mv)
 	}
 	return verdicts
@@ -658,9 +674,9 @@ func Dry(s *Snapshot, rule expose.Rule, names map[string]string, camera bool) []
 // candidates is every entity's verdict as if the lists exposed it: the
 // verdict the web UI shows for an entity the rule leaves out. Disabled
 // and hidden entities stay out.
-func candidates(s *Snapshot, names map[string]string, camera bool) map[string]*Verdict {
+func candidates(s *Snapshot, names map[string]string, cameras bool) map[string]*Verdict {
 	out := map[string]*Verdict{}
-	vs := Dry(s, expose.Rule{Include: []string{"*"}}, names, camera)
+	vs := Dry(s, expose.Rule{Include: []string{"*"}}, names, cameras)
 	for i := range vs {
 		out[vs[i].EntityID] = &vs[i]
 	}
@@ -803,6 +819,7 @@ func (b *Bridge) sync(ctx context.Context) {
 		g.plan.Close()
 	}
 	b.groups = next
+	b.closeCameras(ctx)
 	b.owner = map[string]*group{}
 	for _, g := range next {
 		for _, id := range g.entities {
@@ -977,7 +994,7 @@ func (b *Bridge) Resync(ctx context.Context) error {
 // build maps and builds one device's plan; a build failure leaves the
 // device without endpoints and says why in its verdicts.
 func (b *Bridge) build(ctx context.Context, p *planned) (*group, []hamapping.Verdict) {
-	plan, mv := hamapping.Map(p.device, p.entities, mapOptions(p.regs, p.names))
+	plan, mv := hamapping.Map(p.device, p.entities, mapOptions(p.regs, p.names, b.ports))
 	g := &group{key: p.key, sig: p.sig, device: p.device, regs: p.regs, descs: p.descs, names: p.names, plan: plan}
 	for _, e := range p.entities {
 		g.entities = append(g.entities, e.Key())
@@ -999,6 +1016,7 @@ func (b *Bridge) build(ctx context.Context, p *planned) (*group, []hamapping.Ver
 	for i := range plan.Endpoints {
 		g.keys = append(g.keys, plan.Endpoints[i].Options.StableKey)
 	}
+	b.attachCameras(g, plan, devs)
 	plan.OnChange(b.onCommand)
 	return g, mv
 }

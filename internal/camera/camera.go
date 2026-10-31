@@ -41,6 +41,7 @@ import (
 	csdef "github.com/SukramJ/go-fabric/cluster/spec/cameraavstreammanagement"
 	wpdef "github.com/SukramJ/go-fabric/cluster/spec/webrtctransportprovider"
 	"github.com/SukramJ/go-fabric/contract"
+	"github.com/SukramJ/go-fabric/device"
 
 	"github.com/SukramJ/go-ha2fabric/internal/ha"
 )
@@ -227,8 +228,26 @@ func (h *Host) Attach(s Signaller) {
 	}
 }
 
-// Close ends every session with ReasonUnknown and stops the host.
-func (h *Host) Close() {
+// ErrNoProvider is a device without the kit's *camera.Provider: one the
+// camera row did not build on the host's ports.
+var ErrNoProvider = errors.New("camera: the device has no WebRtcTransportProvider of the kit")
+
+// AttachDevice attaches the *camera.Provider of the device the plan built
+// on the host's ports — the server the node attaches its signalling route
+// to (go-fabric node/webrtc_provider_peers.go:43-56 at v0.15.5).
+func (h *Host) AttachDevice(d *device.Device) error {
+	p, ok := d.Server(wpdef.ClusterID).(*gfcamera.Provider)
+	if !ok {
+		return fmt.Errorf("%w: %T", ErrNoProvider, d.Server(wpdef.ClusterID))
+	}
+	h.Attach(p)
+	return nil
+}
+
+// Close ends every session with ReasonUnknown and stops the host. The
+// signals go out also when ctx has ended (a daemon shutting down), each
+// bounded by SignalTimeout.
+func (h *Host) Close(ctx context.Context) {
 	h.mu.Lock()
 	if h.closed {
 		h.mu.Unlock()
@@ -243,10 +262,10 @@ func (h *Host) Close() {
 	}
 	h.mu.Unlock()
 	for _, ss := range all {
-		h.unsubscribe(h.ctx, ss)
+		h.unsubscribe(ctx, ss)
 		if sig != nil {
-			ctx, cancel := context.WithTimeout(context.Background(), h.opts.SignalTimeout)
-			if err := sig.End(ctx, ss.id, ReasonUnknown); err != nil {
+			ectx, cancel := context.WithTimeout(context.WithoutCancel(ctx), h.opts.SignalTimeout)
+			if err := sig.End(ectx, ss.id, ReasonUnknown); err != nil {
 				h.log.Debug("camera.end", slog.Int("session", int(ss.id)), slog.String("error", err.Error()))
 			}
 			cancel()

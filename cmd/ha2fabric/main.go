@@ -31,6 +31,7 @@ import (
 	"github.com/SukramJ/go-fabric/node"
 
 	"github.com/SukramJ/go-ha2fabric/internal/bridge"
+	"github.com/SukramJ/go-ha2fabric/internal/camera"
 	"github.com/SukramJ/go-ha2fabric/internal/config"
 	"github.com/SukramJ/go-ha2fabric/internal/ha"
 	"github.com/SukramJ/go-ha2fabric/internal/selection"
@@ -91,7 +92,7 @@ func run(ctx context.Context, args []string, env config.Env, stdout, stderr io.W
 	bridge.LogFabrics(ctx, n, logger)
 	bridge.LogPairing(n, logger)
 	br := bridge.New(n, client, bridge.Options{
-		Rule: cfg.Exposure(), Logger: logger, Selection: sel, Camera: cfg.Camera,
+		Rule: cfg.Exposure(), Logger: logger, Selection: sel, Camera: cfg.Camera, CameraUpstream: camera.HA(client),
 		OnChange: func(exposure []string, endpoints bool) {
 			if len(exposure) > 0 {
 				uiEvents.Publish(fabricui.Event{Type: fabricui.EventExposureChanged, Data: fabricui.ExposureEvent{Keys: exposure}})

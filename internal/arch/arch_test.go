@@ -61,7 +61,7 @@ var layers = map[string][]string{
 	"internal/bridge":    {"internal/ha", "internal/adapt", "internal/camera", "internal/expose", "internal/config", "internal/selection", "internal/version"},
 	"internal/web":       {},
 	"internal/arch":      {},
-	"cmd/ha2fabric":      {"internal/bridge", "internal/config", "internal/ha", "internal/selection", "internal/version", "internal/web"},
+	"cmd/ha2fabric":      {"internal/bridge", "internal/camera", "internal/config", "internal/ha", "internal/selection", "internal/version", "internal/web"},
 }
 
 // testLayers widen layers for a package's tests.
