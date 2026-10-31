@@ -8,9 +8,12 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"strconv"
 	"strings"
 
+	keypadinputdef "github.com/SukramJ/go-fabric/cluster/spec/keypadinput"
+	levelcontroldef "github.com/SukramJ/go-fabric/cluster/spec/levelcontrol"
 	hacatalog "github.com/SukramJ/go-ha-catalog"
 	hamapping "github.com/SukramJ/go-hamapping"
 	"github.com/SukramJ/go-hamqtt/model"
@@ -43,9 +46,35 @@ var payloads = map[string][]struct{ key, service string }{
 	"lock": {{"payload_lock", "lock"}, {"payload_unlock", "unlock"}},
 }
 
+// services are the named methods that call one service without data, per
+// domain: the method go-hamapping's row delivers (rows/<domain>.yaml at
+// the version in go.mod) and the service. The payload is the row's
+// constant and carries nothing the service needs.
+var services = map[string]map[string]string{
+	// button/services.py:11-15 press, no fields; row button/plug.
+	"button": {hamapping.MethodPress: "press"},
+	// climate/services.py:170-181 turn_on, turn_off, no fields; row
+	// climate/air_conditioner.
+	"climate": {hamapping.MethodTurnOn: "turn_on", hamapping.MethodTurnOff: "turn_off"},
+	// vacuum/services.py:104-121 start, pause, return_to_base, no fields;
+	// row vacuum/robotic_vacuum_cleaner (Resume starts again).
+	"vacuum": {hamapping.MethodPause: "pause", hamapping.MethodResume: "start", hamapping.MethodGoHome: "return_to_base"},
+	// valve/services.py:22-31 open_valve, close_valve, no fields; row
+	// valve/water_valve.
+	"valve": {hamapping.MethodOpenValve: "open_valve", hamapping.MethodCloseValve: "close_valve"},
+	// media_player/services.py:125-130 turn_on, turn_off; :155-163
+	// media_play, media_pause, media_stop; no fields. Rows
+	// media_player/video_player, speaker.
+	"media_player": {
+		hamapping.MethodTurnOn: "turn_on", hamapping.MethodTurnOff: "turn_off",
+		hamapping.MethodMediaPlay: "media_play", hamapping.MethodMediaPause: "media_pause", hamapping.MethodMediaStop: "media_stop",
+	},
+}
+
 // Service is the call_service of a controller's command. cur is the
 // entity's current state, which a climate range setpoint completes (the
-// other bound of the range).
+// other bound of the range), a water heater's turning on and a media
+// player's mute key read.
 func Service(cmd model.Command, cur *ha.State) (ha.ServiceCall, error) {
 	if cmd.Entity == nil {
 		return ha.ServiceCall{}, fmt.Errorf("%w: no entity", ErrCommand)
@@ -56,6 +85,13 @@ func Service(cmd model.Command, cur *ha.State) (ha.ServiceCall, error) {
 		return ha.ServiceCall{Domain: domain, Service: service, EntityID: id, Data: data}, nil
 	}
 	payload := strings.TrimSpace(string(cmd.Payload))
+	var attrs map[string]any
+	if cur != nil {
+		attrs = cur.Attributes
+	}
+	if service, ok := services[domain][cmd.Method]; ok && cmd.Method != "" {
+		return call(service, nil)
+	}
 	switch {
 	case domain == "light" && cmd.Method == "":
 		return light(id, cmd.Payload)
@@ -96,10 +132,6 @@ func Service(cmd model.Command, cur *ha.State) (ha.ServiceCall, error) {
 		if cmd.Method == hamapping.MethodTemperatureHigh {
 			set, other = other, set
 		}
-		var attrs map[string]any
-		if cur != nil {
-			attrs = cur.Attributes
-		}
 		o, ok := toFloat(attrs[other])
 		if !ok {
 			return ha.ServiceCall{}, fmt.Errorf("%w: %s %s without a current %s", ErrCommand, id, set, other)
@@ -128,8 +160,120 @@ func Service(cmd model.Command, cur *ha.State) (ha.ServiceCall, error) {
 		if payload == "forward" || payload == "reverse" {
 			return call("set_direction", map[string]any{"direction": payload})
 		}
+	case domain == "climate" && cmd.Method == hamapping.MethodFanMode:
+		// climate/services.py:214-219 set_fan_mode, fan_mode.
+		if payload != "" {
+			return call("set_fan_mode", map[string]any{"fan_mode": payload})
+		}
+	case domain == "select" && cmd.Method == hamapping.MethodSelectOption:
+		// select/services.py:42-46 select_option, option.
+		if payload != "" {
+			return call("select_option", map[string]any{"option": payload})
+		}
+	case domain == "vacuum" && cmd.Method == hamapping.MethodRunMode:
+		// Row vacuum/robotic_vacuum_cleaner: run mode 0 Idle, 1 Cleaning;
+		// vacuum/services.py:104-121 start, return_to_base.
+		switch payload {
+		case "0":
+			return call("return_to_base", nil)
+		case "1":
+			return call("start", nil)
+		}
+	case domain == "water_heater" && cmd.Method == hamapping.MethodOperationMode:
+		return waterHeaterMode(id, payload, attrs)
+	case domain == "water_heater" && cmd.Method == hamapping.MethodTemperature:
+		// water_heater/services.py:34-37,90-95 set_temperature, temperature.
+		if f, ok := number(payload); ok {
+			return call("set_temperature", map[string]any{"temperature": f})
+		}
+	case domain == "media_player" && cmd.Method == hamapping.MethodVolumeMute:
+		// media_player/services.py:193-203 volume_mute, is_volume_muted.
+		if mute, err := strconv.ParseBool(payload); err == nil {
+			return call("volume_mute", map[string]any{"is_volume_muted": mute})
+		}
+	case domain == "media_player" && cmd.Method == hamapping.MethodVolumeLevel:
+		// media_player/services.py:182-192 volume_set, volume_level 0 to 1
+		// (cv.small_float): the level 0 to 254 over LevelControl's range,
+		// level / 254 as go-fabric's UnitFromLevel (cluster/spec/
+		// levelcontrol/values.go:21,41-44), to two places.
+		if f, ok := number(payload); ok {
+			level := min(max(math.Round(f), 0), float64(levelcontroldef.LevelMax))
+			v := math.Round(level/float64(levelcontroldef.LevelMax)*100) / 100
+			return call("volume_set", map[string]any{"volume_level": v})
+		}
+	case domain == "media_player" && cmd.Method == hamapping.MethodKey:
+		return mediaKey(id, payload, attrs)
 	}
 	return ha.ServiceCall{}, fmt.Errorf("%w: %s method %q payload %q", ErrCommand, id, cmd.Method, payload)
+}
+
+// waterHeaterOnOff is WaterHeaterEntityFeature.ON_OFF
+// (water_heater/const.py:61-67).
+const waterHeaterOnOff = 8
+
+// waterHeaterMode is row water_heater/thermostat's SystemMode write,
+// "off" or "on" (water_heater/services.py:40-42,96-101 set_operation_mode,
+// operation_mode; :78-83 turn_on, turn_off, which need ON_OFF). The
+// operation mode must be one of the entity's operation_list
+// (water_heater/__init__.py:309-330), so "off" is the operation mode
+// "off" where the list has it, else turn_off; "on" is turn_on where the
+// heater has ON_OFF, else the first operation mode of the list that is
+// not "off".
+func waterHeaterMode(id, payload string, attrs map[string]any) (ha.ServiceCall, error) {
+	call := func(service string, data map[string]any) (ha.ServiceCall, error) {
+		return ha.ServiceCall{Domain: "water_heater", Service: service, EntityID: id, Data: data}, nil
+	}
+	features, _ := toInt(attrs["supported_features"])
+	onOff := features&waterHeaterOnOff != 0
+	modes := strings_(attrs["operation_list"])
+	switch payload {
+	case "off":
+		if slices.Contains(modes, "off") {
+			return call("set_operation_mode", map[string]any{"operation_mode": "off"})
+		}
+		if onOff {
+			return call("turn_off", nil)
+		}
+	case "on":
+		if onOff {
+			return call("turn_on", nil)
+		}
+		for _, m := range modes {
+			if m != "off" {
+				return call("set_operation_mode", map[string]any{"operation_mode": m})
+			}
+		}
+	}
+	return ha.ServiceCall{}, fmt.Errorf("%w: %s operation mode %q: no operation mode and no ON_OFF", ErrCommand, id, payload)
+}
+
+// mediaKey is row media_player/video_player's SendKey with the CEC key
+// codes it lets through (go-fabric cluster/spec/keypadinput
+// definition_gen.go:95-98): volume up and down (media_player/
+// services.py:137-148 volume_up, volume_down), mute as the opposite of
+// the current is_volume_muted (:193-203 volume_mute) and power as toggle
+// (:131-136).
+func mediaKey(id, payload string, attrs map[string]any) (ha.ServiceCall, error) {
+	call := func(service string, data map[string]any) (ha.ServiceCall, error) {
+		return ha.ServiceCall{Domain: "media_player", Service: service, EntityID: id, Data: data}, nil
+	}
+	code, err := strconv.ParseUint(payload, 10, 8)
+	if err == nil {
+		switch keypadinputdef.CecKeyCodeEnum(code) {
+		case keypadinputdef.CecKeyCodeVolumeUp:
+			return call("volume_up", nil)
+		case keypadinputdef.CecKeyCodeVolumeDown:
+			return call("volume_down", nil)
+		case keypadinputdef.CecKeyCodeMute:
+			muted, _ := attrs["is_volume_muted"].(bool)
+			return call("volume_mute", map[string]any{"is_volume_muted": !muted})
+		case keypadinputdef.CecKeyCodePower:
+			return call("toggle", nil)
+		default:
+			// The row lets no other key through.
+		}
+	}
+	return ha.ServiceCall{}, fmt.Errorf("%w: %s key %q", ErrCommand, id, payload)
 }
 
 // light is the JSON light payload of rows light/* (state, brightness,
