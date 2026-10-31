@@ -29,7 +29,7 @@ in-process controller (`fabrictest`).
 The table: which Home Assistant entity becomes which device type and
 cluster, and which controller command becomes which entity command.
 
-- Source: <https://github.com/SukramJ/go-hamapping>, pinned `v0.2.1`.
+- Source: <https://github.com/SukramJ/go-hamapping>, pinned `v0.4.0`.
 - Copyright (C) 2026 SukramJ. Apache License 2.0.
 - Decision: CONCEPT.md, Shape — the mapping is go-hamapping's.
 
