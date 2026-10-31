@@ -19,7 +19,8 @@ Twin of [`go-hamapping`](https://github.com/SukramJ/go-hamapping); both are buil
 setup (pure Go, `CGO_ENABLED=0`, Apache-2.0 with a contributor licence
 agreement, the same guards in CI).
 
-> **Status: 0.4.0.** The daemon and its Home Assistant add-on run; a real
+> **Status: 0.5.0.** The daemon and its Home Assistant add-on run, with
+> cameras as an opt-in (brief R6); a real
 > pairing with Apple Home is the owner's manual step before the release is
 > announced. The design is in [`CONCEPT.md`](CONCEPT.md).
 
@@ -140,6 +141,7 @@ environment only and never logged or stored.
 | `LABEL` | `Matter Bridge` | The bridge's node label (at most 32 bytes). |
 | `STORE_PATH` | `ha2fabric.db`; add-on `/data/ha2fabric.db` | The node's SQLite store. |
 | `EXPOSE_ASSIST` | `true` | Follow Home Assistant's expose-to-Assist setting. |
+| `CAMERA` | `false` | Map cameras with a live stream and relay their WebRTC signalling; also turns on Matter over TCP. Off until a live test with Apple Home has passed ([`docs/operations.md`](docs/operations.md), Cameras). |
 | `INCLUDE`, `EXCLUDE` | empty | Entity ids or globs. |
 | `INCLUDE_LABELS`, `EXCLUDE_LABELS` | empty | Home Assistant labels, by name or id (comma- or newline-separated). |
 | `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error`. |

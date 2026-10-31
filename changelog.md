@@ -6,7 +6,27 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-31
+
+The camera relay (brief R6), on go-hamapping `v0.4.0`'s camera row.
+
+### Added
+
+- Cameras, opt-in (`CAMERA`, add-on option `camera`, default off): a
+  camera entity with the `STREAM` feature becomes a Matter Camera. The
+  daemon relays the WebRTC signalling — the controller's offer and
+  candidates to `camera/webrtc/offer` and `camera/webrtc/candidate`, Home
+  Assistant's answer and candidates to the controller's requestor,
+  `EndSession` as `unsubscribe_events` — and serves a snapshot from the
+  camera proxy. The stream is Home Assistant's (go2rtc or a native WebRTC
+  camera). Off by default under go-fabric's ecosystem gate, until a live
+  test with Apple Home has passed.
+- With `CAMERA` on, the node also accepts Matter over TCP on its port: a
+  signal carrying an SDP needs the controller's TCP session.
+
 ### Changed
+
+- go-hamapping `v0.4.0`.
 
 - go-fabric `v0.15.5`: the camera's signals to the controller's requestor
   (`camera.Provider.Offer`, `Answer`, `IceCandidates`, `End`; go-fabric #351,

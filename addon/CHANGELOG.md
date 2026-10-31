@@ -5,8 +5,12 @@ tracks the project release; the project's
 [changelog.md](https://github.com/SukramJ/go-ha2fabric/blob/main/changelog.md)
 has the details.
 
-## Unreleased
+## 0.5.0
 
+- Cameras, opt-in: with the option `camera` on, a camera with a live
+  stream reaches your controller as a Matter camera; Home Assistant
+  (go2rtc) streams, the bridge relays the connection setup. Off by
+  default until a live test with Apple Home has passed.
 - The side panel is titled **Matter Server**.
 
 ## 0.4.0
