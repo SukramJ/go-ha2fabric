@@ -56,7 +56,7 @@ func TestEntitiesMeetTheirRows(t *testing.T) {
 		{"energy", state("sensor.kwh", "1.5", map[string]any{"device_class": "energy", "unit_of_measurement": "kWh", "state_class": "total_increasing"}), "sensor/energy", eligibility.StateMappable},
 		{"battery alone", state("sensor.b", "80", map[string]any{"device_class": "battery", "unit_of_measurement": "%"}), "sensor/battery", eligibility.StatePartial},
 		{"no device class", state("sensor.cpu", "4", map[string]any{"unit_of_measurement": "%"}), "sensor/no_device_class", eligibility.StateUnmappable},
-		{"co2", state("sensor.co2", "400", map[string]any{"device_class": "carbon_dioxide", "unit_of_measurement": "ppm"}), "sensor/no_device_type", eligibility.StateUnmappable},
+		{"co2", state("sensor.co2", "400", map[string]any{"device_class": "carbon_dioxide", "unit_of_measurement": "ppm"}), "sensor/carbon_dioxide", eligibility.StateMappable},
 		{"door", state("binary_sensor.d", "off", map[string]any{"device_class": "door"}), "binary_sensor/contact", eligibility.StateMappable},
 		{"motion", state("binary_sensor.m", "on", map[string]any{"device_class": "motion"}), "binary_sensor/motion", eligibility.StateMappable},
 		{"occupancy", state("binary_sensor.o", "on", map[string]any{"device_class": "occupancy"}), "binary_sensor/occupancy", eligibility.StateMappable},
@@ -75,8 +75,8 @@ func TestEntitiesMeetTheirRows(t *testing.T) {
 		{"lock open", state("lock.b", "locked", map[string]any{"supported_features": 1.0}), "lock/door_lock", eligibility.StatePartial},
 		{"fan", state("fan.a", "on", map[string]any{"percentage": 50.0, "oscillating": false, "supported_features": 51.0}), "fan/fan", eligibility.StateMappable},
 		{"fan presets", state("fan.b", "on", map[string]any{"percentage": 50.0, "preset_modes": []any{"auto", "sleep"}, "supported_features": 9.0}), "fan/fan", eligibility.StatePartial},
-		{"button", state("button.a", "unknown", map[string]any{}), "button/unmapped", eligibility.StateUnmappable},
-		{"media player", state("media_player.tv", "off", map[string]any{}), "", eligibility.StateUnmappable},
+		{"button", state("button.a", "unknown", map[string]any{}), "button/plug", eligibility.StateMappable},
+		{"media player", state("media_player.tv", "off", map[string]any{}), "media_player/unmapped", eligibility.StateUnmappable},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			e := entity(c.st.EntityID, c.st)
