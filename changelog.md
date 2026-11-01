@@ -6,8 +6,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-11-01
+
+Dependency release: go-fabric `v0.15.6`, go-fabric-ui `v0.2.9`, go-hamapping
+`v0.4.1`.
+
 ### Changed
 
+- go-hamapping `v0.4.1` (was `v0.4.0`): its go-fabric `v0.15.6` bump, no
+  row changes.
 - go-fabric `v0.15.6` (was `v0.15.5`), which answers the two questions of
   go-fabric #356: `internal/camera` takes `camera.ErrPayloadTooLarge` from
   `cluster/camera` and no longer imports go-fabric's `bridge` (the import

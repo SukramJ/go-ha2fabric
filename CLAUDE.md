@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Home Assistant entities as a bridge for Matter controllers, in pure Go on go-fabric. Twin of `go-hamapping`; both are built on
 [go-fabric](https://github.com/SukramJ/go-fabric) and share its project
-setup. **State: 0.5.0** (brief H3, two follow-ups, the family bump F1 and its follow-ups F2, brief R1–R5, brief R6): the daemon `cmd/ha2fabric` and its
+setup. **State: 0.5.1** (brief H3, two follow-ups, the family bump F1 and its follow-ups F2, brief R1–R5, brief R6, the go-fabric v0.15.6 bump): the daemon `cmd/ha2fabric` and its
 add-on. `CONCEPT.md` is the design, `docs/operations.md` the operator's
 page, `docs/by_design.md` the differences from matter-hub,
 `docs/reports/H2.md`, `H3.md`, `F1.md` and `F2.md` the waves' reports. Layout: `internal/ha`

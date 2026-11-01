@@ -5,6 +5,13 @@ tracks the project release; the project's
 [changelog.md](https://github.com/SukramJ/go-ha2fabric/blob/main/changelog.md)
 has the details.
 
+## 0.5.1
+
+- The web UI keeps working when a newer go-fabric adds a field to the
+  node's surface report (go-fabric-ui 0.2.9).
+- A camera's refused `SolicitOffer` answers INVALID_IN_STATE instead of
+  FAILURE (go-fabric 0.15.6).
+
 ## 0.5.0
 
 - Cameras, opt-in: with the option `camera` on, a camera with a live
