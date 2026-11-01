@@ -19,7 +19,7 @@ Twin of [`go-hamapping`](https://github.com/SukramJ/go-hamapping); both are buil
 setup (pure Go, `CGO_ENABLED=0`, Apache-2.0 with a contributor licence
 agreement, the same guards in CI).
 
-> **Status: 0.5.0.** The daemon and its Home Assistant add-on run, with
+> **Status: 0.5.1.** The daemon and its Home Assistant add-on run, with
 > cameras as an opt-in (brief R6); a real
 > pairing with Apple Home is the owner's manual step before the release is
 > announced. The design is in [`CONCEPT.md`](CONCEPT.md).
