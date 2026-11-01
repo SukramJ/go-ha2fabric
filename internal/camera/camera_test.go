@@ -17,7 +17,6 @@ import (
 	"testing"
 	"time"
 
-	gfbridge "github.com/SukramJ/go-fabric/bridge"
 	gfcamera "github.com/SukramJ/go-fabric/cluster/camera"
 	"github.com/SukramJ/go-fabric/cluster/spec"
 	csdef "github.com/SukramJ/go-fabric/cluster/spec/cameraavstreammanagement"
@@ -389,7 +388,7 @@ func TestPayloadTooLargeEndsTheSession(t *testing.T) {
 	up := &upstream{script: func(s *stream) { s.push(map[string]any{"type": "answer", "answer": strings.Repeat("a", 1500)}) }}
 	h, logs := newHost(t, up)
 	sig := &signaller{answerErr: func(int) error {
-		return fmt.Errorf("camera: WebRTC session 6: %w: command 0x01 of 1530 bytes, the session carries 1178", gfbridge.ErrPayloadTooLarge)
+		return fmt.Errorf("camera: WebRTC session 6: %w: command 0x01 of 1530 bytes, the session carries 1178", gfcamera.ErrPayloadTooLarge)
 	}}
 	h.Attach(sig)
 	if _, err := h.ProvideOffer(context.Background(), offer(6)); err != nil {

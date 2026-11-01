@@ -159,9 +159,9 @@ matter-hub accepts `SolicitOffer` and starts a session whose deferred offer
 it does not deliver yet (`backend/src/plugins/builtin/camera/webrtc-provider-server.ts:52-72`).
 go-ha2fabric refuses it: Home Assistant's WebRTC API takes the client's
 offer only (`camera/webrtc.py:252-258`), so the bridge has no offer of its
-own to give. The refusal carries INVALID_IN_STATE; go-fabric's kit answers
-FAILURE for any port error that is not an `im.StatusCodeError`
-(`cluster/camera/chime.go:293-299` at v0.15.5). chip's camera controller
+own to give. The refusal carries INVALID_IN_STATE, which go-fabric's kit
+answers as is since `v0.15.6` (`cluster/camera/chime.go:291-299`,
+`spec.CarriesStatus`; go-fabric #356). chip's camera controller
 starts a live view with `ProvideOffer`
 (`examples/camera-controller/commands/liveview/LiveViewCommands.cpp:40` at
 1dc3b69ed5e), which is served.

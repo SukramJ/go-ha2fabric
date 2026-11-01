@@ -6,6 +6,18 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- go-fabric `v0.15.6` (was `v0.15.5`), which answers the two questions of
+  go-fabric #356: `internal/camera` takes `camera.ErrPayloadTooLarge` from
+  `cluster/camera` and no longer imports go-fabric's `bridge` (the import
+  guard holds it to `cluster/camera`), and a camera's refused `SolicitOffer`
+  answers INVALID_IN_STATE instead of FAILURE, since the kit passes a port's
+  `contract.StatusError` through.
+- go-fabric-ui `v0.2.9` (was `v0.2.8`; oapi-codegen runtime `v1.8.0`): the
+  web UI's client no longer rejects the whole `GET /node/surface` answer
+  when go-fabric adds a field to the surface report (go-fabric-ui #27).
+
 ## [0.5.0] - 2026-10-31
 
 The camera relay (brief R6), on go-hamapping `v0.4.0`'s camera row.

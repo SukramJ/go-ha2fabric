@@ -39,10 +39,10 @@ var testOnly = map[string]bool{"fabrictest": true, "controller/client": true, "c
 // cameraOnly are the go-fabric packages internal/camera alone may import
 // besides the facade: cluster/camera, whose *camera.Provider carries the
 // camera's signals to the controller (go-fabric docs/guides/camera.md:
-// 84-87 at v0.15.5) and whose ErrUnknownSession the relay retries on, and
-// bridge for bridge.ErrPayloadTooLarge, the one error a signal over a
-// UDP session returns (:121-128). No other package reaches them.
-var cameraOnly = map[string]bool{"cluster/camera": true, "bridge": true}
+// 84-87 at v0.15.6), whose ErrUnknownSession the relay retries on and
+// whose ErrPayloadTooLarge is the one error a signal over a UDP session
+// returns (:122-127). No other package reaches it.
+var cameraOnly = map[string]bool{"cluster/camera": true}
 
 // cameraPkg is the package cameraOnly is for.
 const cameraPkg = "internal/camera"
@@ -218,7 +218,7 @@ func TestGuardRefuses(t *testing.T) {
 			t.Errorf("%s may be imported (test %v)", c.dep, c.test)
 		}
 	}
-	if !facadeImport(cameraPkg, "cluster/camera", false) || !facadeImport(cameraPkg, "bridge", false) || facadeImport(cameraPkg, "im", false) {
+	if !facadeImport(cameraPkg, "cluster/camera", false) || facadeImport(cameraPkg, "bridge", false) || facadeImport(cameraPkg, "im", false) {
 		t.Error("the camera package's rule")
 	}
 	if allowedThirdParty("gopkg.in/yaml.v3") || !allowedThirdParty("github.com/SukramJ/go-hamqtt/model") || allowedThirdParty("github.com/SukramJ/go-hamqtt/discovery") {
