@@ -1,10 +1,10 @@
 filippo.io/nistec v0.0.4 h1:F14ZHT5htWlMnQVPndX9ro9arf56cBhQxq4LnDI491s=
 filippo.io/nistec v0.0.4/go.mod h1:PK/lw8I1gQT4hUML4QGaqljwdDaFcMyFKSXN7kjrtKI=
 github.com/RaveNoX/go-jsoncommentstrip v1.0.0/go.mod h1:78ihd09MekBnJnxpICcwzCMzGrKSKYe4AqU6PDYYpjk=
-github.com/SukramJ/go-fabric v0.15.5 h1:FsOCzBasnWAS8hEcqffIAPQIUZhVrdiV+1JfhevRRg8=
-github.com/SukramJ/go-fabric v0.15.5/go.mod h1:u05z8cUjXxgNjqaVn+kMb4S99/hjHdg8WH/8h+oq2rs=
-github.com/SukramJ/go-fabric-ui v0.2.8 h1:OQ4iS6aVXa1Jf4BfcGL5uUE0zWarsUgkXq274MBfnfA=
-github.com/SukramJ/go-fabric-ui v0.2.8/go.mod h1:1x5y9kUFYco/uaEFk3s715KwEyU1McBGFijPcm51ctU=
+github.com/SukramJ/go-fabric v0.15.6 h1:ZRnMcH3G413sBrdYFM3ek7cPgTHg0eLsrv6zhhntVvg=
+github.com/SukramJ/go-fabric v0.15.6/go.mod h1:u05z8cUjXxgNjqaVn+kMb4S99/hjHdg8WH/8h+oq2rs=
+github.com/SukramJ/go-fabric-ui v0.2.9 h1:Y3PHmKUchpTjJKKOrY4h5I2ugqtA9zihO1GwcHlnchY=
+github.com/SukramJ/go-fabric-ui v0.2.9/go.mod h1:gO2j1OOpxAmhTZh3sB57k4VBiv6jvzCyRgOmKnlFPig=
 github.com/SukramJ/go-ha-catalog v0.3.2-0.20261024093528-d9582e022b8f h1:Y0N1A6rojgi1e4GeNuA3twBQbwkTcfalTYfMOK9qPDU=
 github.com/SukramJ/go-ha-catalog v0.3.2-0.20261024093528-d9582e022b8f/go.mod h1:qonkN9S2mQc8Hs4fH8XfVqlORR/yrbmgx6n0ImFlsbc=
 github.com/SukramJ/go-hamapping v0.4.0 h1:2MgFm+2NloyglRrwWaWS4U1JYA4v1oHZYev3evQBtg8=
@@ -41,8 +41,8 @@ github.com/ncruces/go-strftime v1.0.0 h1:HMFp8mLCTPp341M/ZnA4qaf7ZlsbTc+miZjCLOF
 github.com/ncruces/go-strftime v1.0.0/go.mod h1:Fwc5htZGVVkseilnfgOVb9mKy6w1naJmn9CehxcKcls=
 github.com/oapi-codegen/nullable v1.1.0 h1:eAh8JVc5430VtYVnq00Hrbpag9PFRGWLjxR1/3KntMs=
 github.com/oapi-codegen/nullable v1.1.0/go.mod h1:KUZ3vUzkmEKY90ksAmit2+5juDIhIZhfDl+0PwOQlFY=
-github.com/oapi-codegen/runtime v1.7.0 h1:t7358VYPvNbWJ9gdAkIK/smVeHpBf6yp8VTsaZsb/7k=
-github.com/oapi-codegen/runtime v1.7.0/go.mod h1:GwV7hC2hviaMzj+ITfHVRESK5J2W/GefVwIND/bMGvU=
+github.com/oapi-codegen/runtime v1.8.0 h1:RJzEgQSJQADEPaG1cYuSCKYai/cCVRE2xnkrqhJs/3c=
+github.com/oapi-codegen/runtime v1.8.0/go.mod h1:GwV7hC2hviaMzj+ITfHVRESK5J2W/GefVwIND/bMGvU=
 github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=
 github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=

@@ -223,7 +223,7 @@ this derivation is wrong for the installation.
 Limits:
 
 - `SolicitOffer` is refused: Home Assistant takes the client's offer only
-  (`camera/webrtc.py:252-258`). go-fabric's kit answers FAILURE for it.
+  (`camera/webrtc.py:252-258`); the answer is INVALID_IN_STATE.
 - The controller's ICE servers are not relayed; Home Assistant's provider
   uses its own (`camera/__init__.py:708-718`).
 - The stream declaration is nominal: Home Assistant names no codec,

@@ -17,10 +17,10 @@
 // streams it allocates are one nominal stream each, and a snapshot is
 // Home Assistant's camera proxy still.
 //
-// It is the one package that imports go-fabric's cluster/camera — the
-// signals are methods of *camera.Provider — and go-fabric's bridge for the
-// one error a signal over UDP returns, bridge.ErrPayloadTooLarge
-// (docs/guides/camera.md:121-128).
+// It is the one package that imports go-fabric's cluster/camera: the
+// signals are methods of *camera.Provider, and camera.ErrPayloadTooLarge
+// is the one error a signal over UDP returns (docs/guides/camera.md:122-127
+// at v0.15.6).
 package camera
 
 import (
@@ -36,7 +36,6 @@ import (
 	"sync"
 	"time"
 
-	gfbridge "github.com/SukramJ/go-fabric/bridge"
 	gfcamera "github.com/SukramJ/go-fabric/cluster/camera"
 	csdef "github.com/SukramJ/go-fabric/cluster/spec/cameraavstreammanagement"
 	wpdef "github.com/SukramJ/go-fabric/cluster/spec/webrtctransportprovider"
@@ -277,9 +276,8 @@ func (h *Host) Close(ctx context.Context) {
 
 // SolicitOffer implements wpdef.ProviderPort: not served, since Home
 // Assistant's API takes the client's offer only. The error carries
-// INVALID_IN_STATE; the kit's server answers FAILURE for it today, its
-// portError keeping only an im.StatusCodeError (cluster/camera/chime.go:
-// 293-299 at v0.15.5).
+// INVALID_IN_STATE, which the kit's server passes through as the answer
+// (cluster/camera/chime.go:291-299 at v0.15.6, spec.CarriesStatus).
 func (h *Host) SolicitOffer(context.Context, wpdef.OfferArgs) (wpdef.WebRTCSessionStruct, bool, error) {
 	return wpdef.WebRTCSessionStruct{}, false, contract.StatusError{Status: statusInvalidInState, Message: ErrSolicitOffer.Error()}
 }
@@ -544,7 +542,7 @@ func (h *Host) signal(ctx context.Context, ss *session, command string, fn func(
 			return false
 		}
 	}
-	if errors.Is(err, gfbridge.ErrPayloadTooLarge) {
+	if errors.Is(err, gfcamera.ErrPayloadTooLarge) {
 		h.log.Error("camera.signal_too_large", slog.Int("session", int(ss.id)), slog.String("command", command), slog.String("error", err.Error()),
 			slog.String("hint", "the controller reached the bridge over UDP; a signal carrying an SDP needs the controller's TCP session"))
 	} else {
