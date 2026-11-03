@@ -19,6 +19,6 @@ The add-on pulls the pre-built image `ghcr.io/sukramj/go-ha2fabric-addon-{arch}`
 (`.github/workflows/addon-image.yml`): a Home Assistant base image with the
 daemon and `script/run.sh`, which maps the options onto the daemon's
 environment. The distroless image `ghcr.io/sukramj/go-ha2fabric` runs the
-daemon directly and is not an add-on image. To build the add-on on the host
-instead, remove `image:` from `config.yaml`; the Supervisor then builds
-`Dockerfile` from `build.yaml`'s base images.
+daemon directly and is not an add-on image. The Supervisor no longer reads
+`build.yaml` and, since Supervisor 2026.04.0, no longer supplies `BUILD_FROM`;
+build the image yourself with `make addon-image`.
