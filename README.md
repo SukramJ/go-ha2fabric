@@ -3,6 +3,7 @@
 [![ci](https://github.com/SukramJ/go-ha2fabric/actions/workflows/ci.yml/badge.svg)](https://github.com/SukramJ/go-ha2fabric/actions/workflows/ci.yml)
 [![codeql](https://github.com/SukramJ/go-ha2fabric/actions/workflows/codeql.yml/badge.svg)](https://github.com/SukramJ/go-ha2fabric/actions/workflows/codeql.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
+[![Open your Home Assistant instance and add this add-on repository.](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2FSukramJ%2Fgo-ha2fabric)
 
 A Home Assistant installation seen by Apple Home, Google Home and Amazon
 Alexa as one bridge: the entities Home Assistant exposes become endpoints
@@ -93,7 +94,8 @@ not an error, and matches once it is created.
 
 ### As a Home Assistant add-on
 
-1. **Settings → Add-ons → Add-on Store**, **⋮ → Repositories**, add
+1. **Settings → Apps → Install app**, **⋮ → Repositories** (formerly
+   *Settings → Add-ons → Add-on Store*), add
    `https://github.com/SukramJ/go-ha2fabric`.
 2. Install **go-ha2fabric**, change its `passcode`, start it.
 3. Open its **Web UI** and pair the QR code from Apple Home, Google Home or
