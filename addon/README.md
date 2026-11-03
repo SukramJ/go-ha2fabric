@@ -7,7 +7,8 @@ uncertified; a controller may warn when pairing it.
 
 ## Installation
 
-1. In Home Assistant go to **Settings → Add-ons → Add-on Store**.
+1. In Home Assistant go to **Settings → Apps → Install app** (formerly
+   *Settings → Add-ons → Add-on Store*).
 2. Open the **⋮** menu → **Repositories** and add
    `https://github.com/SukramJ/go-ha2fabric`.
 3. Install **go-ha2fabric**, start it and open its **Web UI** for the
