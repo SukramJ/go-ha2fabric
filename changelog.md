@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- The add-on's side panel is titled **Fabric Bridge** (was `Matter Server`,
+  `panel_title` in `addon/config.yaml`): the add-on is the bridge, not the
+  server Home Assistant's Matter integration talks to, and "Matter" stays out
+  of names (README, "Why 'Matter' is not in the name").
+
 ## [0.5.1] - 2026-11-01
 
 Dependency release: go-fabric `v0.15.6`, go-fabric-ui `v0.2.9`, go-hamapping
