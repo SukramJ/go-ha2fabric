@@ -65,8 +65,8 @@ func TestEntitiesMeetTheirRows(t *testing.T) {
 		{"generic binary", state("binary_sensor.g", "off", map[string]any{}), "binary_sensor/generic", eligibility.StateMappable},
 		{"connectivity", state("binary_sensor.c", "on", map[string]any{"device_class": "connectivity"}), "binary_sensor/no_device_type", eligibility.StateUnmappable},
 		{"cover", state("cover.a", "open", map[string]any{"device_class": "blind", "current_position": 70.0, "supported_features": 15.0}), "cover/window_covering", eligibility.StateMappable},
-		// A cover without SET_POSITION: go-fabric v0.11.0's WindowCovering
-		// server refuses Lift without PositionAwareLift (report H2, Q).
+		// A cover without SET_POSITION: Lift without PositionAwareLift,
+		// which go-fabric's kit builds at v0.17.0 (report H2, Q1).
 		{"garage", state("cover.g", "closed", map[string]any{"device_class": "garage", "supported_features": 3.0}), "cover/window_covering", eligibility.StatePartial},
 		{"climate heat", state("climate.a", "heat", map[string]any{"hvac_modes": []any{"off", "heat"}, "min_temp": 7.0, "max_temp": 35.0, "current_temperature": 20.0, "temperature": 21.0, "supported_features": 1.0}), "climate/thermostat", eligibility.StateMappable},
 		{"climate presets", state("climate.b", "heat_cool", map[string]any{"hvac_modes": []any{"off", "heat_cool", "auto"}, "preset_modes": []any{"eco"}, "fan_modes": []any{"low"}}), "climate/thermostat", eligibility.StatePartial},
@@ -110,12 +110,6 @@ func TestEntitiesMeetTheirRows(t *testing.T) {
 				return
 			}
 			devs, err := p.Build(context.Background())
-			if c.name == "garage" {
-				if err == nil {
-					t.Fatal("the kit now builds a Lift-only cover: drop the bridge's note and Q")
-				}
-				return
-			}
 			if err != nil || len(devs) == 0 {
 				t.Fatalf("build: %v", err)
 			}

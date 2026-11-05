@@ -223,7 +223,7 @@ func TestEndToEnd(t *testing.T) {
 			client.AttributeAt(temp, temperaturedef.ClusterID, temperaturedef.AttrMeasuredValue),
 			client.AttributeAt(light, bridgedbidef.ClusterID, bridgedbidef.AttrReachable),
 		},
-		Updated: func(r *fabrictest.Report) { reports <- r },
+		Updated: func(r *fabrictest.Report) error { reports <- r; return nil },
 	})
 	if err != nil {
 		t.Fatal(err)
