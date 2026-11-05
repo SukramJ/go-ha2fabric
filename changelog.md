@@ -8,12 +8,35 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- Several nodes, created in the web UI (#36, go-fabric-ui contract 0.6.0,
+  concept U6): beside the configured node — the add-on options, the
+  flags — the web UI's node selector creates, renames and deletes further
+  nodes, one per ecosystem with its own device scope. Each is a go-fabric
+  node of its own on the next free port above the configured one, with a
+  random 12-bit discriminator unique among the nodes, a random valid
+  passcode, its store `ha2fabric-<key>.db` and its selection
+  `selection-<key>.json`; the registry is `nodes.json` beside the store
+  (`{nodes: [{key, label, listen, discriminator, passcode, created_at}]}`,
+  `internal/nodes`). Every node's bridge rides the one Home Assistant
+  connection (`ha.Fanout`); a new node serves nothing until its entities
+  are picked on its selection page. Registry nodes start with the daemon;
+  deleting one removes its fabrics (its controllers lose it), its files
+  and its record. Each node's status page shows its configuration block,
+  never the passcode. `NODE_LIMIT` (`--node-limit`, the add-on's
+  `node_limit`, default 8, 0 to 32) bounds how many the UI may create.
+
 - The Operation page of the web UI (go-fabric-ui `v0.5.0`): the daemon's
   recent log, its live stream and a run-time log level (#34). The daemon's
   slog handler tees into go-fabric's `logring` ring in front of the stderr
   text handler; one `slog.LevelVar`, set from `LOG_LEVEL` at start, gates
   both, and `fabricui.Options.Operations` reads and moves it. A level set
   on the page (admin) holds until the daemon restarts.
+
+### Changed
+
+- go-fabric-ui `v0.6.0` (was `v0.5.0`): the node registry
+  (`fabricui.NodeRegistry`, `POST /nodes`, `PUT /nodes/{key}/label`,
+  `DELETE /nodes/{key}`), per-node selection and the configuration block.
 
 ## [0.5.2] - 2026-11-05
 

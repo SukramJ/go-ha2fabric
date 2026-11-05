@@ -1,7 +1,7 @@
 # go-ha2fabric add-on
 
 Serves your Home Assistant entities to Matter controllers — Apple Home,
-Google Home, Amazon Alexa — as one bridge. Which entity becomes which
+Google Home, Amazon Alexa — as one bridge, or one per ecosystem. Which entity becomes which
 Matter device is decided by [go-hamapping](https://github.com/SukramJ/go-hamapping);
 the add-on shows its verdict for every entity.
 
@@ -71,19 +71,39 @@ modes are not mapped.
 | `include_labels` | list | `[]` | Home Assistant labels (name or id) whose entities are served. |
 | `exclude_labels` | list | `[]` | Home Assistant labels (name or id) whose entities are never served. |
 | `log_level` | list | `info` | `debug`, `info`, `warn` or `error`. |
+| `node_limit` | int | `8` | How many nodes the web UI may create beside this one (0 to 32; see Nodes). |
+
+## Nodes
+
+The options above configure the add-on's **first node**. The web UI's
+node selector (in its header) creates further nodes — one per ecosystem,
+when Apple Home and Alexa should see different devices: **Create node…**,
+give it a name, pick its entities on its **Selection** page, and pair it
+from its **Pair** page with its own code. A new node serves nothing until
+you pick its entities; the `include`/`exclude` lists and
+`expose_assist` belong to the first node.
+
+The add-on chooses each new node's port (the next free one above `port`),
+its discriminator and its passcode; only its name can be changed later.
+Every node starts with the add-on. **Deleting a node is final**: the
+controllers that paired it lose it, and its store and selection are
+removed. The first node cannot be deleted; its values stay the options.
 
 ## Network
 
 Matter needs the host's network: controllers find the bridge over mDNS and
-reach it over UDP (`port`) and IPv6 on your LAN, so the add-on runs with
-host networking. The web UI is served only through Home Assistant's
+reach it over UDP (`port`, and the ports of the nodes created in the web
+UI) and IPv6 on your LAN, so the add-on runs with host networking; a new
+node's port needs no mapping. The web UI is served only through Home Assistant's
 Ingress.
 
 ## Data and backups
 
 The add-on keeps two files: `/data/ha2fabric.db`, the paired controllers,
 their keys and the endpoint numbers, and `/data/selection.json`, the web
-UI's per-entity choices. Losing it unpairs the bridge
+UI's per-entity choices. Each node created in the web UI adds its own
+pair, `/data/ha2fabric-<key>.db` and `/data/selection-<key>.json`, and
+`/data/nodes.json` lists those nodes with their ports and passcodes. Losing it unpairs the bridge
 everywhere. A Home Assistant backup stops the add-on briefly to copy it
 consistently. The add-on stores no token and no copy of your
 configuration; it reads Home Assistant again on every start.

@@ -51,6 +51,11 @@ fi
 export EXCLUDE_LABELS
 
 export LOG_LEVEL="$(bashio::config 'log_level')"
+# An installation from before 0.6.0 may lack node_limit: the daemon's
+# default (8) holds then.
+if bashio::config.has_value 'node_limit'; then
+  export NODE_LIMIT="$(bashio::config 'node_limit')"
+fi
 
 # --- Web UI through Ingress ---
 # On the host's network: listen on ingress_port and serve only the Ingress

@@ -45,7 +45,13 @@ const (
 	DefaultProductID     = 0x8001
 	DefaultLabel         = "Matter Bridge"
 	DefaultWebListen     = "127.0.0.1:8099"
-	DefaultStoreFile     = "ha2fabric.db"
+	// DefaultNodeLimit is how many nodes the web UI may create beside the
+	// configured one (NODE_LIMIT); MaxNodeLimit bounds the option. Each
+	// node is a Matter node of its own — a port, mDNS records, a store —
+	// and every one re-plans on each Home Assistant registry change.
+	DefaultNodeLimit = 8
+	MaxNodeLimit     = 32
+	DefaultStoreFile = "ha2fabric.db"
 	// AddonStorePath is the store in the add-on's persistent /data.
 	AddonStorePath = "/data/" + DefaultStoreFile
 	// SelectionFile is the web UI's overrides file, beside the store.
@@ -105,6 +111,11 @@ type Config struct {
 	// gate keeps camera clusters out of host devices before that
 	// (go-fabric docs/guides/camera.md:414-425 at v0.15.5).
 	Camera bool
+
+	// NodeLimit is how many nodes the web UI may create beside the
+	// configured one (NODE_LIMIT, default 8, 0 to 32); the registry's
+	// nodes live in nodes.json beside the store (internal/nodes).
+	NodeLimit int
 
 	// DumpPlan prints every candidate entity's verdict and exits.
 	DumpPlan bool
@@ -179,6 +190,7 @@ func Load(args []string, env Env, out io.Writer) (*Config, error) {
 	allow := str("web-allow", "WEB_ALLOW", "", "client addresses allowed on the web UI (comma-separated); empty allows all")
 	webAdmin := str("web-admin", "WEB_ADMIN", "false", "stand-alone: let the web UI write and show the pairing code")
 	cam := str("camera", "CAMERA", "false", "map camera entities and relay their WebRTC signalling (opt-in)")
+	limit := str("node-limit", "NODE_LIMIT", strconv.Itoa(DefaultNodeLimit), "how many nodes the web UI may create beside the configured one")
 	dump := fs.Bool("dump-plan", false, "print every candidate entity's verdict and exit")
 	ver := fs.Bool("version", false, "print the version and exit")
 	if err := fs.Parse(args); err != nil {
@@ -271,6 +283,11 @@ func Load(args []string, env Env, out io.Writer) (*Config, error) {
 		add("CAMERA must be true or false, got %q", *cam)
 	} else {
 		c.Camera = b
+	}
+	if v, err := strconv.Atoi(*limit); err != nil || v < 0 || v > MaxNodeLimit {
+		add("NODE_LIMIT must be 0..%d, got %q", MaxNodeLimit, *limit)
+	} else {
+		c.NodeLimit = v
 	}
 	if err := c.LogLevel.UnmarshalText([]byte(*level)); err != nil {
 		add("LOG_LEVEL must be debug, info, warn or error, got %q", *level)
