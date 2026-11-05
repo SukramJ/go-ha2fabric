@@ -6,12 +6,12 @@
 [![Open your Home Assistant instance and add this add-on repository.](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2FSukramJ%2Fgo-ha2fabric)
 
 A Home Assistant installation seen by Apple Home, Google Home and Amazon
-Alexa as one bridge: the entities Home Assistant exposes become endpoints
+Alexa as a bridge — or as one bridge per ecosystem: the entities Home Assistant exposes become endpoints
 of a bridged node. The daemon embeds [go-fabric](https://github.com/SukramJ/go-fabric) in
 process: the Home Assistant WebSocket API (entity and device registry,
 `state_changed`, `call_service`) on one side, go-fabric's device kit and
 `node` facade speaking Matter to the controllers on the other, one
-process and one store. Which
+process. Which
 Home Assistant component becomes which device type and cluster is the
 table of [`go-hamapping`](https://github.com/SukramJ/go-hamapping).
 
@@ -52,6 +52,12 @@ See go-fabric's README, section "Not certified".
   illuminance, power, voltage, current, energy, with a device's battery on
   its main endpoint), binary sensors (contact, motion, occupancy, water
   leak, smoke, carbon monoxide), covers, climate, locks and fans.
+- **Several nodes, one per ecosystem.** Beside the configured node the
+  web UI creates further nodes — one for Apple Home, one for Alexa —
+  each with its own port, pairing code, store and entity selection, on
+  the one Home Assistant connection; created, renamed and deleted at run
+  time, started with the daemon (`NODE_LIMIT`, default 8;
+  [operations](docs/operations.md#nodes)).
 - **Both directions.** `state_changed` becomes an attribute report to every
   subscribed controller; a controller's command becomes a `call_service`.
 - **Live topology.** A renamed, disabled, hidden or newly exposed entity

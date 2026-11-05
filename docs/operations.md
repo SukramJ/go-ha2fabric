@@ -1,15 +1,19 @@
 # Operations
 
 What an operator of go-ha2fabric needs: the files it keeps, the ports and
-addresses, mDNS, the token, the logs, the health endpoint and pairing. The
+addresses, mDNS, the token, the logs, the health endpoint, pairing and the
+nodes created in the web UI. The
 node's side of each is go-fabric's
 [operations guide](https://github.com/SukramJ/go-fabric/blob/v0.11.0/docs/guides/operations.md);
 this page is the daemon's version.
 
 ## Files
 
-The daemon keeps two files: the node's SQLite store, `STORE_PATH`, and
-beside it `selection.json`, the web UI's per-entity overrides.
+The daemon keeps two files for its configured node: the node's SQLite
+store, `STORE_PATH`, and beside it `selection.json`, the web UI's
+per-entity overrides. Each node created in the web UI (Nodes, below) adds
+its pair in the same directory, `ha2fabric-<key>.db` and
+`selection-<key>.json`, and `nodes.json` lists those nodes.
 
 | Where | Path |
 | --- | --- |
@@ -41,6 +45,18 @@ the daemon starts without overrides. The add-on's cold backup holds it with
 the store. An override keyed by an entity id does not follow a rename of
 that id.
 
+`nodes.json` is the node registry, `{"nodes": [{"key", "label",
+"listen", "discriminator", "passcode", "created_at"}]}`: written
+atomically with mode 0600 — it holds the nodes' passcodes, protect it like
+the store — and read at start. A file that does not parse, or holds a node
+whose key, address, discriminator or passcode is unusable, is renamed to
+`nodes.json.corrupt-<unix seconds>`, logged (`nodes.corrupt`), and the
+daemon starts with its configured node only; the nodes' files stay, and no
+new node takes a key whose files exist, so restoring the file brings them
+back. On Windows, which has no POSIX file modes, the ACL of the data
+directory protects it, as it does the store: that is the service's
+concern.
+
 The daemon stores nothing else: not the token, not Home Assistant's
 registry, not the states. Everything it knows about Home Assistant it reads
 again on every connection.
@@ -50,6 +66,7 @@ again on every connection.
 | What | Default | Notes |
 | --- | --- | --- |
 | UDP `LISTEN` | `:5540` | Every Matter message. The add-on's `port` option sets it; change it when another Matter node on the same host uses 5540. |
+| UDP each node's `listen` | the next free port above `LISTEN`'s | A node created in the web UI (Nodes, below); the add-on's host networking needs no mapping. |
 | TCP `LISTEN` | off; on with `CAMERA` | Matter over TCP on the same port, for a camera's signals (Cameras, below; go-fabric `docs/guides/operations.md:54, 58` at v0.15.5). |
 | UDP 5353, `224.0.0.251`, `ff02::fb` | — | mDNS, below. |
 | IPv6 on the LAN | required | Matter's operational network is IPv6. |
@@ -298,8 +315,52 @@ pairing for real. The bridge carries go-fabric's test attestation chain; a
 controller may warn that it is an uncertified device and needs a
 confirmation to go on.
 
+## Nodes
+
+The first node is the daemon's configuration: `LISTEN`, `PASSCODE`,
+`DISCRIMINATOR`, `VENDOR_ID`, `PRODUCT_ID`, `LABEL`, `STORE_PATH` (the
+add-on's options). Every further node is registry state, created,
+renamed and deleted in the web UI's node selector (go-fabric-ui contract
+0.6.0, "Node registry") — one node per ecosystem when Apple Home and
+Alexa should see different devices: a Matter node has one endpoint tree
+for all its fabrics, so a different scope is a different node.
+
+- **Create** allocates the node's key (a slug of its name, unique;
+  `alexa`, `apple-home`), its port (the first above `LISTEN`'s port that
+  no node names and that binds now, over TCP too with `CAMERA`), its
+  discriminator (random in 12 bits, unique among the nodes) and its
+  passcode (random, valid), starts it, and writes `nodes.json`; the log
+  says `ha2fabric.node_created`. The node shares the vendor and product
+  ids and `CAMERA` with the configured node.
+- **Its scope** is its own selection page alone: a new node serves
+  nothing until its entities are picked there. `EXPOSE_ASSIST`,
+  `INCLUDE`, `EXCLUDE` and the label lists are the configured node's.
+- **Pairing**: each node has its own pairing page and codes, and opens
+  its commissioning window while no controller has paired it; its codes
+  are in the log at its start (`ha2fabric.pairing node=<key>`).
+- **Rename** changes the name in the selector and the status page at
+  once; the node's `NodeLabel` takes it at the next start (a name a
+  controller wrote wins, as for the configured node).
+- **Delete** is final: the node leaves every fabric it holds (its
+  controllers lose it), stops, and its store, its selection and its
+  record are removed (`ha2fabric.node_deleted`). The configured node
+  cannot be deleted (409 `node_is_default`).
+- **Restart**: every registry node starts with the daemon. One that
+  cannot (its port taken) is logged (`ha2fabric.node_start`) and listed
+  as not enabled; deleting it removes its files.
+- **Limit**: `NODE_LIMIT` (`--node-limit`, the add-on's `node_limit`,
+  default 8, 0 to 32) bounds the nodes beside the configured one; one more
+  is refused with 409 `node_limit`.
+
+Every node's bridge rides the daemon's one Home Assistant connection; a
+registry change re-plans every node. Each status page shows its node's
+configuration block — where its values come from, its address,
+discriminator, ids and store — never the passcode.
+
 ## Factory reset
 
-Stop the daemon and delete the store file (and a `-journal` next to it).
+Stop the daemon and delete the store file (and a `-journal` next to it);
+for every node, delete the `ha2fabric-*.db` and `selection-*.json` files
+and `nodes.json` too, or delete one node in the web UI.
 The next start pairs from nothing; the controllers keep a dead bridge until
 they are told to remove it. Home Assistant is untouched.

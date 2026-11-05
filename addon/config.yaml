@@ -59,6 +59,7 @@ options:
   include_labels: []
   exclude_labels: []
   log_level: info
+  node_limit: 8
 
 schema:
   port: port
@@ -78,3 +79,4 @@ schema:
   exclude_labels:
     - str
   log_level: list(debug|info|warn|error)
+  node_limit: int(0,32)
