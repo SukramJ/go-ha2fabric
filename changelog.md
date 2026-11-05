@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- The Operation page of the web UI (go-fabric-ui `v0.5.0`): the daemon's
+  recent log, its live stream and a run-time log level (#34). The daemon's
+  slog handler tees into go-fabric's `logring` ring in front of the stderr
+  text handler; one `slog.LevelVar`, set from `LOG_LEVEL` at start, gates
+  both, and `fabricui.Options.Operations` reads and moves it. A level set
+  on the page (admin) holds until the daemon restarts.
+
 ## [0.5.2] - 2026-11-05
 
 Dependency release: go-fabric `v0.17.0`, go-fabric-ui `v0.5.0`, go-hamapping

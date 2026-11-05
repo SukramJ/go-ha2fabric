@@ -119,6 +119,10 @@ minute; after each reconnect the daemon reads everything again.
 
 The daemon logs to standard error in slog's text form, at `LOG_LEVEL`
 (`debug`, `info`, `warn`, `error`); the node logs through the same handler.
+The web UI's Operation page shows the newest records the daemon keeps in
+memory (go-fabric's log ring) and streams new ones; an admin can change the
+level there, which moves standard error's level too, until the daemon
+restarts.
 The lines to know:
 
 | Message | Level | Meaning |
@@ -264,6 +268,8 @@ go-hamapping puts in front of an entity name otherwise. The status page
 lists the configuration's warnings: unresolved label values
 (`label_unresolved`) and an overrides file moved aside at start
 (`selection_corrupt`).
+The Operation page shows the daemon's version and uptime, its recent log
+and the log level (see Logs); changing the level is a write.
 
 ## Health
 

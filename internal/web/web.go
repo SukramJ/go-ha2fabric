@@ -5,7 +5,8 @@
 // Assistant's Ingress in the add-on): go-fabric-ui's handler
 // (fabricui.Handler at v0.1.0: the node pages — health, pairing and the
 // commissioning window, fabrics, the entity selection, endpoints,
-// diagnostics — and their API under /api/v1), behind the client filter.
+// diagnostics, and the Operation page over the daemon's log ring
+// ([Operations]) — and their API under /api/v1), behind the client filter.
 // The 0.1.0 JSON routes GET /api/health and GET /api/plan are gone (owner
 // decision 2026-10-25): /api/v1/node/status and /api/v1/node/exposure
 // replace them. The UI's URLs are relative, so it
@@ -33,7 +34,8 @@ type Options struct {
 	Allow  []string
 	Logger *slog.Logger
 	// UI are go-fabric-ui's options (Node, Exposure, Admin, Reassemble,
-	// Events); their Logger defaults to Logger.
+	// Events, Operations — [NewOperations] over [NewLogger]'s ring); their
+	// Logger defaults to Logger.
 	UI fabricui.Options
 }
 
