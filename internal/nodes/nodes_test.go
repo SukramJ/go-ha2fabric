@@ -11,6 +11,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -200,7 +201,9 @@ func TestPersistence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if st.Mode().Perm() != 0o600 {
+	// Windows has no POSIX modes (the write asks 0600 everywhere; there
+	// the data directory's ACL, the service's concern, protects the file).
+	if runtime.GOOS != "windows" && st.Mode().Perm() != 0o600 {
 		t.Fatalf("mode %v: the file holds passcodes", st.Mode())
 	}
 	raw, _ := os.ReadFile(filepath.Join(dir, nodes.File))
@@ -291,6 +294,9 @@ func TestRemoveFiles(t *testing.T) {
 }
 
 func TestWriteFails(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("no read-only directory by mode on Windows: the data directory's ACL is the service's concern")
+	}
 	dir := t.TempDir()
 	r := open(t, dir)
 	r.SetSources(nil, func(string, string) bool { return true }, nil)

@@ -53,7 +53,9 @@ whose key, address, discriminator or passcode is unusable, is renamed to
 `nodes.json.corrupt-<unix seconds>`, logged (`nodes.corrupt`), and the
 daemon starts with its configured node only; the nodes' files stay, and no
 new node takes a key whose files exist, so restoring the file brings them
-back.
+back. On Windows, which has no POSIX file modes, the ACL of the data
+directory protects it, as it does the store: that is the service's
+concern.
 
 The daemon stores nothing else: not the token, not Home Assistant's
 registry, not the states. Everything it knows about Home Assistant it reads
