@@ -213,14 +213,37 @@ func (r *Registry) Allocate(label string, c Configured) (Node, error) {
 	return n, nil
 }
 
-// Slug is label as a key of the contract's pattern: lower-case letters and
-// digits kept, every other run of characters one '-', no '-' at either
-// end, at most 56 characters (room for a suffix); "node" when nothing is
-// left.
+// fold transliterates the letters a label commonly carries before Slug
+// strips what is left: German umlauts and ß to their two-letter forms,
+// Latin letters with a diacritic to their base letter (the module does
+// not depend on golang.org/x/text, so a table rather than NFD). Keys are
+// lower case.
+var fold = strings.NewReplacer(
+	"ä", "ae", "ö", "oe", "ü", "ue", "ß", "ss",
+	"à", "a", "á", "a", "â", "a", "ã", "a", "å", "a", "ā", "a", "ą", "a", "æ", "ae",
+	"ç", "c", "ć", "c", "č", "c",
+	"ď", "d", "đ", "d", "ð", "d",
+	"è", "e", "é", "e", "ê", "e", "ë", "e", "ē", "e", "ę", "e", "ě", "e",
+	"ì", "i", "í", "i", "î", "i", "ï", "i", "ī", "i", "ı", "i",
+	"ł", "l", "ľ", "l",
+	"ñ", "n", "ń", "n", "ň", "n",
+	"ò", "o", "ó", "o", "ô", "o", "õ", "o", "ø", "o", "ō", "o", "ő", "o", "œ", "oe",
+	"ř", "r",
+	"ś", "s", "š", "s", "ş", "s",
+	"ť", "t", "ţ", "t", "þ", "th",
+	"ù", "u", "ú", "u", "û", "u", "ū", "u", "ů", "u", "ű", "u",
+	"ý", "y", "ÿ", "y",
+	"ź", "z", "ż", "z", "ž", "z",
+)
+
+// Slug is label as a key of the contract's pattern: transliterated
+// ([fold]), lower-case letters and digits kept, every other run of
+// characters one '-', no '-' at either end, at most 56 characters (room
+// for a suffix); "node" when nothing is left.
 func Slug(label string) string {
 	var b strings.Builder
 	dash := false
-	for _, c := range strings.ToLower(label) {
+	for _, c := range fold.Replace(strings.ToLower(label)) {
 		switch {
 		case c >= 'a' && c <= 'z' || c >= '0' && c <= '9':
 			if dash && b.Len() > 0 {
