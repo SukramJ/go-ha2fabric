@@ -62,7 +62,12 @@ func run(ctx context.Context, args []string, env config.Env, stdout, stderr io.W
 		_, _ = fmt.Fprintln(stdout, version.String())
 		return 0
 	}
-	logger := slog.New(slog.NewTextHandler(stderr, &slog.HandlerOptions{Level: cfg.LogLevel}))
+	// LOG_LEVEL is the level at start; the web UI's Operation page moves
+	// it at run time (lvl gates the ring and stderr alike).
+	lvl := new(slog.LevelVar)
+	lvl.Set(cfg.LogLevel)
+	logger, ring := web.NewLogger(stderr, lvl)
+	started := time.Now()
 	client := ha.New(ha.Options{URL: cfg.HAURL, Token: cfg.HAToken, Events: events, Logger: logger})
 	sel, err := selection.Open(cfg.SelectionPath, logger)
 	if err != nil {
@@ -111,6 +116,7 @@ func run(ctx context.Context, args []string, env config.Env, stdout, stderr io.W
 	if cfg.WebListen != "" {
 		ws := web.New(web.Options{Listen: cfg.WebListen, Allow: cfg.WebAllow, Logger: logger, UI: fabricui.Options{
 			Node: n, Exposure: br.Exposure(), Admin: admin(cfg), Reassemble: br.Resync, Events: uiEvents, Warnings: br.Warnings, Logger: logger,
+			Operations: web.NewOperations(ring, version.Version, started),
 		}})
 		wg.Go(func() { webErr <- ws.Run(rctx) })
 	}

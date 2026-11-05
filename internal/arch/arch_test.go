@@ -3,8 +3,8 @@
 
 // Package arch holds the module's architecture guard (brief H2, hard rule
 // 1): go-fabric is used through its facade only — node, device, contract,
-// eligibility and the <cluster>def packages under cluster/spec/; the
-// camera host alone also cluster/camera and bridge — and the daemon's own
+// eligibility, logring and the <cluster>def packages under cluster/spec/;
+// the camera host alone also cluster/camera and bridge — and the daemon's own
 // packages keep their layers. Tests may import fabrictest,
 // the controller's client paths and clock besides. It is go-fabric's
 // script/archcheck as a test, in the form of go-fabric-server's
@@ -28,7 +28,14 @@ const (
 )
 
 // facade are the go-fabric packages the daemon may import.
-var facade = map[string]bool{"node": true, "device": true, "contract": true, "eligibility": true}
+var facade = map[string]bool{
+	"node": true, "device": true, "contract": true, "eligibility": true,
+	// The daemon's log ring (issue #34, go-fabric #393; as in
+	// go-fabric-server's internal/arch): the slog.Handler in front of the
+	// daemon's own, whose records, level and stream go-fabric-ui's
+	// Operations port reads (go-fabric docs/guides/observability.md).
+	"logring": true,
+}
 
 // testOnly are the go-fabric packages a test may import besides: the
 // in-process controller, its path helpers, the wall clock and the
