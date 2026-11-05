@@ -199,7 +199,7 @@ func (f *fleet) entry(m *member) fabricui.NodeEntry {
 var errStopping = errors.New("the daemon is stopping")
 
 // Create implements [fabricui.NodeRegistry]: allocate, start, persist.
-func (f *fleet) Create(_ context.Context, spec fabricui.NodeSpec) (fabricui.NodeEntry, error) {
+func (f *fleet) Create(ctx context.Context, spec fabricui.NodeSpec) (fabricui.NodeEntry, error) {
 	f.op.Lock()
 	defer f.op.Unlock()
 	if f.closed {
@@ -218,7 +218,7 @@ func (f *fleet) Create(_ context.Context, spec fabricui.NodeSpec) (fabricui.Node
 		return fabricui.NodeEntry{}, fmt.Errorf("node %s: %w", rec.Key, err)
 	}
 	if err := f.reg.Add(rec); err != nil {
-		_ = s.close(context.WithoutCancel(f.base))
+		_ = s.close(context.WithoutCancel(ctx))
 		_ = f.reg.RemoveFiles(&rec)
 		return fabricui.NodeEntry{}, err
 	}

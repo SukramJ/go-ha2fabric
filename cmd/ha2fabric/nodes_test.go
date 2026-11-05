@@ -69,7 +69,7 @@ func (d *daemon) stop() {
 	}
 }
 
-func (d *daemon) call(method, path, body string) (int, []byte) {
+func (d *daemon) call(method, path, body string) (code int, resp []byte) {
 	d.t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
