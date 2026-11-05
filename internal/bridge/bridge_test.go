@@ -157,11 +157,12 @@ func TestResync(t *testing.T) {
 		t.Fatalf("the light moved from %d to %d", light, again)
 	}
 
-	// A new entity the include list names appears; a cover the kit
-	// refuses says why.
+	// A new entity the include list names appears and gets an endpoint;
+	// a cover without SET_POSITION is a Lift-only WindowCovering, which
+	// go-fabric's kit builds at v0.17.0 (report H2, Q1).
 	e.ha.SetState("cover.garage", "closed", map[string]any{"device_class": "garage", "supported_features": 3, "friendly_name": "Garage"})
 	e.eventually("cover.garage assessed", func() bool { return byID(e.br.Plan())["cover.garage"].Exposed })
-	if g := byID(e.br.Plan())["cover.garage"]; g.State != "unmappable" || !strings.Contains(g.Reason, "go-fabric refused the device") || g.Endpoint != 0 {
+	if g := byID(e.br.Plan())["cover.garage"]; g.State != "partially_mappable" || g.Endpoint == 0 {
 		t.Fatalf("garage %+v", g)
 	}
 

@@ -79,7 +79,7 @@ func run(ctx context.Context, args []string, env config.Env, stdout, stderr io.W
 	// The web UI's event stream observes the node itself (Node.Observe,
 	// go-fabric-ui v0.1.2); uiEvents carries the bridge's own events.
 	uiEvents := fabricui.NewEvents()
-	n, err := node.New(bridge.NodeConfig(cfg, logger)) //nolint:contextcheck // the node's constructor takes no context
+	n, err := node.New(ctx, bridge.NodeConfig(cfg, logger))
 	if err != nil {
 		logger.Error("ha2fabric.node", slog.String("error", err.Error()))
 		return 1

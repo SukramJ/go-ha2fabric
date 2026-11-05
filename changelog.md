@@ -6,8 +6,34 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-11-05
+
+Dependency release: go-fabric `v0.17.0`, go-fabric-ui `v0.5.0`, go-hamapping
+`v0.4.2`.
+
 ### Changed
 
+- go-fabric `v0.17.0` (was `v0.15.6`). The removed symbols took the routes
+  of go-fabric's `docs/guides/migrating-to-the-facade.md` (the facade
+  review table): `node.New(cfg)` is `node.New(ctx, cfg)`; `Config.Health`
+  is a `*node.Health` (nil off); `Node.PairingCodes()` is
+  `Node.SetupPayload()` with `.QR` and `.Manual`; in the end-to-end tests a
+  subscription's `Updated` returns an error (go-fabric changelog 0.17.0,
+  `SubscribeRequest.Updated`). A cover without `SET_POSITION` (a garage
+  door, a Lift-only WindowCovering) now builds and gets its endpoint,
+  partially mappable, where go-fabric refused the device before (report
+  H2, Q1). go-fabric answers DNS-SD with its own responder, so
+  github.com/grandcat/zeroconf and github.com/cenkalti/backoff leave the
+  module graph.
+- go-fabric-ui `v0.5.0` (was `v0.2.9`). `*node.Node` remains the
+  `NodeSource`: the methods the interface gained (`ReadCluster`,
+  `ReadAttribute`, `Events`, `Endpoints`, `OnHealthSample`,
+  `OnDiagnosticEvent`) are go-fabric `v0.17.0`'s own, so the web UI shows
+  each endpoint's attributes and the node's event log with no change
+  here. The daemon serves one node (the default key) and attaches no
+  `Operations` port, so the Operation page's tab stays hidden.
+- go-hamapping `v0.4.2` (was `v0.4.1`): its go-fabric `v0.17.0` bump, no
+  row changes.
 - The add-on's side panel is titled **Fabric Bridge** (was `Matter Server`,
   `panel_title` in `addon/config.yaml`): the add-on is the bridge, not the
   server Home Assistant's Matter integration talks to, and "Matter" stays out

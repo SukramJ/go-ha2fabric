@@ -54,7 +54,7 @@ func NodeConfig(c *config.Config, logger *slog.Logger) node.Config {
 			SoftwareVersionString: version.Version,
 		},
 		Store:  node.Store{Path: c.StorePath},
-		Health: node.Health{Interval: node.DefaultProbeInterval},
+		Health: &node.Health{Interval: node.DefaultProbeInterval},
 		Logger: logger,
 	}
 }
@@ -84,12 +84,12 @@ func LogFabrics(ctx context.Context, n *node.Node, logger *slog.Logger) {
 
 // LogPairing writes the pairing codes to the log (cookbook §7).
 func LogPairing(n *node.Node, logger *slog.Logger) {
-	qr, manual, err := n.PairingCodes()
+	payload, err := n.SetupPayload()
 	if err != nil {
 		logger.Warn("ha2fabric.pairing_codes", slog.String("error", err.Error()))
 		return
 	}
 	logger.Info("ha2fabric.pairing",
-		slog.String("manual_code", manual), slog.String("qr_payload", qr),
+		slog.String("manual_code", payload.Manual), slog.String("qr_payload", payload.QR),
 		slog.String("hint", "pair from a Matter controller with the manual code or the QR code in the web UI; the commissioning window is open while no controller has paired"))
 }

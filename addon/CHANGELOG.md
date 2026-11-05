@@ -5,6 +5,14 @@ tracks the project release; the project's
 [changelog.md](https://github.com/SukramJ/go-ha2fabric/blob/main/changelog.md)
 has the details.
 
+## 0.5.2
+
+- A cover without a position (a garage door) now reaches your controller
+  as a window covering that opens and closes (go-fabric 0.17.0).
+- The web UI shows each endpoint's attributes and the node's event log
+  (go-fabric-ui 0.5.0).
+- The add-on's side panel is titled **Fabric Bridge**.
+
 ## 0.5.1
 
 - The web UI keeps working when a newer go-fabric adds a field to the

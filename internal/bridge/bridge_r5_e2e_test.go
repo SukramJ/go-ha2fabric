@@ -131,7 +131,7 @@ func TestNewDomainsEndToEnd(t *testing.T) {
 			client.EventAt(remote, switchdef.ClusterID, switchdef.EventInitialPress),
 			client.EventAt(remote, switchdef.ClusterID, switchdef.EventShortRelease),
 		},
-		Updated: func(r *fabrictest.Report) { reports <- r },
+		Updated: func(r *fabrictest.Report) error { reports <- r; return nil },
 	})
 	if err != nil {
 		t.Fatal(err)
