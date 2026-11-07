@@ -11,8 +11,6 @@ import (
 	"github.com/SukramJ/go-fabric/controller/client"
 	"github.com/SukramJ/go-fabric/fabrictest"
 
-	"github.com/SukramJ/go-ha2fabric/internal/bridge"
-	"github.com/SukramJ/go-ha2fabric/internal/config"
 	"github.com/SukramJ/go-ha2fabric/internal/expose"
 	"github.com/SukramJ/go-ha2fabric/internal/ha"
 	"github.com/SukramJ/go-ha2fabric/internal/plan"
@@ -24,28 +22,6 @@ func byID(vs []plan.Verdict) map[string]plan.Verdict {
 		out[vs[i].EntityID] = vs[i]
 	}
 	return out
-}
-
-func TestNodeConfig(t *testing.T) {
-	c, err := config.Load([]string{"--store-path", t.TempDir() + "/n.db"}, config.MapEnv(map[string]string{"HA_URL": "ws://a/api/websocket", "HA_TOKEN": "t"}), nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	nc := bridge.NodeConfig(c, nil)
-	if err := nc.Validate(); err != nil {
-		t.Fatalf("node.Config: %v", err)
-	}
-	if nc.BasicInformation.NodeLabel != config.DefaultLabel || nc.Network.Listen != config.DefaultListen || nc.Store.Path != c.StorePath || nc.BasicInformation.SoftwareVersion == 0 {
-		t.Fatalf("node config %+v", nc)
-	}
-	if nc.Network.TCP.Incoming || nc.Network.TCP.Outgoing {
-		t.Fatalf("TCP without the camera: %+v", nc.Network.TCP)
-	}
-	c.Camera = true
-	nc = bridge.NodeConfig(c, nil)
-	if err := nc.Validate(); err != nil || !nc.Network.TCP.Incoming || nc.Network.TCP.Outgoing {
-		t.Fatalf("TCP with the camera: %+v %v", nc.Network.TCP, err)
-	}
 }
 
 // TestResync: the registry and the states move the topology at run time.

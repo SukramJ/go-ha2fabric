@@ -32,7 +32,6 @@ import (
 
 	fabricui "github.com/SukramJ/go-fabric-ui/fabricui"
 
-	"github.com/SukramJ/go-ha2fabric/internal/bridge"
 	"github.com/SukramJ/go-ha2fabric/internal/camera"
 	"github.com/SukramJ/go-ha2fabric/internal/config"
 	"github.com/SukramJ/go-ha2fabric/internal/ha"
@@ -99,7 +98,7 @@ func run(ctx context.Context, args []string, env config.Env, stdout, stderr io.W
 	rctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	fan := &ha.Fanout{}
-	def, err := serve(rctx, client, fan, bridge.NodeConfig(cfg, logger), input, sel, logger)
+	def, err := serve(rctx, client, fan, cfg.Node(logger), input, sel, logger)
 	if err != nil {
 		logger.Error("ha2fabric.node", slog.String("error", err.Error()))
 		return 1
@@ -150,8 +149,8 @@ func nodeConfig(cfg *config.Config) *fabricui.NodeConfigView {
 	return &fabricui.NodeConfigView{
 		Source: fabricui.NodeConfigSourceConfiguration, SourceNote: note,
 		Label: cfg.Label, Listen: cfg.Listen, Discriminator: cfg.Discriminator,
-		VendorID: cfg.VendorID, VendorName: bridge.VendorName,
-		ProductID: cfg.ProductID, ProductName: bridge.ProductName,
+		VendorID: cfg.VendorID, VendorName: config.VendorName,
+		ProductID: cfg.ProductID, ProductName: config.ProductName,
 		Store: cfg.StorePath,
 	}
 }

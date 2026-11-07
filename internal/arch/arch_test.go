@@ -4,8 +4,13 @@
 // Package arch holds the module's architecture guard (brief H2, hard rule
 // 1): go-fabric is used through its facade only — node, device, contract,
 // eligibility, logring and the <cluster>def packages under cluster/spec/;
-// the camera host alone also cluster/camera and bridge — and the daemon's own
-// packages keep their layers. Tests may import fabrictest,
+// the camera host alone also cluster/camera, and the pure core
+// (internal/plan) not even node — and the daemon's own packages keep their
+// layers (brief A1): cmd/ha2fabric composes, internal/plan decides,
+// internal/bridge reconciles without the web UI or the configuration,
+// internal/exposure is the web UI's provider; go-fabric-ui is imported
+// only behind internal/exposure, internal/web, internal/nodes and the
+// composition root. Tests may import fabrictest,
 // the controller's client paths and clock besides. It is go-fabric's
 // script/archcheck as a test, in the form of go-fabric-server's
 // internal/arch.
@@ -69,9 +74,9 @@ var layers = map[string][]string{
 	"internal/ha/hatest": {"internal/ha"},
 	"internal/adapt":     {"internal/ha"},
 	"internal/camera":    {"internal/ha"},
-	"internal/config":    {"internal/expose"},
+	"internal/config":    {"internal/expose", "internal/version"},
 	"internal/plan":      {"internal/ha", "internal/adapt", "internal/expose"},
-	"internal/bridge":    {"internal/ha", "internal/adapt", "internal/camera", "internal/config", "internal/plan", "internal/version"},
+	"internal/bridge":    {"internal/ha", "internal/adapt", "internal/camera", "internal/plan"},
 	"internal/exposure":  {"internal/bridge", "internal/plan", "internal/ha", "internal/expose", "internal/selection"},
 	"internal/nodes":     {},
 	"internal/web":       {},
@@ -85,7 +90,7 @@ var layers = map[string][]string{
 var testLayers = map[string][]string{
 	"internal/ha":       {"internal/ha/hatest"},
 	"internal/plan":     {"internal/ha/hatest", "internal/camera"},
-	"internal/bridge":   {"internal/ha/hatest", "internal/expose", "internal/selection", "internal/exposure"},
+	"internal/bridge":   {"internal/ha/hatest", "internal/config", "internal/expose", "internal/selection", "internal/exposure"},
 	"internal/exposure": {"internal/ha/hatest"},
 	"internal/camera":   {"internal/ha/hatest"},
 	"cmd/ha2fabric":     {"internal/ha/hatest"},
@@ -284,6 +289,7 @@ func TestGuardRefuses(t *testing.T) {
 	}
 	// The layers of the cut (brief A1, section 5).
 	for _, c := range []struct{ pkg, dep string }{
+		{"internal/bridge", "internal/config"},
 		{"internal/bridge", "internal/selection"},
 		{"internal/bridge", "internal/exposure"},
 		{"internal/plan", "internal/bridge"},

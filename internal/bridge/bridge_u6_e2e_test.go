@@ -34,12 +34,12 @@ func TestSeveralNodesOneConnection(t *testing.T) {
 	t.Cleanup(cancel)
 	srv := hatest.New(t)
 	site := fabrictest.NewSite(t, fabrictest.Options{Clock: clock.System{}, Logger: logger()})
-	first := site.AddNode(bridge.NodeConfig(&config.Config{
+	first := site.AddNode((&config.Config{
 		Passcode: 20202021, Discriminator: 3840, VendorID: 0xFFF1, ProductID: 0x8001, Label: "go-ha2fabric",
-	}, logger()))
-	second := site.AddNode(bridge.NodeConfig(&config.Config{
+	}).Node(logger()))
+	second := site.AddNode((&config.Config{
 		Passcode: 34567890, Discriminator: 1234, VendorID: 0xFFF1, ProductID: 0x8001, Label: "Alexa",
-	}, logger()))
+	}).Node(logger()))
 
 	cl := ha.New(ha.Options{
 		URL: srv.URL(), Token: hatest.Token, Logger: logger(),

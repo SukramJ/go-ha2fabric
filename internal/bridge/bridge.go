@@ -1,24 +1,28 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (C) 2026 SukramJ.
 
-// Package bridge is the daemon's composition: Home Assistant's registry
-// and states, read through internal/ha, become go-hamqtt entities
-// (internal/adapt), go-hamapping maps each Home Assistant device onto
-// go-fabric's device kit, and the node's Aggregator serves the result.
-// A controller's command comes back through go-hamapping's OnChange and
-// leaves as a call_service.
+// Package bridge is the reconciler: it brings one go-fabric node to what
+// internal/plan decides from Home Assistant. Its worker reads a snapshot
+// (internal/ha) at every connection and after registry changes, assesses
+// it with the plan's input, builds each changed device group through
+// go-hamapping, applies plan.Diff in one aggregator batch, and carries
+// every state onto its device; a controller's command comes back through
+// go-hamapping's OnChange and leaves as a call_service. What the last sync
+// left (View) is the read model the web UI's provider shows
+// (internal/exposure).
 //
 // It follows go-fabric's cookbook "Embed in a daemon"
-// (docs/guides/embed-in-a-daemon.md at v0.11.0): node.Config from the
-// daemon's config (§2), one aggregator batch for the whole exposed set at
-// start and on every registry change (§4), states to attributes through
-// the plan's typed Sets (§5), reachability from each entity's
-// availability and from the Home Assistant connection (§6), the pairing
-// code to the log and the web UI (§7).
+// (docs/guides/embed-in-a-daemon.md at v0.11.0): one aggregator batch for
+// the whole exposed set at start and on every registry change (§4),
+// states to attributes through the plan's typed Sets (§5), reachability
+// from each entity's availability and from the Home Assistant connection
+// (§6). The node's configuration (§2) is internal/config's, the pairing
+// codes in the log (§7) are the composition root's.
 //
-// The bridge holds no mapping: go-hamapping's Map decides every device
-// type and cluster, and the bridge imports go-fabric's facade only
-// (internal/arch).
+// The bridge holds no mapping and no exposure rule: go-hamapping's Map
+// decides every device type and cluster, internal/plan which entities it
+// gets; the bridge imports go-fabric's facade only, and neither the web
+// UI nor the configuration (internal/arch).
 package bridge
 
 import (

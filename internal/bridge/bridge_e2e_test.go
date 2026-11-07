@@ -86,15 +86,15 @@ func newEnv(t *testing.T, rule expose.Rule, edit ...func(*setup)) *env {
 	// A camera's offer is a large message, which the controller sends over
 	// TCP only (go-fabric cluster/camera/requestor_parity_matterjs_test.go:
 	// 465-480 at v0.15.5): the site runs on loopback sockets and the node
-	// accepts TCP, as the daemon's NodeConfig does with the camera on.
+	// accepts TCP, as the daemon's config.Config.Node does with the camera on.
 	site := fabrictest.NewSite(t, fabrictest.Options{Clock: clock.System{}, Logger: logger(), Loopback: s.camera})
 	// The daemon's own node configuration on the site (go-fabric
 	// fabrictest.Site.AddNode, v0.12.1): the identity, the commissioning
 	// values and the health probe main.go hands node.New; the site puts in
 	// its network, clock, advertiser and a store (StorePath is empty).
-	daemon := bridge.NodeConfig(&config.Config{
+	daemon := (&config.Config{
 		Passcode: 20202021, Discriminator: 3840, VendorID: 0xFFF1, ProductID: 0x8000, Label: "go-ha2fabric", Camera: s.camera,
-	}, logger())
+	}).Node(logger())
 	var dev *fabrictest.Device
 	if s.camera {
 		// fabrictest's AddNode clears the program's TCP roles

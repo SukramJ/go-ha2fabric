@@ -57,8 +57,8 @@ func serve(base context.Context, client *ha.Client, fan *ha.Fanout, ncfg node.Co
 		_ = n.Stop(context.WithoutCancel(base))
 		return nil, fmt.Errorf("node start: %w", err)
 	}
-	bridge.LogFabrics(base, n, log)
-	bridge.LogPairing(n, log)
+	logFabrics(base, n, log)
+	logPairing(n, log)
 	// The web UI's event stream observes the node itself (Node.Observe,
 	// go-fabric-ui v0.1.2); events carries the bridge's own.
 	events := fabricui.NewEvents()
@@ -82,6 +82,41 @@ func serve(base context.Context, client *ha.Client, fan *ha.Fanout, ncfg node.Co
 	}()
 	fan.Add(br)
 	return s, nil
+}
+
+// logFabrics writes the fabrics the store holds at start — their count,
+// and per fabric the index, the vendor and the label — so an empty or lost
+// store is visible in the log itself and not only through the commissioning
+// window it opens (2026-10-30: a lost store was diagnosed from the pairing
+// hint alone). With no fabric the line says what that means and how a
+// store comes back.
+func logFabrics(ctx context.Context, n *node.Node, logger *slog.Logger) {
+	infos, err := n.FabricInfos(ctx)
+	if err != nil {
+		logger.Warn("ha2fabric.fabrics", slog.String("error", err.Error()))
+		return
+	}
+	attrs := []any{slog.Int("count", len(infos))}
+	for _, f := range infos {
+		attrs = append(attrs, slog.Group(fmt.Sprintf("fabric_%d", f.FabricIndex),
+			slog.Int("vendor_id", int(f.VendorID)), slog.String("label", f.Label)))
+	}
+	if len(infos) == 0 {
+		attrs = append(attrs, slog.String("hint", "no controller has paired, so the commissioning window opens; a store lost with its fabrics comes back from the add-on's backup (docs/operations.md, Files)"))
+	}
+	logger.Info("ha2fabric.fabrics", attrs...)
+}
+
+// logPairing writes the pairing codes to the log (cookbook §7).
+func logPairing(n *node.Node, logger *slog.Logger) {
+	payload, err := n.SetupPayload()
+	if err != nil {
+		logger.Warn("ha2fabric.pairing_codes", slog.String("error", err.Error()))
+		return
+	}
+	logger.Info("ha2fabric.pairing",
+		slog.String("manual_code", payload.Manual), slog.String("qr_payload", payload.QR),
+		slog.String("hint", "pair from a Matter controller with the manual code or the QR code in the web UI; the commissioning window is open while no controller has paired"))
 }
 
 // close takes the bridge off the connection, ends its worker and stops
@@ -168,7 +203,7 @@ func (f *fleet) start(rec *nodes.Node) (*served, error) {
 		return nil, err
 	}
 	in := func() plan.Input { return plan.Effective(expose.Rule{}, sel, c.Camera, camera.DryPorts) }
-	return serve(f.base, f.client, f.fan, bridge.NodeConfig(&c, log), in, sel, log)
+	return serve(f.base, f.client, f.fan, c.Node(log), in, sel, log)
 }
 
 // List implements [fabricui.NodeRegistry]: from memory.
@@ -189,8 +224,8 @@ func (f *fleet) entry(m *member) fabricui.NodeEntry {
 		Config: &fabricui.NodeConfigView{
 			Source: fabricui.NodeConfigSourceRegistry, Label: m.rec.Label,
 			Listen: m.rec.Listen, Discriminator: m.rec.Discriminator,
-			VendorID: f.cfg.VendorID, VendorName: bridge.VendorName,
-			ProductID: f.cfg.ProductID, ProductName: bridge.ProductName,
+			VendorID: f.cfg.VendorID, VendorName: config.VendorName,
+			ProductID: f.cfg.ProductID, ProductName: config.ProductName,
 			Store: m.rec.StoreFile(),
 		},
 	}
