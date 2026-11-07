@@ -10,7 +10,8 @@ setup. **State: 0.5.3** (brief H3, two follow-ups, the family bump F1 and its fo
 add-on. `CONCEPT.md` is the design, `docs/operations.md` the operator's
 page, `docs/by_design.md` the differences from matter-hub,
 `docs/reports/H2.md`, `H3.md`, `F1.md` and `F2.md` the waves' reports. Layout: `internal/ha`
-(the WebSocket client, `hatest` its fake on the fixtures in `testdata/ha/`),
+(the WebSocket client, `Fanout` handing its one connection to several
+nodes' bridges, `hatest` its fake on the fixtures in `testdata/ha/`),
 `internal/expose` (the exposure rule with labels and overrides),
 `internal/camera` (the camera host: the relay of WebRTC signalling and
 stills, the one importer of go-fabric's `cluster/camera`),
@@ -18,7 +19,10 @@ stills, the one importer of go-fabric's `cluster/camera`),
 onto go-hamqtt's model, a command back to `call_service`),
 `internal/bridge` (the composition on go-fabric's node and go-hamapping's
 plans, and the web UI's exposure provider), `internal/config`,
-`internal/web` (go-fabric-ui's handler behind the client filter),
+`internal/nodes` (the node registry: the nodes the web UI creates beside
+the configured one, in `nodes.json` beside the store; `cmd/ha2fabric/nodes.go`
+starts and stops them), `internal/web` (go-fabric-ui's handler behind the
+client filter, and the Operation page over go-fabric's log ring),
 `internal/arch` (the import guard).
 
 ## Commands
@@ -46,6 +50,77 @@ How a real Home Assistant bridge behaves: the helper reference is
 at a pinned commit (`664575a`), cited `file:line` in `docs/by_design.md` —
 never a gold standard for Matter behaviour, which stays go-fabric's.
 
+## Architecture
+
+These two hold today and stay:
+
+- **Embedded, one process.** go-fabric runs in the daemon (`CONCEPT.md`,
+  Shape); go-fabric-server is a different product and is not used.
+- **A sync reads everything.** It compares each device's signature and
+  applies the difference, so a reconnect needs no path of its own. An
+  incremental mirror of the registries was rejected on 2026-11-05.
+
+**Target, not built yet** (owner, 2026-11-05; `CONCEPT.md`, "Decided (owner,
+2026-11-05)"; `docs/roadmap.md`, tranches A1 and A2). The layout above and
+the layers in `internal/arch` are today's until a tranche lands; new code
+does not deepen what the target removes.
+
+- `cmd/ha2fabric` (`main.go`, `nodes.go`) is the one composition root: each
+  node's configuration is `internal/config`'s translation (`Config.Node`)
+  and `cmd`'s `serve` the call, for the configured node and for every
+  registry node alike; the start-up logs, `--dump-plan`.
+- `internal/plan` is pure, with no node and no goroutines: a snapshot becomes
+  verdicts and groups, the rule meets its overrides in one place, and old
+  and new groups become batch operations.
+- `internal/bridge` is only the reconciler: worker, build, batch, states,
+  commands. It imports neither `fabricui` nor `internal/config`.
+- `internal/exposure` is the web UI's provider and warnings, on the bridge's
+  read model.
+- `internal/adapt` imports nothing of go-fabric, and go-hamapping gets a
+  vocabulary of its own with structured commands: the `go-*2mqtt` daemons
+  are not planned as consumers, so go-hamqtt's MQTT vocabulary has no reason
+  left. Until then the "No mapping of our own" rule below reads as written.
+- `internal/arch` holds each new layer in the wave that makes it.
+
+## The architecture standard
+
+The owner's bar for go-fabric and its family, hosts included (go-fabric
+`CLAUDE.md`, "The architecture standard"; in the owner's words:
+"hervorragende Architektur, zukunftsweisend, innovativ, herausragend"). Here:
+
+- **Outstanding, not adequate.** Every layer is the best design we can
+  state, coherent with the others, and judged as API design: one shape, no
+  convenience seam.
+- **Forward-looking.** A decision is weighed against where Home Assistant,
+  the ecosystems and the consumers are going, not only against today's need;
+  going ahead of matter-hub is allowed and recorded in `docs/by_design.md`,
+  copying a limitation is not.
+- **Better than others, better than before, the right cut.** A concept
+  answers three questions in a section of its own: better than the comparison
+  target (matter-hub, for how a bridge behaves; never for Matter)? Better than
+  the state before? Is the split between go-fabric, go-hamapping, this host,
+  go-fabric-ui and go-fabric-server right? A concept without that section
+  is not finished; `CONCEPT.md` has it.
+- **The check is stated, not assumed.** A recommendation put to the owner
+  says whether it is the best architecture and why. When the owner's choice
+  is not, the assistant says so with its reasons before implementing; the
+  owner decides, the reasons are on record. A scope boundary that is a
+  decision is kept unless the owner reopens it.
+
+## Work that belongs in go-fabric
+
+go-fabric's rule ("Work that starts in a host", its `CLAUDE.md`), which on
+2026-11-05 replaced the instruction of 2026-10-31 for go-fabric. A rule about
+Matter decided while working here is written into go-fabric's `CLAUDE.md` or
+`notes/parity/`, and this repository's documents point there. Implementation
+go-fabric needs is handed over in a go-fabric issue complete enough to continue
+there without this session: why, the verified sources `file:line` at their
+pins, scope and facade shape, the parity tests to port, the `by_design.md` row,
+acceptance criteria, what stays here, open questions. Follow-up here is a
+separate issue that references it. A session here does not implement in
+go-fabric. go-hamapping and go-hamqtt are different: their changes are made
+directly, each in its own pull request.
+
 ## Rules
 
 - **Naming.** "Matter" is a trademark of the Connectivity Standards
@@ -65,7 +140,12 @@ never a gold standard for Matter behaviour, which stays go-fabric's.
 - **Official documents in English**: issues, pull requests, docs, notes.
 - **One pull request per wave**, squash-merged; CI is the gate.
 - **No attribution lines** in commits or pull request bodies.
-- A user-visible change gets a `changelog.md` entry under `[Unreleased]`.
+- A user-visible change gets a `changelog.md` entry under `[Unreleased]`. A
+  direct-dependency version bump is user-visible and gets a `### Changed`
+  line.
+- A change that alters behaviour a page describes updates the page in the
+  same pull request; every behavioural claim in `docs/` is checkable against
+  the code.
 
 ## Which model does which work
 

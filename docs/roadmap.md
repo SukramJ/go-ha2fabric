@@ -308,6 +308,29 @@ Left open:
   through (`cluster/camera/chime.go:291-299`), so `SolicitOffer` answers
   INVALID_IN_STATE.
 
+## A — Architecture (owner, 2026-11-05)
+
+Not an entity gap: the target of `CONCEPT.md`, "Decided (owner,
+2026-11-05)". These tranches change no behaviour, and they run in this
+order: A1 needs nothing from another repository, A2 changes the table's
+interface.
+
+- [ ] **A1 — the internal cut** (go-ha2fabric). `internal/plan` (assess, the
+  effective rule with its overrides, the diff as batch operations),
+  `internal/bridge` as the reconciler without `fabricui` and `config`,
+  `internal/exposure`, `cmd/ha2fabric` as the one composition root —
+  `main.go` and the per-node composition in `nodes.go` — with `--dump-plan`
+  on `internal/plan`. `internal/arch` holds the new layers in
+  the same wave.
+- [ ] **A2 — go-hamapping's own vocabulary** (go-hamapping, go-ha2fabric).
+  A vocabulary of the table's own and structured commands instead of MQTT
+  payloads, which also moves the Matter knowledge out of `internal/adapt`;
+  no separate neutral methods first. `internal/arch` then refuses go-fabric
+  in `internal/adapt`, and go-hamqtt and `go-ha-catalog`'s MQTT tables leave
+  wherever nothing reads them any more. Which of them remain is a reading
+  question for the brief (**unverified**). go-hamapping's `CONCEPT.md`
+  ("Consumers") changes with it.
+
 ## Not planned, with the reason
 
 - `alarm_control_panel`, `siren`, `humidifier`, `lawn_mower`, `scene`,
