@@ -21,8 +21,8 @@ import (
 	bridgedbidef "github.com/SukramJ/go-fabric/cluster/spec/bridgeddevicebasicinformation"
 	"github.com/SukramJ/go-fabric/fabrictest"
 
-	"github.com/SukramJ/go-ha2fabric/internal/bridge"
 	"github.com/SukramJ/go-ha2fabric/internal/expose"
+	"github.com/SukramJ/go-ha2fabric/internal/exposure"
 	"github.com/SukramJ/go-ha2fabric/internal/selection"
 )
 
@@ -124,8 +124,8 @@ func newUI(t *testing.T) (*env, *ui) {
 		t.Fatal(err)
 	}
 	ev := fabricui.NewEvents()
-	e := newEnv(t, expose.Rule{Assist: true}, func(o *bridge.Options) {
-		o.Selection = sel
+	e := newEnv(t, expose.Rule{Assist: true}, func(o *setup) {
+		o.sel = sel
 		o.OnChange = func(keys []string, endpoints bool) {
 			if len(keys) > 0 {
 				ev.Publish(fabricui.Event{Type: fabricui.EventExposureChanged, Data: fabricui.ExposureEvent{Keys: keys}})
@@ -133,8 +133,8 @@ func newUI(t *testing.T) (*env, *ui) {
 		}
 	})
 	h := fabricui.Handler(fabricui.Options{
-		Node: e.dev.Node(), Exposure: e.br.Exposure(), Admin: func(*http.Request) bool { return true },
-		Reassemble: e.br.Resync, Events: ev, Warnings: e.br.Warnings, Logger: logger(), ConfiguredWindow: true,
+		Node: e.dev.Node(), Exposure: e.prov, Admin: func(*http.Request) bool { return true },
+		Reassemble: e.br.Resync, Events: ev, Warnings: e.prov.Warnings, Logger: logger(), ConfiguredWindow: true,
 	})
 	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)
@@ -375,9 +375,9 @@ func TestUIWarnings(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	e := newEnv(t, expose.Rule{IncludeLabels: []string{"MATTER", "Later"}}, func(o *bridge.Options) { o.Selection = sel })
+	e := newEnv(t, expose.Rule{IncludeLabels: []string{"MATTER", "Later"}}, func(o *setup) { o.sel = sel })
 	srv := httptest.NewServer(fabricui.Handler(fabricui.Options{
-		Node: e.dev.Node(), Exposure: e.br.Exposure(), Warnings: e.br.Warnings, Logger: logger(),
+		Node: e.dev.Node(), Exposure: e.prov, Warnings: e.prov.Warnings, Logger: logger(),
 	}))
 	t.Cleanup(srv.Close)
 	res, err := http.Get(srv.URL + "/api/v1/node/status") //nolint:noctx // a test request
@@ -395,19 +395,19 @@ func TestUIWarnings(t *testing.T) {
 	for _, w := range st.Warnings {
 		codes[w.Code] = w
 	}
-	if w, ok := codes[bridge.WarningLabelUnresolved]; len(st.Warnings) != 2 || !ok || !strings.Contains(w.Message, `"Later"`) || w.Since.IsZero() {
+	if w, ok := codes[exposure.WarningLabelUnresolved]; len(st.Warnings) != 2 || !ok || !strings.Contains(w.Message, `"Later"`) || w.Since.IsZero() {
 		t.Fatalf("warnings %+v", st.Warnings)
 	}
-	if w, ok := codes[bridge.WarningSelectionCorrupt]; !ok || !strings.Contains(w.Message, ".corrupt-") || w.Since.IsZero() {
+	if w, ok := codes[exposure.WarningSelectionCorrupt]; !ok || !strings.Contains(w.Message, ".corrupt-") || w.Since.IsZero() {
 		t.Fatalf("warnings %+v", st.Warnings)
 	}
 	// The label's first sighting stays across syncs.
-	first := codes[bridge.WarningLabelUnresolved].Since
+	first := codes[exposure.WarningLabelUnresolved].Since
 	if err := e.br.Resync(e.ctx); err != nil {
 		t.Fatal(err)
 	}
-	for _, w := range e.br.Warnings(e.ctx) {
-		if w.Code == bridge.WarningLabelUnresolved && !w.Since.Equal(first) {
+	for _, w := range e.prov.Warnings(e.ctx) {
+		if w.Code == exposure.WarningLabelUnresolved && !w.Since.Equal(first) {
 			t.Fatalf("since moved from %v to %v", first, w.Since)
 		}
 	}

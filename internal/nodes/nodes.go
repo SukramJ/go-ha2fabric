@@ -183,7 +183,7 @@ type Configured struct {
 	Listen        string
 	Discriminator uint16
 	// TCP also probes the port over TCP: the node accepts Matter over TCP
-	// on it (the camera, bridge.NodeConfig).
+	// on it (the camera, config.Config.Node).
 	TCP bool
 }
 

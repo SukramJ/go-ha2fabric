@@ -136,6 +136,20 @@ func (s *Store) Enabled() map[string]bool {
 	return out
 }
 
+// Names returns the overrides' names as the plan reads them: the
+// entities with a name, by entity id.
+func (s *Store) Names() map[string]string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := map[string]string{}
+	for id, e := range s.entries {
+		if e.Name != "" {
+			out[id] = e.Name
+		}
+	}
+	return out
+}
+
 // Set stores the given overrides over the current ones, drops the
 // overrides of remove, and writes the file; on a write error nothing
 // changes.

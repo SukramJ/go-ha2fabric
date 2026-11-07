@@ -22,6 +22,7 @@ import (
 	csdef "github.com/SukramJ/go-fabric/cluster/spec/cameraavstreammanagement"
 	wpdef "github.com/SukramJ/go-fabric/cluster/spec/webrtctransportprovider"
 	"github.com/SukramJ/go-fabric/contract"
+	"github.com/SukramJ/go-hamqtt/model"
 
 	"github.com/SukramJ/go-ha2fabric/internal/camera"
 	"github.com/SukramJ/go-ha2fabric/internal/ha"
@@ -590,5 +591,17 @@ func TestCaptureSnapshot(t *testing.T) {
 	up.ct, up.img = "image/jpeg", []byte("not a jpeg")
 	if _, err := h.CaptureSnapshot(ctx, nil, csdef.VideoResolutionStruct{Width: 1, Height: 1}); !errors.Is(err, camera.ErrNotJPEG) {
 		t.Fatalf("garbage: %v", err)
+	}
+}
+
+// TestDryPorts: a camera gets the stand-in host, which carries the camera
+// ports; every other entity gets none.
+func TestDryPorts(t *testing.T) {
+	h, ok := camera.DryPorts(&model.Basic{EntityKey: entity, EntityPlatform: "camera"}).(*camera.Host)
+	if !ok || h == nil {
+		t.Fatal("a camera has no stand-in host")
+	}
+	if p := camera.DryPorts(&model.Basic{EntityKey: "light.kitchen", EntityPlatform: "light"}); p != nil {
+		t.Fatalf("a light's ports %v", p)
 	}
 }

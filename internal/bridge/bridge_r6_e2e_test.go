@@ -15,23 +15,23 @@ import (
 	"github.com/SukramJ/go-fabric/controller/client"
 	"github.com/SukramJ/go-fabric/fabrictest"
 
-	"github.com/SukramJ/go-ha2fabric/internal/bridge"
 	"github.com/SukramJ/go-ha2fabric/internal/expose"
 	"github.com/SukramJ/go-ha2fabric/internal/ha/hatest"
+	"github.com/SukramJ/go-ha2fabric/internal/plan"
 )
 
 const cameraDeviceType = 0x0142 // go-fabric device/camera_gen.go:20-24 at v0.15.5
 
-func (e *env) verdict(entityID string) bridge.Verdict {
+func (e *env) verdict(entityID string) plan.Verdict {
 	e.t.Helper()
-	plan := e.br.Plan()
-	for i := range plan {
-		if plan[i].EntityID == entityID {
-			return plan[i]
+	vs := e.br.Plan()
+	for i := range vs {
+		if vs[i].EntityID == entityID {
+			return vs[i]
 		}
 	}
 	e.t.Fatalf("no verdict for %s", entityID)
-	return bridge.Verdict{}
+	return plan.Verdict{}
 }
 
 func (e *env) sessions(ep uint16) []wpdef.WebRTCSessionStruct {
@@ -55,7 +55,7 @@ func (e *env) sessions(ep uint16) []wpdef.WebRTCSessionStruct {
 // node/webrtc_provider_peers_test.go; here a scripted answer shows the
 // signal goes out and, refused, ends the session.
 func TestCameraEndToEnd(t *testing.T) {
-	e := newEnv(t, expose.Rule{Assist: true}, func(o *bridge.Options) { o.Camera = true })
+	e := newEnv(t, expose.Rule{Assist: true}, func(o *setup) { o.camera = true })
 	e.commission()
 	cam := e.mustEndpoint("camera.front_door")
 	if v := e.verdict("camera.front_door"); v.DeviceType != cameraDeviceType || v.Row != "camera/camera" {

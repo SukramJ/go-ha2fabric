@@ -50,6 +50,9 @@ func TestRoundTrip(t *testing.T) {
 	if en := again.Enabled(); !en["light.a"] || len(en) != 2 {
 		t.Fatalf("Enabled %v", en)
 	}
+	if n := again.Names(); len(n) != 1 || n["light.a"] != "Desk" {
+		t.Fatalf("Names %v", n)
+	}
 }
 
 func TestCorruptFileIsMovedAside(t *testing.T) {

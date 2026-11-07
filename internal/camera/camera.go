@@ -41,6 +41,7 @@ import (
 	wpdef "github.com/SukramJ/go-fabric/cluster/spec/webrtctransportprovider"
 	"github.com/SukramJ/go-fabric/contract"
 	"github.com/SukramJ/go-fabric/device"
+	"github.com/SukramJ/go-hamqtt/model"
 
 	"github.com/SukramJ/go-ha2fabric/internal/ha"
 )
@@ -174,6 +175,23 @@ type session struct {
 	// pending holds the controller's candidates until it arrived.
 	haID    string
 	pending []ha.ICECandidate
+}
+
+// dryHost stands in for a camera's host in a plan without a node: it has
+// no upstream and is never attached, and New starts nothing.
+var dryHost = New("", nil, Options{})
+
+// DryPorts is go-hamapping's Options.Ports for a plan without a node
+// (--dump-plan, the web UI's previews): a camera entity gets a host that
+// serves nothing, every other entity none. go-hamapping decides a camera
+// row on the ports' interfaces (go-hamapping plan.go:120-128 at v0.4.3),
+// so the stand-in is a real *Host; the bridge's live hosts take its place
+// when it builds.
+func DryPorts(e model.Entity) any {
+	if e.Platform() == "camera" {
+		return dryHost
+	}
+	return nil
 }
 
 // New returns the host of an entity.

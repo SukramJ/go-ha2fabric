@@ -151,3 +151,27 @@ func TestTokenNotInErrors(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 }
+
+// TestNodeConfig: the node configuration the daemon hands node.New
+// validates, carries the identity, and accepts TCP with the camera only.
+func TestNodeConfig(t *testing.T) {
+	c, err := Load([]string{"--store-path", t.TempDir() + "/n.db"}, MapEnv(map[string]string{"HA_URL": "ws://a/api/websocket", "HA_TOKEN": "t"}), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nc := c.Node(nil)
+	if err := nc.Validate(); err != nil {
+		t.Fatalf("node.Config: %v", err)
+	}
+	if nc.BasicInformation.NodeLabel != DefaultLabel || nc.Network.Listen != DefaultListen || nc.Store.Path != c.StorePath || nc.BasicInformation.SoftwareVersion == 0 {
+		t.Fatalf("node config %+v", nc)
+	}
+	if nc.Network.TCP.Incoming || nc.Network.TCP.Outgoing {
+		t.Fatalf("TCP without the camera: %+v", nc.Network.TCP)
+	}
+	c.Camera = true
+	nc = c.Node(nil)
+	if err := nc.Validate(); err != nil || !nc.Network.TCP.Incoming || nc.Network.TCP.Outgoing {
+		t.Fatalf("TCP with the camera: %+v %v", nc.Network.TCP, err)
+	}
+}

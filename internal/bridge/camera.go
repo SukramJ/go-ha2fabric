@@ -14,11 +14,13 @@ import (
 	"github.com/SukramJ/go-ha2fabric/internal/camera"
 )
 
-// ports is go-hamapping's Options.Ports: a camera entity's host, made on
-// the first ask and kept per entity id; nil for every other entity, and
-// for a camera while the option is off.
+// ports is go-hamapping's Options.Ports for the devices the bridge
+// builds: a camera entity's host, made on the first ask and kept per
+// entity id; nil for every other entity, and without CameraUpstream. The
+// camera option is plan.Assess's gate: a camera it leaves out is not
+// planned, so Map never asks for its ports.
 func (b *Bridge) ports(e model.Entity) any {
-	if !b.opts.Camera || b.opts.CameraUpstream == nil || e.Platform() != "camera" {
+	if b.opts.CameraUpstream == nil || e.Platform() != "camera" {
 		return nil
 	}
 	if h := b.hosts[e.Key()]; h != nil {
@@ -30,20 +32,6 @@ func (b *Bridge) ports(e model.Entity) any {
 	h := camera.New(e.Key(), b.opts.CameraUpstream, camera.Options{Logger: b.log})
 	b.hosts[e.Key()] = h
 	return h
-}
-
-// dryHost stands in for a camera's host in a plan without a node: Map
-// only checks that the ports exist.
-var dryHost = camera.New("", nil, camera.Options{})
-
-// dryPorts is Options.Ports for Dry.
-func dryPorts(cameras bool) func(model.Entity) any {
-	return func(e model.Entity) any {
-		if cameras && e.Platform() == "camera" {
-			return dryHost
-		}
-		return nil
-	}
 }
 
 // attachCameras attaches each camera host to the *camera.Provider of the

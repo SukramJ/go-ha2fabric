@@ -9,16 +9,23 @@ Home Assistant entities as a bridge for Matter controllers, in pure Go on go-fab
 setup. **State: 0.5.4** (brief H3, two follow-ups, the family bump F1 and its follow-ups F2, brief R1–R5, brief R6, the go-fabric v0.15.6 and v0.17.0 bumps, the go-fabric v0.18.0 bump, brief C1): the daemon `cmd/ha2fabric` and its
 add-on. `CONCEPT.md` is the design, `docs/operations.md` the operator's
 page, `docs/by_design.md` the differences from matter-hub,
-`docs/reports/H2.md`, `H3.md`, `F1.md` and `F2.md` the waves' reports. Layout: `internal/ha`
-(the WebSocket client, `Fanout` handing its one connection to several
+`docs/reports/H2.md`, `H3.md`, `F1.md` and `F2.md` the waves' reports. Layout: `cmd/ha2fabric`
+(`main.go`, `nodes.go`: the composition root), `internal/ha`
+(the WebSocket client, the one-shot `Snapshot` read through `Source`,
+`Fanout` handing its one connection to several
 nodes' bridges, `hatest` its fake on the fixtures in `testdata/ha/`),
 `internal/expose` (the exposure rule with labels and overrides),
 `internal/camera` (the camera host: the relay of WebRTC signalling and
-stills, the one importer of go-fabric's `cluster/camera`),
+stills, the one importer of go-fabric's `cluster/camera`; `DryPorts`, the
+stand-in host of a plan without a node),
 `internal/selection` (the web UI's overrides file), `internal/adapt` (HA
 onto go-hamqtt's model, a command back to `call_service`),
-`internal/bridge` (the composition on go-fabric's node and go-hamapping's
-plans, and the web UI's exposure provider), `internal/config`,
+`internal/plan` (the pure core: the assessment, the effective rule with
+its overrides, the diff as batch operations; no node, no goroutines),
+`internal/bridge` (the reconciler on go-fabric's node and go-hamapping's
+plans), `internal/exposure` (the web UI's exposure provider and warnings
+on the bridge's read model), `internal/config` (with each node's
+`node.Config`),
 `internal/nodes` (the node registry: the nodes the web UI creates beside
 the configured one, in `nodes.json` beside the store; `cmd/ha2fabric/nodes.go`
 starts and stops them), `internal/web` (go-fabric-ui's handler behind the
@@ -60,10 +67,9 @@ These two hold today and stay:
   applies the difference, so a reconnect needs no path of its own. An
   incremental mirror of the registries was rejected on 2026-11-05.
 
-**Target, not built yet** (owner, 2026-11-05; `CONCEPT.md`, "Decided (owner,
-2026-11-05)"; `docs/roadmap.md`, tranches A1 and A2). The layout above and
-the layers in `internal/arch` are today's until a tranche lands; new code
-does not deepen what the target removes.
+**Target** (owner, 2026-11-05; `CONCEPT.md`, "Decided (owner,
+2026-11-05)"; `docs/roadmap.md`, tranches A1 and A2). Built with A1
+(`docs/reports/A1.md`), and held by `internal/arch`:
 
 - `cmd/ha2fabric` (`main.go`, `nodes.go`) is the one composition root: each
   node's configuration is `internal/config`'s translation (`Config.Node`)
@@ -76,11 +82,14 @@ does not deepen what the target removes.
   commands. It imports neither `fabricui` nor `internal/config`.
 - `internal/exposure` is the web UI's provider and warnings, on the bridge's
   read model.
+- `internal/arch` holds each new layer in the wave that makes it.
+
+Not built yet (A2); new code does not deepen what it removes:
+
 - `internal/adapt` imports nothing of go-fabric, and go-hamapping gets a
   vocabulary of its own with structured commands: the `go-*2mqtt` daemons
   are not planned as consumers, so go-hamqtt's MQTT vocabulary has no reason
   left. Until then the "No mapping of our own" rule below reads as written.
-- `internal/arch` holds each new layer in the wave that makes it.
 
 ## The architecture standard
 

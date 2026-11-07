@@ -315,7 +315,7 @@ Not an entity gap: the target of `CONCEPT.md`, "Decided (owner,
 order: A1 needs nothing from another repository, A2 changes the table's
 interface.
 
-- [ ] **A1 — the internal cut** (go-ha2fabric). `internal/plan` (assess, the
+- [x] **A1 — the internal cut** (go-ha2fabric, PR #44; report `docs/reports/A1.md`). `internal/plan` (assess, the
   effective rule with its overrides, the diff as batch operations),
   `internal/bridge` as the reconciler without `fabricui` and `config`,
   `internal/exposure`, `cmd/ha2fabric` as the one composition root —

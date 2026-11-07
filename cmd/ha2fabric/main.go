@@ -32,10 +32,11 @@ import (
 
 	fabricui "github.com/SukramJ/go-fabric-ui/fabricui"
 
-	"github.com/SukramJ/go-ha2fabric/internal/bridge"
+	"github.com/SukramJ/go-ha2fabric/internal/camera"
 	"github.com/SukramJ/go-ha2fabric/internal/config"
 	"github.com/SukramJ/go-ha2fabric/internal/ha"
 	"github.com/SukramJ/go-ha2fabric/internal/nodes"
+	"github.com/SukramJ/go-ha2fabric/internal/plan"
 	"github.com/SukramJ/go-ha2fabric/internal/selection"
 	"github.com/SukramJ/go-ha2fabric/internal/version"
 	"github.com/SukramJ/go-ha2fabric/internal/web"
@@ -76,8 +77,11 @@ func run(ctx context.Context, args []string, env config.Env, stdout, stderr io.W
 		logger.Error("ha2fabric.selection", slog.String("error", err.Error()))
 		return 1
 	}
+	// The configured node's plan input: its rule with the web UI's
+	// overrides, read at every call, and the dry camera ports.
+	input := func() plan.Input { return plan.Effective(cfg.Exposure(), sel, cfg.Camera, camera.DryPorts) }
 	if cfg.DumpPlan {
-		return dumpPlan(ctx, client, cfg, sel, stdout, logger)
+		return dumpPlan(ctx, client, input, stdout, logger)
 	}
 	logger.Info("ha2fabric.start", slog.String("version", version.String()), slog.String("ha_url", cfg.HAURL), slog.Bool("addon", cfg.Addon), slog.Bool("camera", cfg.Camera))
 
@@ -94,7 +98,7 @@ func run(ctx context.Context, args []string, env config.Env, stdout, stderr io.W
 	rctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	fan := &ha.Fanout{}
-	def, err := serve(rctx, client, fan, bridge.NodeConfig(cfg, logger), cfg.Exposure(), sel, cfg.Camera, logger)
+	def, err := serve(rctx, client, fan, cfg.Node(logger), input, sel, logger)
 	if err != nil {
 		logger.Error("ha2fabric.node", slog.String("error", err.Error()))
 		return 1
@@ -106,7 +110,7 @@ func run(ctx context.Context, args []string, env config.Env, stdout, stderr io.W
 	webErr := make(chan error, 1)
 	if cfg.WebListen != "" {
 		ws := web.New(web.Options{Listen: cfg.WebListen, Allow: cfg.WebAllow, Logger: logger, UI: fabricui.Options{
-			Node: def.n, Exposure: def.br.Exposure(), Admin: admin(cfg), Reassemble: def.br.Resync, Events: def.events, Warnings: def.br.Warnings, Logger: logger,
+			Node: def.n, Exposure: def.prov, Admin: admin(cfg), Reassemble: def.br.Resync, Events: def.events, Warnings: def.prov.Warnings, Logger: logger,
 			Operations: web.NewOperations(ring, version.Version, started),
 			Registry:   fl, NodeConfig: nodeConfig(cfg),
 		}})
@@ -145,8 +149,8 @@ func nodeConfig(cfg *config.Config) *fabricui.NodeConfigView {
 	return &fabricui.NodeConfigView{
 		Source: fabricui.NodeConfigSourceConfiguration, SourceNote: note,
 		Label: cfg.Label, Listen: cfg.Listen, Discriminator: cfg.Discriminator,
-		VendorID: cfg.VendorID, VendorName: bridge.VendorName,
-		ProductID: cfg.ProductID, ProductName: bridge.ProductName,
+		VendorID: cfg.VendorID, VendorName: config.VendorName,
+		ProductID: cfg.ProductID, ProductName: config.ProductName,
 		Store: cfg.StorePath,
 	}
 }
@@ -182,8 +186,8 @@ func (w *waiter) Disconnected(err error) {
 }
 
 // dumpPlan connects once, reads everything and prints every candidate's
-// verdict.
-func dumpPlan(ctx context.Context, client *ha.Client, cfg *config.Config, sel *selection.Store, out io.Writer, logger *slog.Logger) int {
+// verdict under the configured node's input.
+func dumpPlan(ctx context.Context, client *ha.Client, input func() plan.Input, out io.Writer, logger *slog.Logger) int {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	w := &waiter{ok: make(chan struct{})}
@@ -208,7 +212,8 @@ func dumpPlan(ctx context.Context, client *ha.Client, cfg *config.Config, sel *s
 		logger.Error("ha2fabric.dump_plan", slog.String("error", err.Error()))
 		return 1
 	}
-	snap, err := bridge.Read(ctx, client, cfg.Exposure())
+	in := input()
+	snap, err := ha.ReadSnapshot(ctx, client, in.Rule.Assist)
 	if err != nil {
 		logger.Error("ha2fabric.dump_plan", slog.String("error", err.Error()))
 		return 1
@@ -216,18 +221,10 @@ func dumpPlan(ctx context.Context, client *ha.Client, cfg *config.Config, sel *s
 	var buf bytes.Buffer
 	tw := tabwriter.NewWriter(&buf, 2, 4, 2, ' ', 0)
 	_, _ = fmt.Fprintln(tw, "ENTITY\tDEVICE\tLABELS\tEXPOSED\tSOURCE\tWHY\tROW\tVERDICT\tREASON")
-	rule := cfg.Exposure()
-	rule.Overrides = sel.Enabled()
-	names := map[string]string{}
-	for id, e := range sel.Entries() {
-		if e.Name != "" {
-			names[id] = e.Name
-		}
-	}
-	for _, l := range rule.Unresolved(snap.LabelRegistry()) {
+	for _, l := range in.Rule.Unresolved(plan.Labels(snap)) {
 		logger.Warn("ha2fabric.label_unresolved", slog.String("label", l))
 	}
-	verdicts := bridge.Dry(snap, rule, names, cfg.Camera)
+	verdicts := plan.Dry(snap, in)
 	for i := range verdicts {
 		v := &verdicts[i]
 		exposed := "no"
