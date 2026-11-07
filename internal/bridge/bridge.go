@@ -108,6 +108,12 @@ type group struct {
 	cameras map[string]bool
 }
 
+// built is g as plan.Diff reads it: its signature and its endpoints with
+// their stable keys.
+func (g *group) built() *plan.Built[*device.Device] {
+	return &plan.Built[*device.Device]{Key: g.Key, Sig: g.Sig, Keys: g.keys, Endpoints: g.devices}
+}
+
 // Bridge is the composition. Its work — syncs, states, reachability —
 // runs on one goroutine ([Bridge.Run]); controller commands run on
 // another, so a slow service call never holds an attribute report.
@@ -382,92 +388,42 @@ func (b *Bridge) sync(ctx context.Context) {
 	}
 	b.mu.Unlock()
 
+	// Keep or build, by signature; plan.Diff makes the batch of the
+	// result: an entity removed from the registry is forgotten instead
+	// of removed, one back in the plan already (re-added within the
+	// debounce) keeps its endpoint.
+	served := make(map[string]*plan.Built[*device.Device], len(b.groups))
+	for k, g := range b.groups {
+		served[k] = g.built()
+	}
 	next := map[string]*group{}
-	var added, replaced, removed []*group
-	var closing []*group
+	planned := make([]*plan.Built[*device.Device], 0, len(plannedGroups))
 	for _, p := range plannedGroups {
 		if old := b.groups[p.Key]; old != nil && old.Sig == p.Sig {
 			next[p.Key] = old
+			planned = append(planned, served[p.Key])
 			plan.MergeVerdicts(verdicts, old.verdicts)
 			continue
 		}
 		g, mv := b.build(ctx, p)
 		plan.MergeVerdicts(verdicts, mv)
 		next[p.Key] = g
-		if old := b.groups[p.Key]; old != nil {
-			replaced = append(replaced, g)
-			closing = append(closing, old)
-		} else {
-			added = append(added, g)
-		}
+		planned = append(planned, g.built())
 	}
-	for k, old := range b.groups {
-		if next[k] == nil {
-			removed = append(removed, old)
-			closing = append(closing, old)
-		}
-	}
-	// An entity removed from the registry is forgotten instead of
-	// removed; one that is back in the plan already (re-added within the
-	// debounce) keeps its endpoint.
-	live := map[string]bool{}
-	for _, g := range next {
-		for _, k := range g.keys {
-			live[k.String()] = true
-		}
-	}
-	forgetting := map[string]string{}
-	for id, k := range b.forget {
-		if !live[k.String()] {
-			forgetting[k.String()] = id
-		}
-	}
+	ch := plan.Diff(served, planned, b.forget)
 	b.forget = map[string]device.SourceKey{}
-	forgotten := map[string]bool{}
-	drop := func(bt *node.Batch, k device.SourceKey) error {
-		if _, ok := forgetting[k.String()]; ok {
-			forgotten[k.String()] = true
-			return bt.Forget(k)
-		}
-		return bt.Remove(k)
-	}
 	err = b.n.Aggregator().Batch(ctx, func(bt *node.Batch) error {
-		var errs []error
-		for _, g := range removed {
-			for _, k := range g.keys {
-				errs = append(errs, drop(bt, k))
-			}
-		}
-		for _, g := range replaced {
-			old := b.groups[g.Key]
-			oldKeys := map[device.SourceKey]bool{}
-			for _, k := range old.keys {
-				oldKeys[k] = true
-			}
-			for i, k := range g.keys {
-				if oldKeys[k] {
-					errs = append(errs, bt.Replace(k, g.devices[i]))
-					delete(oldKeys, k)
-				} else {
-					errs = append(errs, bt.Add(g.devices[i]))
-				}
-			}
-			for _, k := range old.keys {
-				if oldKeys[k] {
-					errs = append(errs, drop(bt, k))
-				}
-			}
-		}
-		// A removed entity the bridge did not serve (disabled, hidden,
-		// unexposed): its stored number is freed all the same.
-		for k := range forgetting {
-			if !forgotten[k] {
-				errs = append(errs, bt.Forget(device.StringKey(k)))
-			}
-		}
-		for _, g := range added {
-			for _, d := range g.devices {
-				errs = append(errs, bt.Add(d))
+		errs := make([]error, 0, len(ch.Ops))
+		for _, op := range ch.Ops {
+			switch op.Kind {
+			case plan.Remove:
+				errs = append(errs, bt.Remove(op.Key))
+			case plan.Forget:
+				errs = append(errs, bt.Forget(op.Key))
+			case plan.Replace:
+				errs = append(errs, bt.Replace(op.Key, op.Endpoint))
+			case plan.Add:
+				errs = append(errs, bt.Add(op.Endpoint))
 			}
 		}
 		return errors.Join(errs...)
@@ -475,11 +431,11 @@ func (b *Bridge) sync(ctx context.Context) {
 	if err != nil {
 		b.log.Error("bridge.batch", slog.String("error", err.Error()))
 	}
-	for _, k := range slices.Sorted(maps.Keys(forgetting)) {
-		b.log.Info("bridge.forget", slog.String("entity", forgetting[k]), slog.String("key", k))
+	for _, k := range slices.Sorted(maps.Keys(ch.Forgotten)) {
+		b.log.Info("bridge.forget", slog.String("entity", ch.Forgotten[k]), slog.String("key", k))
 	}
-	for _, g := range closing {
-		g.plan.Close()
+	for _, k := range slices.Concat(ch.Replaced, ch.Removed) {
+		b.groups[k].plan.Close()
 	}
 	b.groups = next
 	b.closeCameras(ctx)
@@ -535,8 +491,8 @@ func (b *Bridge) sync(ctx context.Context) {
 	}
 	b.mu.Unlock()
 	b.log.Info("bridge.synced", slog.Int("candidates", len(verdicts)), slog.Int("devices", len(next)), slog.Int("endpoints", endpoints),
-		slog.Int("added", len(added)), slog.Int("replaced", len(replaced)), slog.Int("removed", len(removed)))
-	changed := len(added)+len(replaced)+len(removed) > 0
+		slog.Int("added", len(ch.Added)), slog.Int("replaced", len(ch.Replaced)), slog.Int("removed", len(ch.Removed)))
+	changed := len(ch.Added)+len(ch.Replaced)+len(ch.Removed) > 0
 	if b.opts.OnChange != nil && (len(moved) > 0 || changed) {
 		b.opts.OnChange(moved, changed)
 	}
