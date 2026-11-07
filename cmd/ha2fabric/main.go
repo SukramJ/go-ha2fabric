@@ -208,7 +208,7 @@ func dumpPlan(ctx context.Context, client *ha.Client, cfg *config.Config, sel *s
 		logger.Error("ha2fabric.dump_plan", slog.String("error", err.Error()))
 		return 1
 	}
-	snap, err := bridge.Read(ctx, client, cfg.Exposure())
+	snap, err := ha.ReadSnapshot(ctx, client, cfg.Exposure().Assist)
 	if err != nil {
 		logger.Error("ha2fabric.dump_plan", slog.String("error", err.Error()))
 		return 1
@@ -224,7 +224,11 @@ func dumpPlan(ctx context.Context, client *ha.Client, cfg *config.Config, sel *s
 			names[id] = e.Name
 		}
 	}
-	for _, l := range rule.Unresolved(snap.LabelRegistry()) {
+	labels := map[string]string{}
+	for _, l := range snap.Labels {
+		labels[l.LabelID] = l.Name
+	}
+	for _, l := range rule.Unresolved(labels) {
 		logger.Warn("ha2fabric.label_unresolved", slog.String("label", l))
 	}
 	verdicts := bridge.Dry(snap, rule, names, cfg.Camera)

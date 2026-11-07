@@ -20,9 +20,9 @@ import (
 )
 
 // snapshot is the recorded fixtures as one sync reads them.
-func snapshot(t *testing.T) *bridge.Snapshot {
+func snapshot(t *testing.T) *ha.Snapshot {
 	t.Helper()
-	var s bridge.Snapshot
+	var s ha.Snapshot
 	for name, v := range map[string]any{
 		"entity_registry_list.json": &s.Entities, "device_registry_list.json": &s.Devices, "area_registry_list.json": &s.Areas, "label_registry_list.json": &s.Labels,
 		"get_states.json": &s.States, "get_config.json": &s.Config, "expose_entity_list.json": &s.Exposed,

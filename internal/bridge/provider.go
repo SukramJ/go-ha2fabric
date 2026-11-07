@@ -81,7 +81,7 @@ func (provider) Schema(context.Context) (fabricui.Schema, error) { return schema
 
 // view is the last sync as the provider reads it.
 type view struct {
-	snap     *Snapshot
+	snap     *ha.Snapshot
 	verdicts []Verdict
 	all      map[string]*Verdict
 	reg      map[string]*ha.EntityEntry

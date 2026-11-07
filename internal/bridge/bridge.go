@@ -49,17 +49,12 @@ import (
 	"github.com/SukramJ/go-ha2fabric/internal/selection"
 )
 
-// Upstream is the Home Assistant side the bridge reads and calls;
+// Upstream is the Home Assistant side the bridge reads and calls: the
+// snapshot's reads, the connection's state and the service call;
 // *ha.Client is the daemon's.
 type Upstream interface {
+	ha.Source
 	Connected() bool
-	ListEntities(ctx context.Context) ([]ha.EntityEntry, error)
-	ListDevices(ctx context.Context) ([]ha.DeviceEntry, error)
-	ListAreas(ctx context.Context) ([]ha.Area, error)
-	ListLabels(ctx context.Context) ([]ha.Label, error)
-	GetStates(ctx context.Context) ([]ha.State, error)
-	GetConfig(ctx context.Context) (ha.Config, error)
-	ListExposed(ctx context.Context) (ha.Exposed, error)
 	CallService(ctx context.Context, sc ha.ServiceCall) error
 }
 
@@ -180,7 +175,7 @@ type Bridge struct {
 	mu       sync.Mutex
 	states   map[string]*ha.State
 	verdicts []Verdict
-	last     *Snapshot
+	last     *ha.Snapshot
 	all      map[string]*Verdict
 	status   Status
 	warnings []fabricui.Warning
@@ -330,7 +325,7 @@ func (b *Bridge) noteRemoved(entityID string) {
 // removedKey is the stable key go-hamapping gives entityID's endpoint
 // (its device's UID, "/", the registry entry id; see mapOptions and
 // hamapping's Plan.options), or nil when s has no registry entry for it.
-func removedKey(s *Snapshot, entityID string) device.SourceKey {
+func removedKey(s *ha.Snapshot, entityID string) device.SourceKey {
 	if s == nil {
 		return nil
 	}
@@ -390,56 +385,14 @@ func (b *Bridge) Plan() []Verdict {
 	return slices.Clone(b.verdicts)
 }
 
-// Snapshot is what one sync read from Home Assistant.
-type Snapshot struct {
-	Entities []ha.EntityEntry
-	Devices  []ha.DeviceEntry
-	Areas    []ha.Area
-	Labels   []ha.Label
-	States   []ha.State
-	Config   ha.Config
-	Exposed  ha.Exposed
-}
-
-// LabelRegistry is the snapshot's labels as the exposure rule resolves
+// labelRegistry is the snapshot's labels as the exposure rule resolves
 // them.
-func (s *Snapshot) LabelRegistry() expose.Labels {
+func labelRegistry(s *ha.Snapshot) expose.Labels {
 	out := make(expose.Labels, len(s.Labels))
 	for _, l := range s.Labels {
 		out[l.LabelID] = l.Name
 	}
 	return out
-}
-
-// Read reads the registries, the states, the configuration and — when
-// the rule follows Assist — the exposure list.
-func Read(ctx context.Context, up Upstream, rule expose.Rule) (*Snapshot, error) {
-	var s Snapshot
-	var err error
-	if s.Entities, err = up.ListEntities(ctx); err != nil {
-		return nil, fmt.Errorf("config/entity_registry/list: %w", err)
-	}
-	if s.Devices, err = up.ListDevices(ctx); err != nil {
-		return nil, fmt.Errorf("config/device_registry/list: %w", err)
-	}
-	if s.Areas, err = up.ListAreas(ctx); err != nil {
-		return nil, fmt.Errorf("config/area_registry/list: %w", err)
-	}
-	if s.Labels, err = up.ListLabels(ctx); err != nil {
-		return nil, fmt.Errorf("config/label_registry/list: %w", err)
-	}
-	if s.States, err = up.GetStates(ctx); err != nil {
-		return nil, fmt.Errorf("get_states: %w", err)
-	}
-	if s.Config, err = up.GetConfig(ctx); err != nil {
-		return nil, fmt.Errorf("get_config: %w", err)
-	}
-	if rule.Assist {
-		if s.Exposed, err = up.ListExposed(ctx); err != nil {
-			return nil, fmt.Errorf("homeassistant/expose_entity/list: %w", err)
-		}
-	}
-	return &s, nil
 }
 
 // planned is one device's exposed entities, ready for go-hamapping.
@@ -466,7 +419,7 @@ func isCamera(id string) bool { return strings.HasPrefix(id, "camera.") }
 // state or a registry entry. names are the web UI's name overrides.
 // Without cameras, an exposed camera is not planned; its verdict is
 // unmappable with cameraOff.
-func assess(s *Snapshot, rule expose.Rule, names map[string]string, cameras bool) ([]Verdict, []*planned) {
+func assess(s *ha.Snapshot, rule expose.Rule, names map[string]string, cameras bool) ([]Verdict, []*planned) {
 	reg := map[string]*ha.EntityEntry{}
 	for i := range s.Entities {
 		reg[s.Entities[i].EntityID] = &s.Entities[i]
@@ -494,7 +447,7 @@ func assess(s *Snapshot, rule expose.Rule, names map[string]string, cameras bool
 	}
 	sort.Strings(order)
 
-	labels := s.LabelRegistry()
+	labels := labelRegistry(s)
 	unit := s.Config.TemperatureUnit()
 	groups := map[string]*planned{}
 	var keys []string
@@ -662,7 +615,7 @@ func mapOptions(regs map[string]*ha.EntityEntry, names map[string]string, ports 
 
 // Dry is the plan without a node: what --dump-plan prints. names are the
 // web UI's name overrides (nil: none).
-func Dry(s *Snapshot, rule expose.Rule, names map[string]string, cameras bool) []Verdict {
+func Dry(s *ha.Snapshot, rule expose.Rule, names map[string]string, cameras bool) []Verdict {
 	verdicts, groups := assess(s, rule, names, cameras)
 	for _, g := range groups {
 		_, mv := hamapping.Map(g.device, g.entities, mapOptions(g.regs, g.names, dryPorts(cameras)))
@@ -674,7 +627,7 @@ func Dry(s *Snapshot, rule expose.Rule, names map[string]string, cameras bool) [
 // candidates is every entity's verdict as if the lists exposed it: the
 // verdict the web UI shows for an entity the rule leaves out. Disabled
 // and hidden entities stay out.
-func candidates(s *Snapshot, names map[string]string, cameras bool) map[string]*Verdict {
+func candidates(s *ha.Snapshot, names map[string]string, cameras bool) map[string]*Verdict {
 	out := map[string]*Verdict{}
 	vs := Dry(s, expose.Rule{Include: []string{"*"}}, names, cameras)
 	for i := range vs {
@@ -689,7 +642,7 @@ func (b *Bridge) sync(ctx context.Context) {
 	if !b.up.Connected() {
 		return
 	}
-	snap, err := Read(ctx, b.up, b.opts.Rule)
+	snap, err := ha.ReadSnapshot(ctx, b.up, b.opts.Rule.Assist)
 	if err != nil {
 		b.log.Error("bridge.sync_failed", slog.String("error", err.Error()))
 		b.setStatus(func(s *Status) { s.SyncError = err.Error() })
@@ -700,7 +653,7 @@ func (b *Bridge) sync(ctx context.Context) {
 	verdicts, plannedGroups := assess(snap, rule, names, b.opts.Camera)
 	all := candidates(snap, names, b.opts.Camera)
 	b.logCameraOff(verdicts)
-	warnings, uiWarnings := b.warn(rule, snap.LabelRegistry())
+	warnings, uiWarnings := b.warn(rule, labelRegistry(snap))
 
 	b.mu.Lock()
 	b.states = map[string]*ha.State{}
