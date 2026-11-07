@@ -7,7 +7,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"maps"
 	"slices"
 	"strings"
 
@@ -16,6 +15,7 @@ import (
 
 	"github.com/SukramJ/go-ha2fabric/internal/expose"
 	"github.com/SukramJ/go-ha2fabric/internal/ha"
+	"github.com/SukramJ/go-ha2fabric/internal/plan"
 	"github.com/SukramJ/go-ha2fabric/internal/selection"
 )
 
@@ -82,8 +82,8 @@ func (provider) Schema(context.Context) (fabricui.Schema, error) { return schema
 // view is the last sync as the provider reads it.
 type view struct {
 	snap     *ha.Snapshot
-	verdicts []Verdict
-	all      map[string]*Verdict
+	verdicts []plan.Verdict
+	all      map[string]*plan.Verdict
 	reg      map[string]*ha.EntityEntry
 	devs     map[string]*ha.DeviceEntry
 	areas    map[string]string
@@ -106,12 +106,12 @@ func (p provider) view() *view {
 			v.areas[a.AreaID] = a.Name
 		}
 	}
-	v.names = p.b.names()
+	v.names = p.b.opts.Input().Names
 	return v
 }
 
 // item is one candidate as the page shows it.
-func (v *view) item(c *Verdict) fabricui.Item {
+func (v *view) item(c *plan.Verdict) fabricui.Item {
 	id := c.EntityID
 	it := fabricui.Item{Key: id, Name: c.Name, Group: c.Device, Enabled: c.Exposed, Source: c.Source}
 	if n := v.names[id]; n != "" {
@@ -122,9 +122,9 @@ func (v *view) item(c *Verdict) fabricui.Item {
 	}
 	switch {
 	case c.Exposed:
-		it.Verdict = c.verdict
+		it.Verdict = c.Full
 	case v.all[id] != nil && v.all[id].Exposed:
-		it.Verdict = v.all[id].verdict
+		it.Verdict = v.all[id].Full
 	default:
 		// Disabled, hidden or without a state: nothing go-hamapping could
 		// map now.
@@ -192,24 +192,17 @@ func (v *view) check(updates []fabricui.Update) (map[string]fabricui.Item, error
 	return items, nil
 }
 
-// proposed is the rule and the names with the updates applied.
-func (p provider) proposed(v *view, updates []fabricui.Update) (rule expose.Rule, names map[string]string) {
-	rule = p.b.rule()
-	rule.Overrides = maps.Clone(rule.Overrides)
-	if rule.Overrides == nil {
-		rule.Overrides = map[string]bool{}
-	}
-	names = maps.Clone(v.names)
-	if names == nil {
-		names = map[string]string{}
-	}
+// proposed is the current input with the updates applied: each one's
+// exposure as an override, and its name when it carries one.
+func (p provider) proposed(updates []fabricui.Update) plan.Input {
+	enabled, names := map[string]bool{}, map[string]string{}
 	for _, u := range updates {
-		rule.Overrides[u.Key] = u.Enabled
+		enabled[u.Key] = u.Enabled
 		if u.Name != nil {
 			names[u.Key] = strings.TrimSpace(*u.Name)
 		}
 	}
-	return rule, names
+	return p.b.opts.Input().With(enabled, names)
 }
 
 // Preview is the plan with the updates as overrides, through
@@ -222,8 +215,8 @@ func (p provider) Preview(_ context.Context, updates []fabricui.Update) ([]fabri
 	if err != nil {
 		return nil, err
 	}
-	rule, names := p.proposed(v, updates)
-	after := &view{snap: v.snap, verdicts: Dry(v.snap, rule, names, p.b.opts.Camera), all: v.all, reg: v.reg, devs: v.devs, areas: v.areas, names: names}
+	in := p.proposed(updates)
+	after := &view{snap: v.snap, verdicts: plan.Dry(v.snap, in), all: v.all, reg: v.reg, devs: v.devs, areas: v.areas, names: in.Names}
 	touched := map[string]bool{}
 	for _, u := range updates {
 		touched[u.Key] = true
@@ -252,13 +245,12 @@ func (p provider) Apply(_ context.Context, updates []fabricui.Update) (int, erro
 	if _, err := v.check(updates); err != nil {
 		return 0, err
 	}
-	base := p.b.rule()
-	base.Overrides = maps.Clone(base.Overrides)
+	keys := make([]string, 0, len(updates))
 	for _, u := range updates {
-		delete(base.Overrides, u.Key)
+		keys = append(keys, u.Key)
 	}
 	plain := map[string]bool{}
-	dry := Dry(v.snap, base, nil, p.b.opts.Camera)
+	dry := plan.Dry(v.snap, p.b.opts.Input().Without(keys...))
 	for i := range dry {
 		plain[dry[i].EntityID] = dry[i].Exposed
 	}

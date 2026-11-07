@@ -29,8 +29,6 @@ import (
 	"log/slog"
 	"maps"
 	"slices"
-	"sort"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -44,8 +42,8 @@ import (
 
 	"github.com/SukramJ/go-ha2fabric/internal/adapt"
 	"github.com/SukramJ/go-ha2fabric/internal/camera"
-	"github.com/SukramJ/go-ha2fabric/internal/expose"
 	"github.com/SukramJ/go-ha2fabric/internal/ha"
+	"github.com/SukramJ/go-ha2fabric/internal/plan"
 	"github.com/SukramJ/go-ha2fabric/internal/selection"
 )
 
@@ -60,51 +58,27 @@ type Upstream interface {
 
 // Options configure a [Bridge].
 type Options struct {
-	// Rule is the exposure rule.
-	Rule expose.Rule
+	// Input is the plan's input at every sync: the effective exposure
+	// rule (the configured one with the web UI's overrides, read at every
+	// sync), the names, the camera option and the dry camera ports
+	// (plan.Effective). Required.
+	Input func() plan.Input
 	// Debounce coalesces registry events into one re-sync; 0 is one
 	// second.
 	Debounce time.Duration
 	// Logger is the bridge's logger; nil is slog.Default().
 	Logger *slog.Logger
-	// Selection is the web UI's overrides; nil is none. The rule reads
-	// them at every sync: disabled/hidden, override, exclude, include,
-	// Assist.
+	// Selection is the web UI's overrides store, which the exposure
+	// provider writes; nil is none. The rule reads it through Input.
 	Selection *selection.Store
 	// OnChange, when set, is called on the worker after a sync that
 	// changed the exposure (the entity ids whose decision moved) or the
 	// endpoints (added, replaced or removed devices).
 	OnChange func(exposure []string, endpoints bool)
-	// Camera maps camera entities (config.Config.Camera). Off, an
-	// exposed camera is skipped before go-hamapping sees it, with
-	// cameraOff as its verdict.
-	Camera bool
 	// CameraUpstream is Home Assistant's side of the camera relay
 	// (camera.HA of the client). Without it a camera has no host ports
 	// and go-hamapping skips its row.
 	CameraUpstream camera.Upstream
-}
-
-// Verdict is one candidate entity's line of the plan an operator reads:
-// whether the exposure rule takes it and why, and go-hamapping's verdict.
-type Verdict struct {
-	EntityID     string `json:"entity_id"`
-	Name         string `json:"name,omitempty"`
-	Device       string `json:"device,omitempty"`
-	Exposed      bool   `json:"exposed"`
-	ExposeReason string `json:"expose_reason"`
-	// Source is the exposure rule's layer that decided (expose.Source…).
-	Source string `json:"source"`
-	// Labels are the names of the entity's and its device's labels.
-	Labels     []string `json:"labels,omitempty"`
-	Row        string   `json:"row,omitempty"`
-	State      string   `json:"state,omitempty"`
-	Reason     string   `json:"reason,omitempty"`
-	DeviceType uint16   `json:"device_type,omitempty"`
-	Endpoint   uint16   `json:"endpoint,omitempty"`
-
-	// verdict is go-hamapping's verdict in full (with the clusters).
-	verdict eligibility.Verdict
 }
 
 // Status is the bridge's state for the web UI and the health endpoint.
@@ -125,13 +99,7 @@ type Status struct {
 // group is one Home Assistant device and the plan serving its exposed
 // entities.
 type group struct {
-	key      string
-	sig      string
-	device   *model.Device
-	entities []string
-	regs     map[string]*ha.EntityEntry
-	descs    map[string]string
-	names    map[string]string
+	*plan.Group
 	plan     *hamapping.Plan
 	verdicts []hamapping.Verdict
 	devices  []*device.Device
@@ -174,9 +142,9 @@ type Bridge struct {
 
 	mu       sync.Mutex
 	states   map[string]*ha.State
-	verdicts []Verdict
+	verdicts []plan.Verdict
 	last     *ha.Snapshot
-	all      map[string]*Verdict
+	all      map[string]*plan.Verdict
 	status   Status
 	warnings []fabricui.Warning
 	timer    *time.Timer
@@ -317,36 +285,9 @@ func (b *Bridge) noteRemoved(entityID string) {
 	b.mu.Lock()
 	snap := b.last
 	b.mu.Unlock()
-	if k := removedKey(snap, entityID); k != nil {
+	if k := plan.RemovedKey(snap, entityID); k != nil {
 		b.forget[entityID] = k
 	}
-}
-
-// removedKey is the stable key go-hamapping gives entityID's endpoint
-// (its device's UID, "/", the registry entry id; see mapOptions and
-// hamapping's Plan.options), or nil when s has no registry entry for it.
-func removedKey(s *ha.Snapshot, entityID string) device.SourceKey {
-	if s == nil {
-		return nil
-	}
-	for i := range s.Entities {
-		r := &s.Entities[i]
-		if r.EntityID != entityID || r.ID == "" {
-			continue
-		}
-		md := adapt.OwnDevice(entityID, "")
-		for j := range s.Devices {
-			if r.DeviceID != "" && s.Devices[j].ID == r.DeviceID {
-				areas := map[string]string{}
-				for _, a := range s.Areas {
-					areas[a.AreaID] = a.Name
-				}
-				md = adapt.Device(&s.Devices[j], areas)
-			}
-		}
-		return device.StringKey(md.UID() + "/" + r.ID)
-	}
-	return nil
 }
 
 // resyncSoon schedules one sync after the debounce; events within it
@@ -379,171 +320,21 @@ func (b *Bridge) Status() Status {
 }
 
 // Plan returns every candidate entity's verdict, in entity id order.
-func (b *Bridge) Plan() []Verdict {
+func (b *Bridge) Plan() []plan.Verdict {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return slices.Clone(b.verdicts)
 }
 
-// labelRegistry is the snapshot's labels as the exposure rule resolves
-// them.
-func labelRegistry(s *ha.Snapshot) expose.Labels {
-	out := make(expose.Labels, len(s.Labels))
-	for _, l := range s.Labels {
-		out[l.LabelID] = l.Name
-	}
-	return out
-}
-
-// planned is one device's exposed entities, ready for go-hamapping.
-type planned struct {
-	key      string
-	device   *model.Device
-	entities []model.Entity
-	regs     map[string]*ha.EntityEntry
-	descs    map[string]string
-	names    map[string]string
-	sig      string
-}
-
-// cameraOff is the verdict of an exposed camera while the camera option
-// is off.
-const cameraOff = "the camera option is off (CAMERA, add-on option camera)"
-
-// isCamera reports whether an entity id is of the camera domain.
-func isCamera(id string) bool { return strings.HasPrefix(id, "camera.") }
-
-// assess applies the exposure rule and groups the exposed entities by
-// device: the candidates' verdicts (go-hamapping's verdict left to the
-// caller) and the devices to plan. A candidate is every entity with a
-// state or a registry entry. names are the web UI's name overrides.
-// Without cameras, an exposed camera is not planned; its verdict is
-// unmappable with cameraOff.
-func assess(s *ha.Snapshot, rule expose.Rule, names map[string]string, cameras bool) ([]Verdict, []*planned) {
-	reg := map[string]*ha.EntityEntry{}
-	for i := range s.Entities {
-		reg[s.Entities[i].EntityID] = &s.Entities[i]
-	}
-	devs := map[string]*ha.DeviceEntry{}
-	for i := range s.Devices {
-		devs[s.Devices[i].ID] = &s.Devices[i]
-	}
-	areas := map[string]string{}
-	for _, a := range s.Areas {
-		areas[a.AreaID] = a.Name
-	}
-	states := map[string]*ha.State{}
-	ids := map[string]bool{}
-	for i := range s.States {
-		states[s.States[i].EntityID] = &s.States[i]
-		ids[s.States[i].EntityID] = true
-	}
-	for id := range reg {
-		ids[id] = true
-	}
-	order := make([]string, 0, len(ids))
-	for id := range ids {
-		order = append(order, id)
-	}
-	sort.Strings(order)
-
-	labels := labelRegistry(s)
-	unit := s.Config.TemperatureUnit()
-	groups := map[string]*planned{}
-	var keys []string
-	verdicts := make([]Verdict, 0, len(order))
-	for _, id := range order {
-		r, st := reg[id], states[id]
-		e := expose.Entity{EntityID: id, Registered: r != nil, ExposedToAssist: s.Exposed.Entities[id][ha.AssistantConversation]}
-		if r != nil {
-			e.DisabledBy, e.HiddenBy = r.DisabledBy, r.HiddenBy
-			e.Labels = slices.Clone(r.Labels)
-			if dev := devs[r.DeviceID]; dev != nil {
-				for _, l := range dev.Labels {
-					if !slices.Contains(e.Labels, l) {
-						e.Labels = append(e.Labels, l)
-					}
-				}
-			}
-		}
-		d := rule.Decide(e, labels)
-		v := Verdict{EntityID: id, Exposed: d.Exposed, ExposeReason: d.Reason, Source: d.Source}
-		for _, l := range e.Labels {
-			if n := labels[l]; n != "" {
-				v.Labels = append(v.Labels, n)
-			} else {
-				v.Labels = append(v.Labels, l)
-			}
-		}
-		if r != nil && r.DeviceID != "" && devs[r.DeviceID] != nil {
-			v.Device = deviceName(devs[r.DeviceID])
-		}
-		if st != nil {
-			v.Name, _ = st.Attributes["friendly_name"].(string)
-		}
-		if d.Exposed && st == nil {
-			v.Exposed, v.ExposeReason = false, d.Reason+"; no state yet"
-		}
-		if !v.Exposed {
-			verdicts = append(verdicts, v)
-			continue
-		}
-		if !cameras && isCamera(id) {
-			v.State, v.Reason = eligibility.StateUnmappable.String(), cameraOff
-			verdicts = append(verdicts, v)
-			continue
-		}
-		var md *model.Device
-		var key string
-		if r != nil && r.DeviceID != "" && devs[r.DeviceID] != nil {
-			md = adapt.Device(devs[r.DeviceID], areas)
-		} else {
-			name, _ := st.Attributes["friendly_name"].(string)
-			if name == "" {
-				name = id
-			}
-			md = adapt.OwnDevice(id, name)
-		}
-		key = md.UID()
-		v.Device = md.Name.Default
-		g := groups[key]
-		if g == nil {
-			g = &planned{key: key, device: md, descs: map[string]string{}, regs: map[string]*ha.EntityEntry{}, names: map[string]string{}}
-			groups[key] = g
-			keys = append(keys, key)
-		}
-		ent := adapt.Entity(adapt.Input{EntityID: id, Registry: r, State: st, Device: md, TemperatureUnit: unit, Name: names[id]})
-		g.entities = append(g.entities, ent)
-		g.regs[id] = r
-		if names[id] != "" {
-			g.names[id] = names[id]
-		}
-		g.descs[id] = describe(ent)
-		verdicts = append(verdicts, v)
-	}
-	out := make([]*planned, 0, len(keys))
-	for _, k := range keys {
-		g := groups[k]
-		dev, _ := json.Marshal(g.device)
-		sig := string(dev)
-		for _, e := range g.entities {
-			sig += "|" + e.Key() + "=" + g.descs[e.Key()]
-		}
-		g.sig = sig
-		out = append(out, g)
-	}
-	return verdicts, out
-}
-
 // logCameraOff logs, once per start, the exposed cameras the camera
 // option left out.
-func (b *Bridge) logCameraOff(verdicts []Verdict) {
+func (b *Bridge) logCameraOff(verdicts []plan.Verdict) {
 	if b.cameraLogged {
 		return
 	}
 	n := 0
 	for i := range verdicts {
-		if verdicts[i].Reason == cameraOff {
+		if verdicts[i].Reason == plan.CameraOff {
 			n++
 		}
 	}
@@ -553,107 +344,26 @@ func (b *Bridge) logCameraOff(verdicts []Verdict) {
 	}
 }
 
-// describe is an entity's description as a comparable string: a change
-// means a new plan for its device.
-func describe(e model.Entity) string {
-	b, _ := json.Marshal(struct {
-		P string
-		D *model.Description
-	}{string(e.Platform()), e.Desc()})
-	return string(b)
-}
-
-// mapVerdicts merges go-hamapping's verdicts into the candidates'.
-func mapVerdicts(verdicts []Verdict, mv []hamapping.Verdict) {
-	idx := map[string]int{}
-	for i := range verdicts {
-		idx[verdicts[i].EntityID] = i
-	}
-	for _, m := range mv {
-		i, ok := idx[m.Key]
-		if !ok {
-			continue
-		}
-		verdicts[i].Row, verdicts[i].State, verdicts[i].Reason, verdicts[i].DeviceType = m.Row, m.State.String(), m.Reason, m.DeviceType
-		verdicts[i].verdict = m.Verdict
-	}
-}
-
-// deviceName is a registry device's name: the user's over the
-// integration's (adapt.Device).
-func deviceName(d *ha.DeviceEntry) string {
-	if d.NameByUser != "" {
-		return d.NameByUser
-	}
-	return d.Name
-}
-
-// mapOptions are go-hamapping's options for one device: the stable key
-// of an entity is its registry entry id (helpers/entity_registry.py:
-// 261-263), which a rename of the entity id keeps (:2051-2061, :2104),
-// so a renamed entity keeps its endpoint number. An entity without a
-// registry entry keeps go-hamapping's default, its entity id.
-//
-// names are the web UI's name overrides: an overridden entity's node label
-// is the name as typed, without the device name (hamapping.Options.Name,
-// verbatim; the owner's decision on H3 Q3, a name typed in a UI is final).
-func mapOptions(regs map[string]*ha.EntityEntry, names map[string]string, ports func(model.Entity) any) hamapping.Options {
-	return hamapping.Options{
-		Ports: ports,
-		StableKey: func(e model.Entity) string {
-			if r := regs[e.Key()]; r != nil {
-				return r.ID
-			}
-			return ""
-		},
-		Name: func(e model.Entity) (string, bool) {
-			n := names[e.Key()]
-			return n, n != ""
-		},
-	}
-}
-
-// Dry is the plan without a node: what --dump-plan prints. names are the
-// web UI's name overrides (nil: none).
-func Dry(s *ha.Snapshot, rule expose.Rule, names map[string]string, cameras bool) []Verdict {
-	verdicts, groups := assess(s, rule, names, cameras)
-	for _, g := range groups {
-		_, mv := hamapping.Map(g.device, g.entities, mapOptions(g.regs, g.names, dryPorts(cameras)))
-		mapVerdicts(verdicts, mv)
-	}
-	return verdicts
-}
-
-// candidates is every entity's verdict as if the lists exposed it: the
-// verdict the web UI shows for an entity the rule leaves out. Disabled
-// and hidden entities stay out.
-func candidates(s *ha.Snapshot, names map[string]string, cameras bool) map[string]*Verdict {
-	out := map[string]*Verdict{}
-	vs := Dry(s, expose.Rule{Include: []string{"*"}}, names, cameras)
-	for i := range vs {
-		out[vs[i].EntityID] = &vs[i]
-	}
-	return out
-}
-
 // sync reads everything and brings the Aggregator's set to it in one
 // batch: new devices added, changed ones replaced, vanished ones removed.
 func (b *Bridge) sync(ctx context.Context) {
 	if !b.up.Connected() {
 		return
 	}
-	snap, err := ha.ReadSnapshot(ctx, b.up, b.opts.Rule.Assist)
+	in := b.opts.Input()
+	snap, err := ha.ReadSnapshot(ctx, b.up, in.Rule.Assist)
 	if err != nil {
 		b.log.Error("bridge.sync_failed", slog.String("error", err.Error()))
 		b.setStatus(func(s *Status) { s.SyncError = err.Error() })
 		return
 	}
 	b.unit = snap.Config.TemperatureUnit()
-	rule, names := b.rule(), b.names()
-	verdicts, plannedGroups := assess(snap, rule, names, b.opts.Camera)
-	all := candidates(snap, names, b.opts.Camera)
+	verdicts, plannedGroups := plan.Assess(snap, in)
+	// The candidates map with the input's dry ports: the live hosts are
+	// made for the devices the bridge builds, not for every camera.
+	all := plan.Candidates(snap, in)
 	b.logCameraOff(verdicts)
-	warnings, uiWarnings := b.warn(rule, labelRegistry(snap))
+	warnings, uiWarnings := b.warn(plan.Warnings(in, plan.Labels(snap)))
 
 	b.mu.Lock()
 	b.states = map[string]*ha.State{}
@@ -676,15 +386,15 @@ func (b *Bridge) sync(ctx context.Context) {
 	var added, replaced, removed []*group
 	var closing []*group
 	for _, p := range plannedGroups {
-		if old := b.groups[p.key]; old != nil && old.sig == p.sig {
-			next[p.key] = old
-			mapVerdicts(verdicts, old.verdicts)
+		if old := b.groups[p.Key]; old != nil && old.Sig == p.Sig {
+			next[p.Key] = old
+			plan.MergeVerdicts(verdicts, old.verdicts)
 			continue
 		}
 		g, mv := b.build(ctx, p)
-		mapVerdicts(verdicts, mv)
-		next[p.key] = g
-		if old := b.groups[p.key]; old != nil {
+		plan.MergeVerdicts(verdicts, mv)
+		next[p.Key] = g
+		if old := b.groups[p.Key]; old != nil {
 			replaced = append(replaced, g)
 			closing = append(closing, old)
 		} else {
@@ -729,7 +439,7 @@ func (b *Bridge) sync(ctx context.Context) {
 			}
 		}
 		for _, g := range replaced {
-			old := b.groups[g.key]
+			old := b.groups[g.Key]
 			oldKeys := map[device.SourceKey]bool{}
 			for _, k := range old.keys {
 				oldKeys[k] = true
@@ -775,16 +485,16 @@ func (b *Bridge) sync(ctx context.Context) {
 	b.closeCameras(ctx)
 	b.owner = map[string]*group{}
 	for _, g := range next {
-		for _, id := range g.entities {
-			b.owner[id] = g
+		for _, e := range g.Entities {
+			b.owner[e.Key()] = g
 		}
 	}
 	// Every state onto its device: values and reachability.
 	endpoints := 0
 	for _, g := range next {
 		endpoints += len(g.devices)
-		for _, id := range g.entities {
-			b.apply(ctx, g, id)
+		for _, e := range g.Entities {
+			b.apply(ctx, g, e.Key())
 		}
 	}
 	for i := range verdicts {
@@ -832,29 +542,6 @@ func (b *Bridge) sync(ctx context.Context) {
 	}
 }
 
-// rule is the configured rule with the web UI's overrides.
-func (b *Bridge) rule() expose.Rule {
-	r := b.opts.Rule
-	if b.opts.Selection != nil {
-		r.Overrides = b.opts.Selection.Enabled()
-	}
-	return r
-}
-
-// names are the web UI's name overrides.
-func (b *Bridge) names() map[string]string {
-	if b.opts.Selection == nil {
-		return nil
-	}
-	out := map[string]string{}
-	for id, e := range b.opts.Selection.Entries() {
-		if e.Name != "" {
-			out[id] = e.Name
-		}
-	}
-	return out
-}
-
 // WarningLabelUnresolved is the web UI's code of a label value that
 // names no Home Assistant label (the log's bridge.label_unresolved).
 const WarningLabelUnresolved = "label_unresolved"
@@ -864,20 +551,15 @@ const WarningLabelUnresolved = "label_unresolved"
 // selection.corrupt).
 const WarningSelectionCorrupt = "selection_corrupt"
 
-// warn is the configuration's warnings against the label registry,
-// logged when they change: a label value that names no label is used as
-// a label_id and matches once such a label exists. The second result is
-// the same warnings for the web UI, each with the time it was first seen
-// in an unbroken run of syncs.
-func (b *Bridge) warn(rule expose.Rule, labels expose.Labels) ([]string, []fabricui.Warning) {
-	unresolved := rule.Unresolved(labels)
-	out := make([]string, 0, len(unresolved))
-	ui := make([]fabricui.Warning, 0, len(unresolved))
+// warn logs the configuration's warnings (plan.Warnings) when they
+// change. The second result is the same warnings for the web UI, each
+// with the time it was first seen in an unbroken run of syncs.
+func (b *Bridge) warn(found []string) ([]string, []fabricui.Warning) {
+	out := slices.Clone(found)
+	ui := make([]fabricui.Warning, 0, len(out))
 	since := map[string]time.Time{}
 	now := time.Now()
-	for _, v := range unresolved {
-		msg := fmt.Sprintf("label %q names no Home Assistant label; it matches a label with that id once one exists", v)
-		out = append(out, msg)
+	for _, msg := range out {
 		at, ok := b.since[msg]
 		if !ok {
 			at = now
@@ -946,15 +628,12 @@ func (b *Bridge) Resync(ctx context.Context) error {
 
 // build maps and builds one device's plan; a build failure leaves the
 // device without endpoints and says why in its verdicts.
-func (b *Bridge) build(ctx context.Context, p *planned) (*group, []hamapping.Verdict) {
-	plan, mv := hamapping.Map(p.device, p.entities, mapOptions(p.regs, p.names, b.ports))
-	g := &group{key: p.key, sig: p.sig, device: p.device, regs: p.regs, descs: p.descs, names: p.names, plan: plan}
-	for _, e := range p.entities {
-		g.entities = append(g.entities, e.Key())
-	}
-	devs, err := plan.Build(ctx)
+func (b *Bridge) build(ctx context.Context, p *plan.Group) (*group, []hamapping.Verdict) {
+	hp, mv := hamapping.Map(p.Device, p.Entities, plan.MapOptions(p.Regs, p.Names, b.ports))
+	g := &group{Group: p, plan: hp}
+	devs, err := hp.Build(ctx)
 	if err != nil {
-		b.log.Warn("bridge.build_failed", slog.String("device", p.device.Name.Default), slog.String("error", err.Error()))
+		b.log.Warn("bridge.build_failed", slog.String("device", p.Device.Name.Default), slog.String("error", err.Error()))
 		for i := range mv {
 			if mv[i].State != eligibility.StateUnmappable {
 				mv[i].State = eligibility.StateUnmappable
@@ -966,11 +645,11 @@ func (b *Bridge) build(ctx context.Context, p *planned) (*group, []hamapping.Ver
 	}
 	g.verdicts = mv
 	g.devices = devs
-	for i := range plan.Endpoints {
-		g.keys = append(g.keys, plan.Endpoints[i].Options.StableKey)
+	for i := range hp.Endpoints {
+		g.keys = append(g.keys, hp.Endpoints[i].Options.StableKey)
 	}
-	b.attachCameras(g, plan, devs)
-	plan.OnChange(b.onCommand)
+	b.attachCameras(g, hp, devs)
+	hp.OnChange(b.onCommand)
 	return g, mv
 }
 
@@ -1011,13 +690,8 @@ func (b *Bridge) stateChanged(ctx context.Context, sc ha.StateChanged) {
 	if g == nil {
 		return
 	}
-	if g.descs[sc.EntityID] != b.descOf(g, sc.EntityID, sc.NewState) {
+	if g.Descs[sc.EntityID] != g.Describe(sc.EntityID, sc.NewState, b.unit) {
 		b.resyncSoon()
 	}
 	b.apply(ctx, g, sc.EntityID)
-}
-
-// descOf is the description an entity would have with st.
-func (b *Bridge) descOf(g *group, id string, st *ha.State) string {
-	return describe(adapt.Entity(adapt.Input{EntityID: id, Registry: g.regs[id], State: st, Device: g.device, TemperatureUnit: b.unit, Name: g.names[id]}))
 }

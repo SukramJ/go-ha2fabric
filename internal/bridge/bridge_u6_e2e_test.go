@@ -18,6 +18,7 @@ import (
 	"github.com/SukramJ/go-ha2fabric/internal/expose"
 	"github.com/SukramJ/go-ha2fabric/internal/ha"
 	"github.com/SukramJ/go-ha2fabric/internal/ha/hatest"
+	"github.com/SukramJ/go-ha2fabric/internal/plan"
 	"github.com/SukramJ/go-ha2fabric/internal/selection"
 )
 
@@ -54,7 +55,7 @@ func TestSeveralNodesOneConnection(t *testing.T) {
 			<-done
 		}
 	})
-	br1 := bridge.New(first.Node(), cl, bridge.Options{Rule: expose.Rule{Assist: true}, Debounce: 20 * time.Millisecond, Logger: logger()})
+	br1 := bridge.New(first.Node(), cl, bridge.Options{Input: func() plan.Input { return plan.Input{Rule: expose.Rule{Assist: true}} }, Debounce: 20 * time.Millisecond, Logger: logger()})
 	go func() { _ = br1.Run(rctx); done <- struct{}{} }()
 	fan.Add(br1)
 	go func() { _ = cl.Run(rctx, fan); done <- struct{}{} }()
@@ -71,7 +72,7 @@ func TestSeveralNodesOneConnection(t *testing.T) {
 	if err := sel.Set(map[string]selection.Entry{"light.kitchen": {Enabled: true}}, nil); err != nil {
 		t.Fatal(err)
 	}
-	br2 := bridge.New(second.Node(), cl, bridge.Options{Rule: expose.Rule{}, Selection: sel, Debounce: 20 * time.Millisecond, Logger: logger()})
+	br2 := bridge.New(second.Node(), cl, bridge.Options{Input: func() plan.Input { return plan.Effective(expose.Rule{}, sel, false, nil) }, Debounce: 20 * time.Millisecond, Logger: logger()})
 	go func() { _ = br2.Run(rctx); done <- struct{}{} }()
 	fan.Add(br2)
 	select {

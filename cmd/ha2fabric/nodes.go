@@ -21,6 +21,7 @@ import (
 	"github.com/SukramJ/go-ha2fabric/internal/expose"
 	"github.com/SukramJ/go-ha2fabric/internal/ha"
 	"github.com/SukramJ/go-ha2fabric/internal/nodes"
+	"github.com/SukramJ/go-ha2fabric/internal/plan"
 	"github.com/SukramJ/go-ha2fabric/internal/selection"
 )
 
@@ -41,8 +42,9 @@ type served struct {
 // (go-fabric docs/guides/embed-in-a-daemon.md §6): node.New and Start,
 // the fabrics and the pairing codes to the log, the bridge on the node,
 // its worker on base, and the bridge on the connection's fan-out, which
-// hands it Connected at once when Home Assistant is up.
-func serve(base context.Context, client *ha.Client, fan *ha.Fanout, ncfg node.Config, rule expose.Rule, sel *selection.Store, cam bool, log *slog.Logger) (*served, error) {
+// hands it Connected at once when Home Assistant is up. in is the node's
+// plan input; sel its overrides store, which the web UI writes.
+func serve(base context.Context, client *ha.Client, fan *ha.Fanout, ncfg node.Config, in func() plan.Input, sel *selection.Store, log *slog.Logger) (*served, error) {
 	n, err := node.New(base, ncfg)
 	if err != nil {
 		return nil, fmt.Errorf("node: %w", err)
@@ -57,7 +59,7 @@ func serve(base context.Context, client *ha.Client, fan *ha.Fanout, ncfg node.Co
 	// go-fabric-ui v0.1.2); events carries the bridge's own.
 	events := fabricui.NewEvents()
 	br := bridge.New(n, client, bridge.Options{
-		Rule: rule, Logger: log, Selection: sel, Camera: cam, CameraUpstream: camera.HA(client),
+		Input: in, Logger: log, Selection: sel, CameraUpstream: camera.HA(client),
 		OnChange: func(exposure []string, endpoints bool) {
 			if len(exposure) > 0 {
 				events.Publish(fabricui.Event{Type: fabricui.EventExposureChanged, Data: fabricui.ExposureEvent{Keys: exposure}})
@@ -160,7 +162,8 @@ func (f *fleet) start(rec *nodes.Node) (*served, error) {
 	if err != nil {
 		return nil, err
 	}
-	return serve(f.base, f.client, f.fan, bridge.NodeConfig(&c, log), expose.Rule{}, sel, c.Camera, log)
+	in := func() plan.Input { return plan.Effective(expose.Rule{}, sel, c.Camera, camera.DryPorts) }
+	return serve(f.base, f.client, f.fan, bridge.NodeConfig(&c, log), in, sel, log)
 }
 
 // List implements [fabricui.NodeRegistry]: from memory.

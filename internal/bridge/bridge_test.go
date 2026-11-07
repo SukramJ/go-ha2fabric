@@ -4,7 +4,6 @@
 package bridge_test
 
 import (
-	"encoding/json"
 	"strings"
 	"testing"
 
@@ -16,105 +15,15 @@ import (
 	"github.com/SukramJ/go-ha2fabric/internal/config"
 	"github.com/SukramJ/go-ha2fabric/internal/expose"
 	"github.com/SukramJ/go-ha2fabric/internal/ha"
-	"github.com/SukramJ/go-ha2fabric/internal/ha/hatest"
+	"github.com/SukramJ/go-ha2fabric/internal/plan"
 )
 
-// snapshot is the recorded fixtures as one sync reads them.
-func snapshot(t *testing.T) *ha.Snapshot {
-	t.Helper()
-	var s ha.Snapshot
-	for name, v := range map[string]any{
-		"entity_registry_list.json": &s.Entities, "device_registry_list.json": &s.Devices, "area_registry_list.json": &s.Areas, "label_registry_list.json": &s.Labels,
-		"get_states.json": &s.States, "get_config.json": &s.Config, "expose_entity_list.json": &s.Exposed,
-	} {
-		if err := json.Unmarshal(hatest.Fixture(t, name), v); err != nil {
-			t.Fatalf("%s: %v", name, err)
-		}
-	}
-	return &s
-}
-
-func byID(vs []bridge.Verdict) map[string]bridge.Verdict {
-	out := map[string]bridge.Verdict{}
+func byID(vs []plan.Verdict) map[string]plan.Verdict {
+	out := map[string]plan.Verdict{}
 	for i := range vs {
 		out[vs[i].EntityID] = vs[i]
 	}
 	return out
-}
-
-// TestDryPlan is --dump-plan on the fixtures: every candidate with the
-// rule's word and go-hamapping's.
-func TestDryPlan(t *testing.T) {
-	v := byID(bridge.Dry(snapshot(t), expose.Rule{Assist: true, Include: []string{"sensor.outdoor"}, Exclude: []string{"fan.*"}}, nil, false))
-	for id, want := range map[string]struct {
-		exposed bool
-		why     string
-		row     string
-		state   string
-	}{
-		"light.kitchen":             {true, "exposed to Assist", "light/extended_color", "mappable"},
-		"sensor.living_temperature": {true, "exposed to Assist", "sensor/temperature", "mappable"},
-		"sensor.living_battery":     {false, "not exposed to Assist and not included", "", ""},
-		"switch.coffee":             {true, "exposed to Assist", "switch/plug", "mappable"},
-		"binary_sensor.front_door":  {true, "exposed to Assist", "binary_sensor/contact", "mappable"},
-		"cover.living_blind":        {true, "exposed to Assist", "cover/window_covering", "mappable"},
-		"climate.hall":              {true, "exposed to Assist", "climate/thermostat", "partially_mappable"},
-		"lock.front":                {true, "exposed to Assist", "lock/door_lock", "partially_mappable"},
-		"fan.ceiling":               {false, "excluded by fan.*", "", ""},
-		"light.cellar":              {false, "disabled in Home Assistant (by user)", "", ""},
-		"light.attic":               {false, "hidden in Home Assistant (by user)", "", ""},
-		"sensor.processor_use":      {false, "not exposed to Assist and not included", "", ""},
-		"sensor.outdoor":            {true, "included by sensor.outdoor", "sensor/temperature", "mappable"},
-		"sensor.legacy_yaml":        {false, "not exposed to Assist and not included", "", ""},
-		// The rows of go-hamapping v0.3.0 (R1-R5).
-		"sensor.office_co2":            {true, "exposed to Assist", "sensor/carbon_dioxide", "mappable"},
-		"sensor.mains_frequency":       {true, "exposed to Assist", "sensor/frequency", "mappable"},
-		"sensor.garden_flow":           {true, "exposed to Assist", "sensor/volume_flow_rate", "mappable"},
-		"button.router_restart":        {true, "exposed to Assist", "button/plug", "mappable"},
-		"event.hall_remote":            {true, "exposed to Assist", "event/generic_switch", "partially_mappable"},
-		"select.hall_scene":            {true, "exposed to Assist", "select/mode_select", "mappable"},
-		"climate.bedroom_ac":           {true, "exposed to Assist", "climate/air_conditioner", "partially_mappable"},
-		"vacuum.robo":                  {true, "exposed to Assist", "vacuum/robotic_vacuum_cleaner", "partially_mappable"},
-		"valve.garden":                 {true, "exposed to Assist", "valve/water_valve", "mappable"},
-		"water_heater.boiler":          {true, "exposed to Assist", "water_heater/thermostat", "partially_mappable"},
-		"media_player.kitchen_speaker": {true, "exposed to Assist", "media_player/speaker", "mappable"},
-		"media_player.living_tv":       {true, "exposed to Assist", "media_player/video_player", "partially_mappable"},
-	} {
-		got, ok := v[id]
-		if !ok {
-			t.Errorf("%s is no candidate", id)
-			continue
-		}
-		if got.Exposed != want.exposed || got.ExposeReason != want.why || got.Row != want.row || got.State != want.state {
-			t.Errorf("%s: %+v, want %+v", id, got, want)
-		}
-	}
-	if d := v["light.kitchen"].Device; d != "Kitchen ceiling" {
-		t.Errorf("light.kitchen's device %q", d)
-	}
-	if d := v["sensor.outdoor"].Device; d != "Outdoor temperature" {
-		t.Errorf("sensor.outdoor's own device %q", d)
-	}
-	// An entity with a registry entry and no state is no endpoint yet.
-	s := snapshot(t)
-	s.States = s.States[1:] // light.kitchen
-	if got := byID(bridge.Dry(s, expose.Rule{Assist: true}, nil, false))["light.kitchen"]; got.Exposed || !strings.HasSuffix(got.ExposeReason, "no state yet") {
-		t.Errorf("stateless light %+v", got)
-	}
-}
-
-// TestCameraOff: with the option off, an exposed camera is skipped
-// before go-hamapping, and says why.
-func TestCameraOff(t *testing.T) {
-	s := snapshot(t)
-	s.States = append(s.States, ha.State{EntityID: "camera.porch", State: "idle", Attributes: map[string]any{"supported_features": 2, "friendly_name": "Porch"}})
-	got := byID(bridge.Dry(s, expose.Rule{Include: []string{"camera.porch"}}, nil, false))["camera.porch"]
-	if !got.Exposed || got.State != "unmappable" || !strings.Contains(got.Reason, "CAMERA") || got.Row != "" {
-		t.Fatalf("camera off %+v", got)
-	}
-	if got := byID(bridge.Dry(s, expose.Rule{Include: []string{"camera.porch"}}, nil, true))["camera.porch"]; strings.Contains(got.Reason, "CAMERA") {
-		t.Fatalf("camera on %+v", got)
-	}
 }
 
 func TestNodeConfig(t *testing.T) {

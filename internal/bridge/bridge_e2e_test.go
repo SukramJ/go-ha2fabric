@@ -25,6 +25,8 @@ import (
 	"github.com/SukramJ/go-ha2fabric/internal/expose"
 	"github.com/SukramJ/go-ha2fabric/internal/ha"
 	"github.com/SukramJ/go-ha2fabric/internal/ha/hatest"
+	"github.com/SukramJ/go-ha2fabric/internal/plan"
+	"github.com/SukramJ/go-ha2fabric/internal/selection"
 )
 
 func logger() *slog.Logger {
@@ -55,29 +57,44 @@ type env struct {
 	tcp bool
 }
 
-func newEnv(t *testing.T, rule expose.Rule, edit ...func(*bridge.Options)) *env {
+// setup is how a test composes its env, as cmd/ha2fabric's serve does:
+// the bridge's options, the camera option and the web UI's overrides.
+type setup struct {
+	bridge.Options
+	camera bool
+	sel    *selection.Store
+}
+
+func newEnv(t *testing.T, rule expose.Rule, edit ...func(*setup)) *env {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	t.Cleanup(cancel)
 	srv := hatest.New(t)
-	opts := bridge.Options{Rule: rule, Debounce: 20 * time.Millisecond, Logger: logger()}
+	s := setup{Options: bridge.Options{Debounce: 20 * time.Millisecond, Logger: logger()}}
 	for _, fn := range edit {
-		fn(&opts)
+		fn(&s)
 	}
+	var overrides plan.Overrides
+	if s.sel != nil {
+		overrides = s.sel
+	}
+	s.Input = func() plan.Input { return plan.Effective(rule, overrides, s.camera, camera.DryPorts) }
+	s.Selection = s.sel
+	opts := s.Options
 	// A camera's offer is a large message, which the controller sends over
 	// TCP only (go-fabric cluster/camera/requestor_parity_matterjs_test.go:
 	// 465-480 at v0.15.5): the site runs on loopback sockets and the node
 	// accepts TCP, as the daemon's NodeConfig does with the camera on.
-	site := fabrictest.NewSite(t, fabrictest.Options{Clock: clock.System{}, Logger: logger(), Loopback: opts.Camera})
+	site := fabrictest.NewSite(t, fabrictest.Options{Clock: clock.System{}, Logger: logger(), Loopback: s.camera})
 	// The daemon's own node configuration on the site (go-fabric
 	// fabrictest.Site.AddNode, v0.12.1): the identity, the commissioning
 	// values and the health probe main.go hands node.New; the site puts in
 	// its network, clock, advertiser and a store (StorePath is empty).
 	daemon := bridge.NodeConfig(&config.Config{
-		Passcode: 20202021, Discriminator: 3840, VendorID: 0xFFF1, ProductID: 0x8000, Label: "go-ha2fabric", Camera: opts.Camera,
+		Passcode: 20202021, Discriminator: 3840, VendorID: 0xFFF1, ProductID: 0x8000, Label: "go-ha2fabric", Camera: s.camera,
 	}, logger())
 	var dev *fabrictest.Device
-	if opts.Camera {
+	if s.camera {
 		// fabrictest's AddNode clears the program's TCP roles
 		// (fabrictest/device.go:314-316 at v0.15.5); a topology's Configure
 		// runs after the site's defaults (:297-299), so the camera env
@@ -95,7 +112,7 @@ func newEnv(t *testing.T, rule expose.Rule, edit ...func(*bridge.Options)) *env 
 		Events:     []string{ha.EventStateChanged, ha.EventEntityRegistryUpdated, ha.EventDeviceRegistryUpdated, ha.EventLabelRegistryUpdated},
 		MinBackoff: 20 * time.Millisecond, MaxBackoff: 100 * time.Millisecond,
 	})
-	if opts.Camera && opts.CameraUpstream == nil {
+	if s.camera && opts.CameraUpstream == nil {
 		opts.CameraUpstream = camera.HA(cl)
 	}
 	br := bridge.New(dev.Node(), cl, opts)
@@ -113,7 +130,7 @@ func newEnv(t *testing.T, rule expose.Rule, edit ...func(*bridge.Options)) *env 
 	case <-ctx.Done():
 		t.Fatal("no first sync")
 	}
-	return &env{t: t, ctx: ctx, ha: srv, site: site, dev: dev, br: br, cl: cl, tcp: opts.Camera}
+	return &env{t: t, ctx: ctx, ha: srv, site: site, dev: dev, br: br, cl: cl, tcp: s.camera}
 }
 
 func (e *env) commission() {
@@ -129,10 +146,10 @@ func (e *env) commission() {
 }
 
 func (e *env) endpoint(entityID string) (uint16, bool) {
-	plan := e.br.Plan()
-	for i := range plan {
-		if plan[i].EntityID == entityID && plan[i].Endpoint != 0 {
-			return plan[i].Endpoint, true
+	vs := e.br.Plan()
+	for i := range vs {
+		if vs[i].EntityID == entityID && vs[i].Endpoint != 0 {
+			return vs[i].Endpoint, true
 		}
 	}
 	return 0, false

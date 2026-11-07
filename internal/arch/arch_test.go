@@ -54,6 +54,10 @@ var cameraOnly = map[string]bool{"cluster/camera": true}
 // cameraPkg is the package cameraOnly is for.
 const cameraPkg = "internal/camera"
 
+// nodeFree are the packages that may not import go-fabric's node: the
+// pure core decides without one (internal/plan; brief A1, section 4).
+var nodeFree = map[string]bool{"internal/plan": true}
+
 // layers are the module's own import rules: a package may import only the
 // module packages its entry lists.
 var layers = map[string][]string{
@@ -65,16 +69,18 @@ var layers = map[string][]string{
 	"internal/adapt":     {"internal/ha"},
 	"internal/camera":    {"internal/ha"},
 	"internal/config":    {"internal/expose"},
-	"internal/bridge":    {"internal/ha", "internal/adapt", "internal/camera", "internal/expose", "internal/config", "internal/selection", "internal/version"},
+	"internal/plan":      {"internal/ha", "internal/adapt", "internal/expose"},
+	"internal/bridge":    {"internal/ha", "internal/adapt", "internal/camera", "internal/expose", "internal/config", "internal/plan", "internal/selection", "internal/version"},
 	"internal/nodes":     {},
 	"internal/web":       {},
 	"internal/arch":      {},
-	"cmd/ha2fabric":      {"internal/bridge", "internal/camera", "internal/config", "internal/expose", "internal/ha", "internal/nodes", "internal/selection", "internal/version", "internal/web"},
+	"cmd/ha2fabric":      {"internal/bridge", "internal/camera", "internal/config", "internal/expose", "internal/ha", "internal/nodes", "internal/plan", "internal/selection", "internal/version", "internal/web"},
 }
 
 // testLayers widen layers for a package's tests.
 var testLayers = map[string][]string{
 	"internal/ha":     {"internal/ha/hatest"},
+	"internal/plan":   {"internal/ha/hatest", "internal/camera"},
 	"internal/bridge": {"internal/ha/hatest"},
 	"internal/camera": {"internal/ha/hatest"},
 	"cmd/ha2fabric":   {"internal/ha/hatest"},
@@ -97,6 +103,9 @@ func isDef(rel string) bool {
 
 // facadeImport reports whether a file of pkg may import go-fabric's dep.
 func facadeImport(pkg, dep string, isTest bool) bool {
+	if dep == "node" && nodeFree[pkg] {
+		return false
+	}
 	return facade[dep] || isDef(dep) || isTest && testOnly[dep] || pkg == cameraPkg && cameraOnly[dep]
 }
 
@@ -228,6 +237,9 @@ func TestGuardRefuses(t *testing.T) {
 	}
 	if !facadeImport(cameraPkg, "cluster/camera", false) || facadeImport(cameraPkg, "bridge", false) || facadeImport(cameraPkg, "im", false) {
 		t.Error("the camera package's rule")
+	}
+	if facadeImport("internal/plan", "node", false) || !facadeImport("internal/plan", "device", false) || !facadeImport("internal/plan", "eligibility", false) {
+		t.Error("the pure core's rule: no node")
 	}
 	if allowedThirdParty("gopkg.in/yaml.v3") || !allowedThirdParty("github.com/SukramJ/go-hamqtt/model") || allowedThirdParty("github.com/SukramJ/go-hamqtt/discovery") {
 		t.Error("third-party list")

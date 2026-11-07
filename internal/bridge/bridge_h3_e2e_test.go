@@ -124,8 +124,8 @@ func newUI(t *testing.T) (*env, *ui) {
 		t.Fatal(err)
 	}
 	ev := fabricui.NewEvents()
-	e := newEnv(t, expose.Rule{Assist: true}, func(o *bridge.Options) {
-		o.Selection = sel
+	e := newEnv(t, expose.Rule{Assist: true}, func(o *setup) {
+		o.sel = sel
 		o.OnChange = func(keys []string, endpoints bool) {
 			if len(keys) > 0 {
 				ev.Publish(fabricui.Event{Type: fabricui.EventExposureChanged, Data: fabricui.ExposureEvent{Keys: keys}})
@@ -375,7 +375,7 @@ func TestUIWarnings(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	e := newEnv(t, expose.Rule{IncludeLabels: []string{"MATTER", "Later"}}, func(o *bridge.Options) { o.Selection = sel })
+	e := newEnv(t, expose.Rule{IncludeLabels: []string{"MATTER", "Later"}}, func(o *setup) { o.sel = sel })
 	srv := httptest.NewServer(fabricui.Handler(fabricui.Options{
 		Node: e.dev.Node(), Exposure: e.br.Exposure(), Warnings: e.br.Warnings, Logger: logger(),
 	}))
