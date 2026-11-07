@@ -91,11 +91,12 @@ renamed the same day; GitHub redirects the old name.
 ## Decided (owner, 2026-11-05)
 
 Against go-fabric's architecture standard (its `CLAUDE.md`, "The
-architecture standard"). None of this is built yet; `docs/roadmap.md`
-tranches A1 and A2 carry it, and the sections above describe today's state
-until they land.
+architecture standard"). The first bullet is built (A1, report
+`docs/reports/A1.md`). The two remaining bullets are not built yet;
+`docs/roadmap.md` tranche A2 carries them, and the sections above describe
+today's state until it lands.
 
-- **The internal cut.** `cmd/ha2fabric` is the one composition root;
+- **The internal cut** (built in A1). `cmd/ha2fabric` is the one composition root;
   `internal/plan` a pure core (no node, no goroutines); `internal/bridge`
   only the reconciler; `internal/exposure` the web UI's provider. An
   incremental mirror of the registries was rejected: it gives up what a
@@ -122,16 +123,18 @@ design, not measured behaviour.
   offers user-defined composed entities, go-ha2fabric composes nothing
   (`docs/by_design.md`, Composition). That is a recorded decision, not an
   advantage.
-- **Better than before?** Yes. `Bridge.sync` holds planning, the diff, the
-  forget and replace rules, the batch and the status in one method
-  (`internal/bridge/bridge.go:688-880`), so those rules are reachable only
-  through a node. The rule with its overrides exists in the
-  bridge (`bridge.go:883-903`), in `--dump-plan`
+- **Better than before?** Yes. Before A1, at `34075a6`, `Bridge.sync` held
+  planning, the diff, the forget and replace rules, the batch and the
+  status in one method (`internal/bridge/bridge.go:688-880`), so those
+  rules were reachable only through a node. The rule with its overrides
+  existed in the bridge (`bridge.go:883-903`), in `--dump-plan`
   (`cmd/ha2fabric/main.go:219-226`) and twice more, varied, in the provider
-  (`provider.go:196-213`, `:255-259`), and the bridge imports `fabricui` and,
-  for `NodeConfig` alone, `config` (`node.go:39`; called for the
+  (`provider.go:196-213`, `:255-259`), and the bridge imported `fabricui`
+  and, for `NodeConfig` alone, `config` (`node.go:39`; called for the
   configured node at `main.go:97` and for each registry node at
-  `nodes.go:163`).
+  `nodes.go:163`). Since A1 the rules are `plan.Diff`'s, tested without a
+  node; the rule meets its overrides in `plan.Effective` alone; the
+  bridge imports neither `fabricui` nor `config`.
 - **The right cut?** go-fabric owns Matter. go-hamapping owns what an entity
   and a command become, including the Matter half of a command. This
   repository owns Home Assistant's wire, the exposure rule and the
