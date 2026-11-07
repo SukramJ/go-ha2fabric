@@ -88,6 +88,61 @@ renamed the same day; GitHub redirects the old name.
   `switch`, `cover`, `climate`, `lock`, `fan`, `sensor`, `binary_sensor`;
   the daemon adds none of its own.
 
+## Decided (owner, 2026-11-05)
+
+Against go-fabric's architecture standard (its `CLAUDE.md`, "The
+architecture standard"). None of this is built yet; `docs/roadmap.md`
+tranches A1 and A2 carry it, and the sections above describe today's state
+until they land.
+
+- **The internal cut.** `cmd/ha2fabric` is the one composition root;
+  `internal/plan` a pure core (no node, no goroutines); `internal/bridge`
+  only the reconciler; `internal/exposure` the web UI's provider. An
+  incremental mirror of the registries was rejected: it gives up what a
+  full read gives after a reconnect, for a gain nobody has measured.
+- **No Matter types in the adapter.** `internal/adapt` imports nothing of
+  go-fabric. What it knows of Matter today (`command.go:15-16`, `:208-209`,
+  `:276-284`) moves to go-hamapping, where "The mapping" above already
+  places it.
+- **go-hamapping's own vocabulary.** The `go-*2mqtt` daemons are not planned
+  as consumers. go-hamqtt's vocabulary was chosen so that one table serves
+  them too (go-hamapping `CONCEPT.md:20-22, 26-29`); without them it is a
+  detour: a WebSocket entity renamed into MQTT terms (`adapt.go:11-15`) and
+  a command rendered as an MQTT payload that `command.go` parses back. The
+  table gets a vocabulary of its own with structured commands.
+
+## Better, before, the right cut
+
+The three questions of the standard, for the target above. They compare
+design, not measured behaviour.
+
+- **Better than matter-hub?** In its form and in the single place for a
+  device's shape: one static binary embedding the protocol in process, and
+  one table that decides what a device becomes. Not everywhere: matter-hub
+  offers user-defined composed entities, go-ha2fabric composes nothing
+  (`docs/by_design.md`, Composition). That is a recorded decision, not an
+  advantage.
+- **Better than before?** Yes. `Bridge.sync` holds planning, the diff, the
+  forget and replace rules, the batch and the status in one method
+  (`internal/bridge/bridge.go:688-880`), so those rules are reachable only
+  through a node. The rule with its overrides exists in the
+  bridge (`bridge.go:883-903`), in `--dump-plan`
+  (`cmd/ha2fabric/main.go:219-226`) and twice more, varied, in the provider
+  (`provider.go:196-213`, `:255-259`), and the bridge imports `fabricui` and,
+  for `NodeConfig` alone, `config` (`node.go:39`; called for the
+  configured node at `main.go:97` and for each registry node at
+  `nodes.go:163`).
+- **The right cut?** go-fabric owns Matter. go-hamapping owns what an entity
+  and a command become, including the Matter half of a command. This
+  repository owns Home Assistant's wire, the exposure rule and the
+  reconciliation. go-fabric-ui owns the web UI, behind `internal/exposure`.
+  go-fabric-server is not used (Shape, above). Since U6b (#36) one host
+  serves several nodes: each has its own bridge and, after A1, its own plan
+  input and exposure provider, composed per node by `cmd/ha2fabric`'s
+  `serve` (`nodes.go`); the registry of those nodes (`internal/nodes`) and
+  the fan-out of the one Home Assistant connection (`internal/ha`) are
+  daemon state and stay here.
+
 ## References
 
 - go-fabric: [README](https://github.com/SukramJ/go-fabric#readme),
