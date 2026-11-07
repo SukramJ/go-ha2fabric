@@ -6,6 +6,23 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Covers with OPEN and CLOSE only (#40, #42): a cover without
+  SET_POSITION got `set_cover_position` from a controller's
+  GoToLiftPercentage and one without STOP got `stop_cover` from
+  StopMotion, which Home Assistant refuses with `ServiceNotSupported` —
+  a template cover with open and close scenes could not be moved.
+  go-hamapping `v0.4.4` gates the cover's commands on its features:
+  without SET_POSITION, GoToLiftPercentage 0 calls `open_cover` and any
+  other value `close_cover`; without STOP, StopMotion answers success
+  and calls nothing.
+
+### Changed
+
+- go-hamapping `v0.4.4` (was `v0.4.3`): the cover rows' command gates
+  above, no other row changes.
+
 ## [0.5.3] - 2026-11-07
 
 Several nodes created in the web UI and its Operation page; go-fabric
