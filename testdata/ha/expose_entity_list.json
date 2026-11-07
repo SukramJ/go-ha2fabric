@@ -17,6 +17,12 @@
    "cover.living_blind": {
     "conversation": true
    },
+   "cover.scene_blind": {
+    "conversation": true
+   },
+   "cover.position_blind": {
+    "conversation": true
+   },
    "climate.hall": {
     "conversation": true
    },
