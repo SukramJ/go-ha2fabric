@@ -5,6 +5,15 @@ tracks the project release; the project's
 [changelog.md](https://github.com/SukramJ/go-ha2fabric/blob/main/changelog.md)
 has the details.
 
+## 0.5.3
+
+- The web UI creates further nodes, one per ecosystem with its own device
+  selection; `node_limit` bounds how many (default 8).
+- The web UI's Operation page shows the recent log and sets the log level
+  until the add-on restarts.
+- The bridge follows the host's network interfaces and re-announces itself
+  when an address changes (go-fabric 0.18.0).
+
 ## 0.5.2
 
 - A cover without a position (a garage door) now reaches your controller

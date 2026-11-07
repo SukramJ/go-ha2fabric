@@ -6,6 +6,11 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.5.3] - 2026-11-07
+
+Several nodes created in the web UI and its Operation page; go-fabric
+`v0.18.0`, go-fabric-ui `v0.6.1`, go-hamapping `v0.4.3`.
+
 ### Added
 
 - Several nodes, created in the web UI (#36, go-fabric-ui contract 0.6.0,
@@ -34,9 +39,24 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
-- go-fabric-ui `v0.6.0` (was `v0.5.0`): the node registry
+- go-fabric `v0.18.0` (was `v0.17.0`), no code change here. What a
+  controller of this daemon sees (go-fabric changelog 0.18.0): the
+  OccupancySensing server behind an OccupancySensor is `cluster/sensing`'s
+  `Occupancy`, its FeatureMap still the one go-hamapping's row declares (the
+  `0x202` default belongs to `cluster/measurement`'s projected server, which
+  no row uses; go-hamapping changelog 0.4.3); an mDNS goodbye names only the
+  records no published service holds any more, and the node follows the
+  host's network interfaces, re-announcing on an interface whose addresses
+  changed; a controller's SetUTCTime sets the node's UTC as an offset over
+  its clock, never the host clock. golang.org/x/net moves to `v0.62.0` (was
+  `v0.61.0`), required by all three modules below.
+- go-fabric-ui `v0.6.1` (was `v0.5.0`): `v0.6.0` brought the node registry
   (`fabricui.NodeRegistry`, `POST /nodes`, `PUT /nodes/{key}/label`,
-  `DELETE /nodes/{key}`), per-node selection and the configuration block.
+  `DELETE /nodes/{key}`), per-node selection and the configuration block;
+  `v0.6.1` is its go-fabric `v0.18.0` bump with no route or contract change
+  and no migration (go-fabric-ui changelog 0.6.1).
+- go-hamapping `v0.4.3` (was `v0.4.2`): its go-fabric `v0.18.0` bump, no
+  row changes.
 
 ## [0.5.2] - 2026-11-05
 
