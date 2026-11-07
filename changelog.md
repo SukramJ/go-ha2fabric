@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.5.4] - 2026-11-07
+
+Covers with OPEN and CLOSE only, over go-hamapping `v0.4.4` (#40, #42).
+
 ### Fixed
 
 - Covers with OPEN and CLOSE only (#40, #42): a cover without
