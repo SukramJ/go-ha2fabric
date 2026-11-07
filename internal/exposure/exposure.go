@@ -1,33 +1,71 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (C) 2026 SukramJ.
 
-package bridge
+// Package exposure is the web UI's exposure provider and warnings
+// (go-fabric-ui's fabricui.ExposureProvider and Options.Warnings) on the
+// bridge's read model: every candidate entity of the last sync with
+// go-hamapping's verdict, whether the rule exposes it and which layer
+// decided; a change is an override in the node's [selection.Store], and a
+// preview is plan.Dry with the change applied. It decides nothing of its
+// own: the verdicts are internal/plan's, the sync internal/bridge's.
+package exposure
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"slices"
 	"strings"
 
 	fabricui "github.com/SukramJ/go-fabric-ui/fabricui"
 	"github.com/SukramJ/go-fabric/eligibility"
 
+	"github.com/SukramJ/go-ha2fabric/internal/bridge"
 	"github.com/SukramJ/go-ha2fabric/internal/expose"
 	"github.com/SukramJ/go-ha2fabric/internal/ha"
 	"github.com/SukramJ/go-ha2fabric/internal/plan"
 	"github.com/SukramJ/go-ha2fabric/internal/selection"
 )
 
-// Exposure is the web UI's selection over the bridge
-// (go-fabric-ui docs/provider.md at v0.1.0): every candidate entity of
-// the last sync with go-hamapping's verdict, whether the rule exposes it
-// and which layer decided; a change is an override in the bridge's
-// [selection.Store]. The handler calls [Bridge.Resync] (Options.Reassemble)
-// after every apply, so the endpoints follow before the response.
-func (b *Bridge) Exposure() fabricui.ExposureProvider { return provider{b} }
+// Model is the read model the provider shows: the last sync's;
+// *bridge.Bridge is the daemon's.
+type Model interface {
+	View() bridge.View
+}
 
-type provider struct{ b *Bridge }
+// Options configure a [Provider].
+type Options struct {
+	// Input is the node's plan input, the same closure its bridge gets:
+	// the provider reads the current names and previews on it.
+	Input func() plan.Input
+	// Selection is the node's overrides store, which Apply writes; nil
+	// refuses Apply.
+	Selection *selection.Store
+	// Logger is the provider's logger; nil is slog.Default().
+	Logger *slog.Logger
+}
+
+// Provider is the web UI's selection over one node's bridge
+// (go-fabric-ui docs/provider.md at v0.1.0). The handler calls the
+// bridge's Resync (fabricui.Options.Reassemble) after every apply, so the
+// endpoints follow before the response.
+type Provider struct {
+	m    Model
+	opts Options
+	log  *slog.Logger
+}
+
+// New returns the provider over m.
+func New(m Model, opts Options) *Provider {
+	log := opts.Logger
+	if log == nil {
+		log = slog.Default()
+	}
+	return &Provider{m: m, opts: opts, log: log}
+}
+
+var _ fabricui.ExposureProvider = (*Provider)(nil)
 
 // The item fields: the schema's columns and the fixed filters.
 const (
@@ -77,7 +115,8 @@ var schema = fabricui.Schema{
 	},
 }
 
-func (provider) Schema(context.Context) (fabricui.Schema, error) { return schema, nil }
+// Schema implements fabricui.ExposureProvider.
+func (*Provider) Schema(context.Context) (fabricui.Schema, error) { return schema, nil }
 
 // view is the last sync as the provider reads it.
 type view struct {
@@ -90,10 +129,9 @@ type view struct {
 	names    map[string]string
 }
 
-func (p provider) view() *view {
-	p.b.mu.Lock()
-	v := &view{snap: p.b.last, verdicts: slices.Clone(p.b.verdicts), all: p.b.all}
-	p.b.mu.Unlock()
+func (p *Provider) view() *view {
+	m := p.m.View()
+	v := &view{snap: m.Snapshot, verdicts: m.Verdicts, all: m.All}
 	v.reg, v.devs, v.areas = map[string]*ha.EntityEntry{}, map[string]*ha.DeviceEntry{}, map[string]string{}
 	if v.snap != nil {
 		for i := range v.snap.Entities {
@@ -106,7 +144,7 @@ func (p provider) view() *view {
 			v.areas[a.AreaID] = a.Name
 		}
 	}
-	v.names = p.b.opts.Input().Names
+	v.names = p.opts.Input().Names
 	return v
 }
 
@@ -160,7 +198,9 @@ func (v *view) item(c *plan.Verdict) fabricui.Item {
 	return it
 }
 
-func (p provider) List(context.Context) ([]fabricui.Item, error) {
+// List implements fabricui.ExposureProvider: one item per candidate of
+// the last sync.
+func (p *Provider) List(context.Context) ([]fabricui.Item, error) {
 	v := p.view()
 	out := make([]fabricui.Item, 0, len(v.verdicts))
 	for i := range v.verdicts {
@@ -194,7 +234,7 @@ func (v *view) check(updates []fabricui.Update) (map[string]fabricui.Item, error
 
 // proposed is the current input with the updates applied: each one's
 // exposure as an override, and its name when it carries one.
-func (p provider) proposed(updates []fabricui.Update) plan.Input {
+func (p *Provider) proposed(updates []fabricui.Update) plan.Input {
 	enabled, names := map[string]bool{}, map[string]string{}
 	for _, u := range updates {
 		enabled[u.Key] = u.Enabled
@@ -202,14 +242,14 @@ func (p provider) proposed(updates []fabricui.Update) plan.Input {
 			names[u.Key] = strings.TrimSpace(*u.Name)
 		}
 	}
-	return p.b.opts.Input().With(enabled, names)
+	return p.opts.Input().With(enabled, names)
 }
 
 // Preview is the plan with the updates as overrides, through
 // go-hamapping's Map without Build: the updated items and every item
 // whose exposure or verdict the change moves (a battery that rides on
 // another entity's endpoint).
-func (p provider) Preview(_ context.Context, updates []fabricui.Update) ([]fabricui.Item, error) {
+func (p *Provider) Preview(_ context.Context, updates []fabricui.Update) ([]fabricui.Item, error) {
 	v := p.view()
 	before, err := v.check(updates)
 	if err != nil {
@@ -236,9 +276,9 @@ func (p provider) Preview(_ context.Context, updates []fabricui.Update) ([]fabri
 // Apply stores the updates as overrides. An update that asks for what
 // the rule decides without an override, and names nothing, removes the
 // entity's override: it follows the rule again. The endpoints follow on
-// the handler's Reassemble ([Bridge.Resync]).
-func (p provider) Apply(_ context.Context, updates []fabricui.Update) (int, error) {
-	if p.b.opts.Selection == nil {
+// the handler's Reassemble (the bridge's Resync).
+func (p *Provider) Apply(_ context.Context, updates []fabricui.Update) (int, error) {
+	if p.opts.Selection == nil {
 		return 0, errors.New("bridge: no selection store")
 	}
 	v := p.view()
@@ -250,11 +290,11 @@ func (p provider) Apply(_ context.Context, updates []fabricui.Update) (int, erro
 		keys = append(keys, u.Key)
 	}
 	plain := map[string]bool{}
-	dry := plan.Dry(v.snap, p.b.opts.Input().Without(keys...))
+	dry := plan.Dry(v.snap, p.opts.Input().Without(keys...))
 	for i := range dry {
 		plain[dry[i].EntityID] = dry[i].Exposed
 	}
-	current := p.b.opts.Selection.Entries()
+	current := p.opts.Selection.Entries()
 	set := map[string]selection.Entry{}
 	var remove []string
 	for _, u := range updates {
@@ -270,9 +310,40 @@ func (p provider) Apply(_ context.Context, updates []fabricui.Update) (int, erro
 		set[u.Key] = selection.Entry{Enabled: u.Enabled, Name: name}
 		remove = slices.DeleteFunc(remove, func(id string) bool { return id == u.Key })
 	}
-	if err := p.b.opts.Selection.Set(set, remove); err != nil {
+	if err := p.opts.Selection.Set(set, remove); err != nil {
 		return 0, err
 	}
-	p.b.log.Info("bridge.selection_applied", "set", len(set), "removed", len(remove))
+	p.log.Info("bridge.selection_applied", "set", len(set), "removed", len(remove))
 	return len(updates), nil
+}
+
+// WarningLabelUnresolved is the web UI's code of a label value that
+// names no Home Assistant label (the log's bridge.label_unresolved).
+const WarningLabelUnresolved = "label_unresolved"
+
+// WarningSelectionCorrupt is the web UI's code of an overrides file that
+// did not parse and was moved aside at start (the log's
+// selection.corrupt).
+const WarningSelectionCorrupt = "selection_corrupt"
+
+// Warnings are the configuration's half-valid parts for the web UI's
+// status (fabricui.Options.Warnings): the label values of the last sync
+// that name no Home Assistant label, each since its first sighting in an
+// unbroken run of syncs, and an overrides file that was moved aside at
+// start. The log carries the same findings.
+func (p *Provider) Warnings(context.Context) []fabricui.Warning {
+	var out []fabricui.Warning
+	for _, w := range p.m.View().Warnings {
+		out = append(out, fabricui.Warning{Code: WarningLabelUnresolved, Message: w.Message, Since: w.Since})
+	}
+	if p.opts.Selection != nil {
+		if r, ok := p.opts.Selection.Recovered(); ok {
+			out = append(out, fabricui.Warning{
+				Code:    WarningSelectionCorrupt,
+				Message: fmt.Sprintf("the overrides file did not parse (%s) and was moved to %s; the web UI's overrides started empty", r.Err, r.MovedTo),
+				Since:   r.At,
+			})
+		}
+	}
+	return out
 }

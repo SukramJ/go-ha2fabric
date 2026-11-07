@@ -33,7 +33,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	fabricui "github.com/SukramJ/go-fabric-ui/fabricui"
 	"github.com/SukramJ/go-fabric/device"
 	"github.com/SukramJ/go-fabric/eligibility"
 	"github.com/SukramJ/go-fabric/node"
@@ -44,7 +43,6 @@ import (
 	"github.com/SukramJ/go-ha2fabric/internal/camera"
 	"github.com/SukramJ/go-ha2fabric/internal/ha"
 	"github.com/SukramJ/go-ha2fabric/internal/plan"
-	"github.com/SukramJ/go-ha2fabric/internal/selection"
 )
 
 // Upstream is the Home Assistant side the bridge reads and calls: the
@@ -68,9 +66,6 @@ type Options struct {
 	Debounce time.Duration
 	// Logger is the bridge's logger; nil is slog.Default().
 	Logger *slog.Logger
-	// Selection is the web UI's overrides store, which the exposure
-	// provider writes; nil is none. The rule reads it through Input.
-	Selection *selection.Store
 	// OnChange, when set, is called on the worker after a sync that
 	// changed the exposure (the entity ids whose decision moved) or the
 	// endpoints (added, replaced or removed devices).
@@ -152,7 +147,7 @@ type Bridge struct {
 	last     *ha.Snapshot
 	all      map[string]*plan.Verdict
 	status   Status
-	warnings []fabricui.Warning
+	warnings []Warning
 	timer    *time.Timer
 	synced   chan struct{}
 }
@@ -498,21 +493,40 @@ func (b *Bridge) sync(ctx context.Context) {
 	}
 }
 
-// WarningLabelUnresolved is the web UI's code of a label value that
-// names no Home Assistant label (the log's bridge.label_unresolved).
-const WarningLabelUnresolved = "label_unresolved"
+// Warning is a configuration finding of the last sync and when an
+// unbroken run of syncs first saw it.
+type Warning struct {
+	Message string
+	Since   time.Time
+}
 
-// WarningSelectionCorrupt is the web UI's code of an overrides file that
-// did not parse and was moved aside at start (the log's
-// selection.corrupt).
-const WarningSelectionCorrupt = "selection_corrupt"
+// View is what the last sync left for readers: the web UI's exposure
+// provider (internal/exposure) reads it.
+type View struct {
+	// Snapshot is what the sync read; nil before the first sync.
+	Snapshot *ha.Snapshot
+	// Verdicts are the candidates' verdicts, as [Bridge.Plan] returns them.
+	Verdicts []plan.Verdict
+	// All are the sync's plan.Candidates: each entity's verdict as if the
+	// rule exposed it.
+	All map[string]*plan.Verdict
+	// Warnings are the sync's findings (plan.Warnings) with their age.
+	Warnings []Warning
+}
+
+// View returns the last sync's read model.
+func (b *Bridge) View() View {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return View{Snapshot: b.last, Verdicts: slices.Clone(b.verdicts), All: b.all, Warnings: slices.Clone(b.warnings)}
+}
 
 // warn logs the configuration's warnings (plan.Warnings) when they
-// change. The second result is the same warnings for the web UI, each
-// with the time it was first seen in an unbroken run of syncs.
-func (b *Bridge) warn(found []string) ([]string, []fabricui.Warning) {
+// change. The second result is the same warnings, each with the time it
+// was first seen in an unbroken run of syncs.
+func (b *Bridge) warn(found []string) ([]string, []Warning) {
 	out := slices.Clone(found)
-	ui := make([]fabricui.Warning, 0, len(out))
+	ui := make([]Warning, 0, len(out))
 	since := map[string]time.Time{}
 	now := time.Now()
 	for _, msg := range out {
@@ -521,7 +535,7 @@ func (b *Bridge) warn(found []string) ([]string, []fabricui.Warning) {
 			at = now
 		}
 		since[msg] = at
-		ui = append(ui, fabricui.Warning{Code: WarningLabelUnresolved, Message: msg, Since: at})
+		ui = append(ui, Warning{Message: msg, Since: at})
 	}
 	b.since = since
 	if len(out) == 0 {
@@ -534,26 +548,6 @@ func (b *Bridge) warn(found []string) ([]string, []fabricui.Warning) {
 		}
 	}
 	return out, ui
-}
-
-// Warnings are the configuration's half-valid parts for the web UI's
-// status (fabricui.Options.Warnings): the label values of the last sync
-// that name no Home Assistant label, and an overrides file that was moved
-// aside at start. The log carries the same findings.
-func (b *Bridge) Warnings(context.Context) []fabricui.Warning {
-	b.mu.Lock()
-	out := slices.Clone(b.warnings)
-	b.mu.Unlock()
-	if b.opts.Selection != nil {
-		if r, ok := b.opts.Selection.Recovered(); ok {
-			out = append(out, fabricui.Warning{
-				Code:    WarningSelectionCorrupt,
-				Message: fmt.Sprintf("the overrides file did not parse (%s) and was moved to %s; the web UI's overrides started empty", r.Err, r.MovedTo),
-				Since:   r.At,
-			})
-		}
-	}
-	return out
 }
 
 // Resync reads Home Assistant again and brings the endpoints to it, and

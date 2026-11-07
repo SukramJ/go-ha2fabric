@@ -19,6 +19,7 @@ import (
 	"github.com/SukramJ/go-ha2fabric/internal/camera"
 	"github.com/SukramJ/go-ha2fabric/internal/config"
 	"github.com/SukramJ/go-ha2fabric/internal/expose"
+	"github.com/SukramJ/go-ha2fabric/internal/exposure"
 	"github.com/SukramJ/go-ha2fabric/internal/ha"
 	"github.com/SukramJ/go-ha2fabric/internal/nodes"
 	"github.com/SukramJ/go-ha2fabric/internal/plan"
@@ -26,11 +27,12 @@ import (
 )
 
 // served is one node the daemon serves: the go-fabric node, its bridge
-// on the one Home Assistant connection, its selection and the web UI's
-// events of its bridge.
+// on the one Home Assistant connection, the web UI's exposure provider
+// on the bridge and its selection, and the web UI's events of its bridge.
 type served struct {
 	n      *node.Node
 	br     *bridge.Bridge
+	prov   *exposure.Provider
 	events *fabricui.Events
 	fan    *ha.Fanout
 	cancel context.CancelFunc
@@ -40,10 +42,12 @@ type served struct {
 
 // serve starts a node and its bridge in the cookbook's order
 // (go-fabric docs/guides/embed-in-a-daemon.md §6): node.New and Start,
-// the fabrics and the pairing codes to the log, the bridge on the node,
-// its worker on base, and the bridge on the connection's fan-out, which
-// hands it Connected at once when Home Assistant is up. in is the node's
-// plan input; sel its overrides store, which the web UI writes.
+// the fabrics and the pairing codes to the log, the bridge on the node and
+// the web UI's exposure provider on the bridge, the bridge's worker on
+// base, and the bridge on the connection's fan-out, which hands it
+// Connected at once when Home Assistant is up. in is the node's plan
+// input, the bridge's and the provider's; sel its overrides store, which
+// the provider writes.
 func serve(base context.Context, client *ha.Client, fan *ha.Fanout, ncfg node.Config, in func() plan.Input, sel *selection.Store, log *slog.Logger) (*served, error) {
 	n, err := node.New(base, ncfg)
 	if err != nil {
@@ -59,7 +63,7 @@ func serve(base context.Context, client *ha.Client, fan *ha.Fanout, ncfg node.Co
 	// go-fabric-ui v0.1.2); events carries the bridge's own.
 	events := fabricui.NewEvents()
 	br := bridge.New(n, client, bridge.Options{
-		Input: in, Logger: log, Selection: sel, CameraUpstream: camera.HA(client),
+		Input: in, Logger: log, CameraUpstream: camera.HA(client),
 		OnChange: func(exposure []string, endpoints bool) {
 			if len(exposure) > 0 {
 				events.Publish(fabricui.Event{Type: fabricui.EventExposureChanged, Data: fabricui.ExposureEvent{Keys: exposure}})
@@ -70,7 +74,8 @@ func serve(base context.Context, client *ha.Client, fan *ha.Fanout, ncfg node.Co
 		},
 	})
 	ctx, cancel := context.WithCancel(base)
-	s := &served{n: n, br: br, events: events, fan: fan, cancel: cancel, done: make(chan struct{})}
+	prov := exposure.New(br, exposure.Options{Input: in, Selection: sel, Logger: log})
+	s := &served{n: n, br: br, prov: prov, events: events, fan: fan, cancel: cancel, done: make(chan struct{})}
 	go func() {
 		defer close(s.done)
 		_ = br.Run(ctx)
@@ -191,7 +196,7 @@ func (f *fleet) entry(m *member) fabricui.NodeEntry {
 	}
 	if m.s != nil {
 		e.Source = m.s.n
-		e.Exposure = m.s.br.Exposure()
+		e.Exposure = m.s.prov
 		e.Reassemble = m.s.br.Resync
 		e.Events = m.s.events
 	}

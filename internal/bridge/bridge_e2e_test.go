@@ -23,6 +23,7 @@ import (
 	"github.com/SukramJ/go-ha2fabric/internal/camera"
 	"github.com/SukramJ/go-ha2fabric/internal/config"
 	"github.com/SukramJ/go-ha2fabric/internal/expose"
+	"github.com/SukramJ/go-ha2fabric/internal/exposure"
 	"github.com/SukramJ/go-ha2fabric/internal/ha"
 	"github.com/SukramJ/go-ha2fabric/internal/ha/hatest"
 	"github.com/SukramJ/go-ha2fabric/internal/plan"
@@ -37,7 +38,8 @@ func logger() *slog.Logger {
 }
 
 // env is the daemon's composition in one process: the fake Home
-// Assistant, the HA client, the bridge, and the bridge's node on a
+// Assistant, the HA client, the bridge with the web UI's exposure
+// provider on it, and the bridge's node on a
 // fabrictest site with a controller. The node is the site's
 // (fabrictest.Device.Node), as go-fabric-server's S2 runs its bridge half
 // (bridgeapi/harness_test.go): a node.New of the daemon's own cannot join
@@ -51,6 +53,7 @@ type env struct {
 	site *fabrictest.Site
 	dev  *fabrictest.Device
 	br   *bridge.Bridge
+	prov *exposure.Provider
 	cl   *ha.Client
 	pair *fabrictest.Pair
 	// tcp: the controller dials TCP (the camera env).
@@ -79,7 +82,6 @@ func newEnv(t *testing.T, rule expose.Rule, edit ...func(*setup)) *env {
 		overrides = s.sel
 	}
 	s.Input = func() plan.Input { return plan.Effective(rule, overrides, s.camera, camera.DryPorts) }
-	s.Selection = s.sel
 	opts := s.Options
 	// A camera's offer is a large message, which the controller sends over
 	// TCP only (go-fabric cluster/camera/requestor_parity_matterjs_test.go:
@@ -116,6 +118,7 @@ func newEnv(t *testing.T, rule expose.Rule, edit ...func(*setup)) *env {
 		opts.CameraUpstream = camera.HA(cl)
 	}
 	br := bridge.New(dev.Node(), cl, opts)
+	prov := exposure.New(br, exposure.Options{Input: s.Input, Selection: s.sel, Logger: logger()})
 	rctx, stop := context.WithCancel(ctx)
 	done := make(chan struct{}, 2)
 	go func() { _ = br.Run(rctx); done <- struct{}{} }()
@@ -130,7 +133,7 @@ func newEnv(t *testing.T, rule expose.Rule, edit ...func(*setup)) *env {
 	case <-ctx.Done():
 		t.Fatal("no first sync")
 	}
-	return &env{t: t, ctx: ctx, ha: srv, site: site, dev: dev, br: br, cl: cl, tcp: s.camera}
+	return &env{t: t, ctx: ctx, ha: srv, site: site, dev: dev, br: br, prov: prov, cl: cl, tcp: s.camera}
 }
 
 func (e *env) commission() {

@@ -17,6 +17,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -70,20 +71,24 @@ var layers = map[string][]string{
 	"internal/camera":    {"internal/ha"},
 	"internal/config":    {"internal/expose"},
 	"internal/plan":      {"internal/ha", "internal/adapt", "internal/expose"},
-	"internal/bridge":    {"internal/ha", "internal/adapt", "internal/camera", "internal/expose", "internal/config", "internal/plan", "internal/selection", "internal/version"},
+	"internal/bridge":    {"internal/ha", "internal/adapt", "internal/camera", "internal/config", "internal/plan", "internal/version"},
+	"internal/exposure":  {"internal/bridge", "internal/plan", "internal/ha", "internal/expose", "internal/selection"},
 	"internal/nodes":     {},
 	"internal/web":       {},
 	"internal/arch":      {},
-	"cmd/ha2fabric":      {"internal/bridge", "internal/camera", "internal/config", "internal/expose", "internal/ha", "internal/nodes", "internal/plan", "internal/selection", "internal/version", "internal/web"},
+	"cmd/ha2fabric":      {"internal/bridge", "internal/camera", "internal/config", "internal/expose", "internal/exposure", "internal/ha", "internal/nodes", "internal/plan", "internal/selection", "internal/version", "internal/web"},
 }
 
-// testLayers widen layers for a package's tests.
+// testLayers widen layers for a package's tests. internal/bridge's end to
+// end tests compose the stack as cmd/ha2fabric does: the rule, the
+// overrides store and the web UI's provider on the bridge.
 var testLayers = map[string][]string{
-	"internal/ha":     {"internal/ha/hatest"},
-	"internal/plan":   {"internal/ha/hatest", "internal/camera"},
-	"internal/bridge": {"internal/ha/hatest"},
-	"internal/camera": {"internal/ha/hatest"},
-	"cmd/ha2fabric":   {"internal/ha/hatest"},
+	"internal/ha":       {"internal/ha/hatest"},
+	"internal/plan":     {"internal/ha/hatest", "internal/camera"},
+	"internal/bridge":   {"internal/ha/hatest", "internal/expose", "internal/selection", "internal/exposure"},
+	"internal/exposure": {"internal/ha/hatest"},
+	"internal/camera":   {"internal/ha/hatest"},
+	"cmd/ha2fabric":     {"internal/ha/hatest"},
 }
 
 // Other modules the daemon may import: the mapping, its vocabulary, the
@@ -95,6 +100,16 @@ var thirdParty = []string{
 	"github.com/SukramJ/go-ha-catalog",
 	"github.com/coder/websocket",
 	"github.com/SukramJ/go-fabric-ui/fabricui",
+}
+
+// restricted are third-party imports only some packages may make:
+// go-fabric-ui is the web UI's, behind internal/exposure and internal/web,
+// wired by the composition root; internal/nodes, the store of the web
+// UI's node registry, keeps its node keys off the UI's default one
+// (nodes.go reservedKeys, fabricui.DefaultNodeKey). A package's tests may
+// compose the stack.
+var restricted = map[string][]string{
+	"github.com/SukramJ/go-fabric-ui/fabricui": {"internal/web", "internal/exposure", "internal/nodes", "cmd/ha2fabric"},
 }
 
 func isDef(rel string) bool {
@@ -147,23 +162,18 @@ func TestImports(t *testing.T) {
 				}
 			case p == module || strings.HasPrefix(p, module+"/"):
 				dep := strings.TrimPrefix(strings.TrimPrefix(p, module), "/")
-				allowed, ruled := layers[pkg]
-				if !ruled {
+				if _, ruled := layers[pkg]; !ruled {
 					if pkg != "." {
 						t.Errorf("%s: package %s has no layer entry", where, pkg)
 					}
 					continue
 				}
-				ok := dep == pkg
-				for _, a := range append(allowed, testLayersFor(pkg, isTest)...) {
-					ok = ok || dep == a
-				}
-				if !ok {
+				if !layerAllows(pkg, dep, isTest) {
 					t.Errorf("%s imports %s: outside the layers of %s", where, p, pkg)
 				}
 			case strings.Contains(strings.Split(p, "/")[0], "."):
-				if !allowedThirdParty(p) {
-					t.Errorf("%s imports %s: not a dependency of the daemon", where, p)
+				if !allowedThirdParty(pkg, p, isTest) {
+					t.Errorf("%s imports %s: not a dependency of %s", where, p, pkg)
 				}
 			}
 		}
@@ -177,10 +187,22 @@ func TestImports(t *testing.T) {
 	}
 }
 
-func allowedThirdParty(p string) bool {
+// layerAllows reports whether a file of pkg may import the module's dep.
+func layerAllows(pkg, dep string, isTest bool) bool {
+	if dep == pkg {
+		return true
+	}
+	return slices.Contains(layers[pkg], dep) || slices.Contains(testLayersFor(pkg, isTest), dep)
+}
+
+// allowedThirdParty reports whether a file of pkg may import p of
+// another module: p is a dependency, and pkg is one restricted names, or
+// the file is a test.
+func allowedThirdParty(pkg, p string, isTest bool) bool {
 	for _, a := range thirdParty {
 		if p == a || strings.HasPrefix(p, a+"/") {
-			return true
+			only, ok := restricted[a]
+			return !ok || isTest || slices.Contains(only, pkg)
 		}
 	}
 	return false
@@ -241,7 +263,41 @@ func TestGuardRefuses(t *testing.T) {
 	if facadeImport("internal/plan", "node", false) || !facadeImport("internal/plan", "device", false) || !facadeImport("internal/plan", "eligibility", false) {
 		t.Error("the pure core's rule: no node")
 	}
-	if allowedThirdParty("gopkg.in/yaml.v3") || !allowedThirdParty("github.com/SukramJ/go-hamqtt/model") || allowedThirdParty("github.com/SukramJ/go-hamqtt/discovery") {
+	if allowedThirdParty("internal/bridge", "gopkg.in/yaml.v3", false) || !allowedThirdParty("internal/bridge", "github.com/SukramJ/go-hamqtt/model", false) || allowedThirdParty("internal/bridge", "github.com/SukramJ/go-hamqtt/discovery", false) {
 		t.Error("third-party list")
+	}
+	// go-fabric-ui is the web UI's: the provider, the handler and the
+	// composition root, and tests that compose the stack.
+	const ui = "github.com/SukramJ/go-fabric-ui/fabricui"
+	for _, pkg := range []string{"internal/bridge", "internal/plan", "internal/adapt"} {
+		if allowedThirdParty(pkg, ui, false) {
+			t.Errorf("%s may not import go-fabric-ui", pkg)
+		}
+	}
+	for _, pkg := range []string{"internal/web", "internal/exposure", "cmd/ha2fabric"} {
+		if !allowedThirdParty(pkg, ui, false) {
+			t.Errorf("%s may import go-fabric-ui", pkg)
+		}
+	}
+	if !allowedThirdParty("internal/bridge", ui, true) {
+		t.Error("internal/bridge's tests may import go-fabric-ui")
+	}
+	// The layers of the cut (brief A1, section 5).
+	for _, c := range []struct{ pkg, dep string }{
+		{"internal/bridge", "internal/selection"},
+		{"internal/bridge", "internal/exposure"},
+		{"internal/plan", "internal/bridge"},
+		{"internal/plan", "internal/selection"},
+		{"internal/plan", "internal/config"},
+		{"internal/plan", "internal/camera"},
+		{"internal/exposure", "internal/config"},
+		{"internal/config", "internal/bridge"},
+	} {
+		if layerAllows(c.pkg, c.dep, false) {
+			t.Errorf("%s may not import %s", c.pkg, c.dep)
+		}
+	}
+	if !layerAllows("internal/bridge", "internal/exposure", true) || !layerAllows("internal/plan", "internal/camera", true) {
+		t.Error("the tests' layers")
 	}
 }

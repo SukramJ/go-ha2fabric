@@ -111,7 +111,7 @@ func run(ctx context.Context, args []string, env config.Env, stdout, stderr io.W
 	webErr := make(chan error, 1)
 	if cfg.WebListen != "" {
 		ws := web.New(web.Options{Listen: cfg.WebListen, Allow: cfg.WebAllow, Logger: logger, UI: fabricui.Options{
-			Node: def.n, Exposure: def.br.Exposure(), Admin: admin(cfg), Reassemble: def.br.Resync, Events: def.events, Warnings: def.br.Warnings, Logger: logger,
+			Node: def.n, Exposure: def.prov, Admin: admin(cfg), Reassemble: def.br.Resync, Events: def.events, Warnings: def.prov.Warnings, Logger: logger,
 			Operations: web.NewOperations(ring, version.Version, started),
 			Registry:   fl, NodeConfig: nodeConfig(cfg),
 		}})
