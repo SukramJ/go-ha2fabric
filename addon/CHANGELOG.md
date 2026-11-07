@@ -5,6 +5,12 @@ tracks the project release; the project's
 [changelog.md](https://github.com/SukramJ/go-ha2fabric/blob/main/changelog.md)
 has the details.
 
+## 0.5.4
+
+- A cover with open and close only (a template cover with scenes) can be
+  moved from a controller again: a position command opens or closes it,
+  and a stop on a cover without stop does nothing instead of failing.
+
 ## 0.5.3
 
 - The web UI creates further nodes, one per ecosystem with its own device

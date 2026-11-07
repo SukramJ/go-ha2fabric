@@ -168,6 +168,62 @@
   {
    "area_id": null,
    "categories": {},
+   "config_entry_id": "ce-template",
+   "config_subentry_id": null,
+   "created_at": 1761350400.0,
+   "device_id": null,
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "cover.scene_blind",
+   "has_entity_name": true,
+   "hidden_by": null,
+   "icon": null,
+   "id": "reg-cover-scene_blind",
+   "labels": [],
+   "modified_at": 1761350400.0,
+   "name": "Scene blind",
+   "next_name_part": null,
+   "options": {
+    "conversation": {
+     "should_expose": true
+    }
+   },
+   "original_name": null,
+   "platform": "template",
+   "translation_key": null,
+   "unique_id": "tmpl-scene-blind"
+  },
+  {
+   "area_id": null,
+   "categories": {},
+   "config_entry_id": "ce-somfy",
+   "config_subentry_id": null,
+   "created_at": 1761350400.0,
+   "device_id": "dev-somfy-2",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "cover.position_blind",
+   "has_entity_name": true,
+   "hidden_by": null,
+   "icon": null,
+   "id": "reg-cover-position_blind",
+   "labels": [],
+   "modified_at": 1761350400.0,
+   "name": null,
+   "next_name_part": null,
+   "options": {
+    "conversation": {
+     "should_expose": true
+    }
+   },
+   "original_name": null,
+   "platform": "somfy",
+   "translation_key": null,
+   "unique_id": "somfy-2"
+  },
+  {
+   "area_id": null,
+   "categories": {},
    "config_entry_id": "ce-tado",
    "config_subentry_id": null,
    "created_at": 1761350400.0,

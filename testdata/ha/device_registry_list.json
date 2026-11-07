@@ -199,6 +199,45 @@
    "via_device_id": null
   },
   {
+   "area_id": "living_room",
+   "configuration_url": null,
+   "config_entries": [
+    "ce"
+   ],
+   "config_entries_subentries": {
+    "ce": [
+     null
+    ]
+   },
+   "config_entry_id": "ce",
+   "config_subentry_id": null,
+   "connections": [],
+   "created_at": 1761350400.0,
+   "disabled_by": null,
+   "entry_type": null,
+   "hw_version": null,
+   "id": "dev-somfy-2",
+   "identifiers": [
+    [
+     "somfy",
+     "7654321"
+    ]
+   ],
+   "labels": [],
+   "manufacturer": "Somfy",
+   "model": "Oximo io",
+   "model_id": null,
+   "modified_at": 1761350400.0,
+   "name_by_user": null,
+   "name": "Study blind",
+   "next_name_part": null,
+   "parent_device_id": null,
+   "primary_config_entry": "ce",
+   "serial_number": null,
+   "sw_version": null,
+   "via_device_id": null
+  },
+  {
    "area_id": null,
    "configuration_url": null,
    "config_entries": [
