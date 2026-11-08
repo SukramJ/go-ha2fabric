@@ -53,9 +53,10 @@ var payloads = map[string][]struct{ key, service string }{
 var services = map[string]map[string]string{
 	// button/services.py:11-15 press, no fields; row button/plug.
 	"button": {hamapping.MethodPress: "press"},
-	// climate/services.py:170-181 turn_on, turn_off, no fields; row
-	// climate/air_conditioner.
-	"climate": {hamapping.MethodTurnOn: "turn_on", hamapping.MethodTurnOff: "turn_off"},
+	// climate/services.py:170-181 turn_on, turn_off, no fields;
+	// climate/services.yaml:145-151 toggle (TURN_ON and TURN_OFF, which
+	// the row requires); row climate/air_conditioner.
+	"climate": {hamapping.MethodTurnOn: "turn_on", hamapping.MethodTurnOff: "turn_off", hamapping.MethodToggle: "toggle"},
 	// vacuum/services.py:104-121 start, pause, return_to_base, no fields;
 	// row vacuum/robotic_vacuum_cleaner (Resume starts again).
 	"vacuum": {hamapping.MethodPause: "pause", hamapping.MethodResume: "start", hamapping.MethodGoHome: "return_to_base"},
@@ -63,10 +64,11 @@ var services = map[string]map[string]string{
 	// valve/water_valve.
 	"valve": {hamapping.MethodOpenValve: "open_valve", hamapping.MethodCloseValve: "close_valve"},
 	// media_player/services.py:125-130 turn_on, turn_off; :155-163
-	// media_play, media_pause, media_stop; no fields. Rows
-	// media_player/video_player, speaker.
+	// media_play, media_pause, media_stop; no fields;
+	// media_player/services.yaml:17-24 toggle (TURN_ON and TURN_OFF, which
+	// the rows require). Rows media_player/video_player, speaker.
 	"media_player": {
-		hamapping.MethodTurnOn: "turn_on", hamapping.MethodTurnOff: "turn_off",
+		hamapping.MethodTurnOn: "turn_on", hamapping.MethodTurnOff: "turn_off", hamapping.MethodToggle: "toggle",
 		hamapping.MethodMediaPlay: "media_play", hamapping.MethodMediaPause: "media_pause", hamapping.MethodMediaStop: "media_stop",
 	},
 	// script/services.yaml:4-8 turn_on, no fields; row script/plug.

@@ -90,6 +90,9 @@ type Status struct {
 	Commands    uint64    `json:"commands"`
 	CommandErrs uint64    `json:"command_errors"`
 	LastCommand string    `json:"last_command_error,omitempty"`
+	// Discards counts the controller commands a row answered with success
+	// and the entity had no action for (bridge.command_discarded).
+	Discards uint64 `json:"discards"`
 	// Warnings are the configuration's problems that do not stop the
 	// bridge: a label value that names no Home Assistant label.
 	Warnings []string `json:"warnings,omitempty"`
@@ -604,6 +607,7 @@ func (b *Bridge) build(ctx context.Context, p *plan.Group) (*group, []hamapping.
 	}
 	b.attachCameras(g, hp, devs)
 	hp.OnChange(b.onCommand)
+	hp.OnDiscard(b.onDiscard)
 	return g, mv
 }
 
