@@ -165,8 +165,9 @@ checks may use a cheaper one.
 
 | Work | Model |
 | --- | --- |
-| Analysis, planning, briefs, reviews, the wave report; anything written into `docs/by_design.md`, `CONCEPT.md` or a comment that cites `home-assistant/core` or matter-hub `file:line`; the translation in `internal/adapt` and the exposure rule in `internal/expose` (both are facts about Home Assistant); credential handling (`internal/config`, the token's path to the client); rebases and merge conflicts where upstream may have overtaken the change; a question to go-hamapping or go-fabric | **Fable** (the default for this repo) |
+| Analysis, planning, briefs, the wave report; anything written into `docs/by_design.md`, `CONCEPT.md` or a comment that cites `home-assistant/core` or matter-hub `file:line`; the translation in `internal/adapt` and the exposure rule in `internal/expose` (both are facts about Home Assistant); credential handling (`internal/config`, the token's path to the client); rebases and merge conflicts where upstream may have overtaken the change; a question to go-hamapping or go-fabric | **Fable** (the default for this repo) |
 | Implementation of a finished brief with guards behind it: a bridge or web change whose tests and fixtures already hold the behaviour, a dependency bump with its notices, a `changelog.md` entry for a finished diff | **Opus** (also what fast mode runs on) |
+| **Review of a wave's pull request, split (owner decision 2026-11-08, go-fabric #456).** The code review — correctness, concurrency, error paths, tests, the fixed report shape — is **Opus**. On top of it **Fable** reads, bounded: every new citation line against the pinned source (`home-assistant/core` 2026.10.3, matter-hub `664575a`, go-fabric at its tag), every line that enters `docs/by_design.md` or `CONCEPT.md`, the credential paths of the first row, and the brief's decisions against Home Assistant and matter-hub — the behavioural gaps a code review does not see. The load-bearing claims of the Opus review are verified before they reach the implementer. | **Opus**, then **Fable** |
 | Work a test or formatter checks immediately: `gofumpt`, regenerating the coverage floors, adding a test case to an existing pattern; search and first reading of a source tree (`home-assistant/core`, matter-hub, go-hamapping, this repo) whose result a stronger model or the owner reads again | **Sonnet**, including as the model of a delegated search subagent |
 
 Sonnet never writes a fact about Home Assistant or matter-hub into the
@@ -221,3 +222,10 @@ doubling.
   in the fixed shape; it does not survey the tree. The brief is copied to
   `notes/briefs/` in the wave's first commit. One agent per brief; two
   agents only on disjoint paths.
+- **Push, pull request and tag are the session's own calls.** An
+  implementing agent works locally — branch, commits, guards — and reports;
+  the owner's session reads the diff, pushes, opens the pull request with
+  auto-merge and tags after CI. A delegated push, pull request or tag is
+  refused by the auto-mode classifier ("Create Public Surface",
+  2026-11-07), and the review above sits between the agent's report and the
+  push anyway.
