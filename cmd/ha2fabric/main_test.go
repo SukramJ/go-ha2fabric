@@ -9,7 +9,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -78,11 +77,6 @@ func freePort(t *testing.T, network string) string {
 // TestRun starts the daemon for real — its own node on a loopback port,
 // the fake Home Assistant — reads its health and stops it.
 func TestRun(t *testing.T) {
-	if runtime.GOOS != "linux" {
-		// The daemon's own node advertises over the host's mDNS; the other
-		// runners of the OS triplet get the in-process tests only.
-		t.Skip("runs the node on the host's network: linux only")
-	}
 	srv := hatest.New(t)
 	webAddr := freePort(t, "tcp")
 	env := config.MapEnv(map[string]string{

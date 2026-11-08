@@ -13,7 +13,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -141,9 +140,6 @@ func (d *daemon) nodes() nodeList {
 // it with its configuration block, rename it, restart the daemon with it
 // in the registry, delete it — its files go — and meet the limit.
 func TestNodeRegistry(t *testing.T) {
-	if runtime.GOOS != "linux" {
-		t.Skip("runs the nodes on the host's network: linux only")
-	}
 	srv := hatest.New(t)
 	dir := t.TempDir()
 	web := freePort(t, "tcp")
@@ -324,9 +320,6 @@ const eraseBody = `{"confirm":"erase-node"}`
 // on its erased store, the status reads the new one through the switch,
 // the fixtures' endpoints come back, and Delete works after an erase.
 func TestNodeErase(t *testing.T) {
-	if runtime.GOOS != "linux" {
-		t.Skip("runs the nodes on the host's network: linux only")
-	}
 	env, web := eraseEnv(t)
 	d := startDaemon(t, env, web)
 	var before []int
@@ -380,9 +373,6 @@ func TestNodeErase(t *testing.T) {
 // again. A registry node in that state is listed not enabled and can be
 // deleted.
 func TestNodeEraseFailed(t *testing.T) {
-	if runtime.GOOS != "linux" {
-		t.Skip("runs the nodes on the host's network: linux only")
-	}
 	env, web := eraseEnv(t)
 	d := startDaemon(t, env, web)
 	sentinel := errors.New("the sentinel's come-back fails")
