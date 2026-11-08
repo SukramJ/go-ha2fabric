@@ -4,7 +4,7 @@ go 1.27.3
 
 require (
 	github.com/SukramJ/go-fabric v0.18.0
-	github.com/SukramJ/go-fabric-ui v0.6.1
+	github.com/SukramJ/go-fabric-ui v0.7.1
 	github.com/SukramJ/go-ha-catalog v0.3.2-0.20261024093528-d9582e022b8f
 	github.com/SukramJ/go-hamapping v0.4.4
 	github.com/SukramJ/go-hamqtt v0.39.0

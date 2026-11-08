@@ -6,6 +6,16 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- go-fabric-ui `v0.7.1` (was `v0.6.1`). From 0.7.0: a Re-announce
+  button on the diagnostics page, `attestation_error` and `boot_reason`
+  on the status page, the sessions' parameters on the diagnostics page,
+  and the node stream's `fabric_updated`, `commissioning_complete` and
+  `cluster_event`. From 0.7.1: `fabricui.NodeSwitch`, which the erase
+  uses; its Commission-page fix (Bluetooth LE) is the controller
+  family's, which this daemon does not serve.
+
 ## [0.5.4] - 2026-11-07
 
 Covers with OPEN and CLOSE only, over go-hamapping `v0.4.4` (#40, #42).
