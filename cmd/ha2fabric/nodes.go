@@ -10,6 +10,8 @@ import (
 	"log/slog"
 	"slices"
 	"sync"
+	"sync/atomic"
+	"time"
 	"unicode/utf8"
 
 	fabricui "github.com/SukramJ/go-fabric-ui/fabricui"
@@ -26,62 +28,215 @@ import (
 	"github.com/SukramJ/go-ha2fabric/internal/selection"
 )
 
-// served is one node the daemon serves: the go-fabric node, its bridge
-// on the one Home Assistant connection, the web UI's exposure provider
-// on the bridge and its selection, and the web UI's events of its bridge.
+// served is one node the daemon serves, the owner that outlives its run:
+// what serve was given, the web UI's exposure provider and events, made
+// once over the owner, and the switch the web UI reads the node through
+// (fabricui.NodeSwitch, go-fabric-ui v0.7.1). The run is the go-fabric
+// node and its bridge on the one Home Assistant connection; an erase
+// ends it and starts a new one (a Go node is single-use, go-fabric
+// node/node.go:39-41 at v0.18.0), so the web UI's handler, which keeps
+// the values it was given, follows the new node through the switch.
 type served struct {
+	base   context.Context
+	client *ha.Client
+	fan    *ha.Fanout
+	ncfg   node.Config
+	in     func() plan.Input
+	sel    *selection.Store
+	log    *slog.Logger
+	events *fabricui.Events
+	prov   *exposure.Provider
+	sw     *fabricui.NodeSwitch
+
+	// op serialises erase and close; closed is set by close.
+	op     sync.Mutex
+	closed bool
+
+	// mu guards the current run and the last failed come-back; live
+	// mirrors n != nil for the fleet's List, which does not wait on an
+	// erase.
+	mu     sync.RWMutex
 	n      *node.Node
 	br     *bridge.Bridge
-	prov   *exposure.Provider
-	events *fabricui.Events
-	fan    *ha.Fanout
 	cancel context.CancelFunc
 	done   chan struct{}
-	once   sync.Once
+	lost   error
+	lostAt time.Time
+	live   atomic.Bool
 }
 
-// serve starts a node and its bridge in the cookbook's order
-// (go-fabric docs/guides/embed-in-a-daemon.md §6): node.New and Start,
-// the fabrics and the pairing codes to the log, the bridge on the node and
-// the web UI's exposure provider on the bridge, the bridge's worker on
-// base, and the bridge on the connection's fan-out, which hands it
-// Connected at once when Home Assistant is up. in is the node's plan
-// input, the bridge's and the provider's; sel its overrides store, which
-// the provider writes.
+// newNode is node.New; the daemon test swaps it to fail a come-back.
+var newNode = node.New
+
+// eraseTimeout bounds an erase: the reset and the come-back.
+const eraseTimeout = 30 * time.Second
+
+// serve builds the owner of a node and starts its first run (start). in
+// is the node's plan input, the bridge's and the provider's; sel its
+// overrides store, which the provider writes.
 func serve(base context.Context, client *ha.Client, fan *ha.Fanout, ncfg node.Config, in func() plan.Input, sel *selection.Store, log *slog.Logger) (*served, error) {
-	n, err := node.New(base, ncfg)
+	s := &served{base: base, client: client, fan: fan, ncfg: ncfg, in: in, sel: sel, log: log, events: fabricui.NewEvents()}
+	s.prov = exposure.New(s, exposure.Options{Input: in, Selection: sel, Logger: log})
+	if err := s.start(base); err != nil {
+		return nil, err
+	}
+	return s, nil
+}
+
+// start runs a node and its bridge in the cookbook's order (go-fabric
+// docs/guides/embed-in-a-daemon.md §6): node.New and Start, the fabrics
+// and the pairing codes to the log, the bridge on the node, its worker on
+// base, and the bridge on the connection's fan-out, which hands it
+// Connected at once when Home Assistant is up; then the switch points at
+// the node. s.mu is held, or s is not shared yet.
+func (s *served) start(base context.Context) error {
+	n, err := newNode(base, s.ncfg)
 	if err != nil {
-		return nil, fmt.Errorf("node: %w", err)
+		return fmt.Errorf("node: %w", err)
 	}
 	if err := n.Start(base); err != nil {
 		_ = n.Stop(context.WithoutCancel(base))
-		return nil, fmt.Errorf("node start: %w", err)
+		return fmt.Errorf("node start: %w", err)
 	}
-	logFabrics(base, n, log)
-	logPairing(n, log)
+	logFabrics(base, n, s.log)
+	logPairing(n, s.log)
 	// The web UI's event stream observes the node itself (Node.Observe,
-	// go-fabric-ui v0.1.2); events carries the bridge's own.
-	events := fabricui.NewEvents()
-	br := bridge.New(n, client, bridge.Options{
-		Input: in, Logger: log, CameraUpstream: camera.HA(client),
+	// go-fabric-ui v0.1.2); s.events carries the bridge's own.
+	br := bridge.New(n, s.client, bridge.Options{
+		Input: s.in, Logger: s.log, CameraUpstream: camera.HA(s.client),
 		OnChange: func(exposure []string, endpoints bool) {
 			if len(exposure) > 0 {
-				events.Publish(fabricui.Event{Type: fabricui.EventExposureChanged, Data: fabricui.ExposureEvent{Keys: exposure}})
+				s.events.Publish(fabricui.Event{Type: fabricui.EventExposureChanged, Data: fabricui.ExposureEvent{Keys: exposure}})
 			}
 			if endpoints {
-				events.Publish(fabricui.Event{Type: fabricui.EventEndpointsChanged, Data: struct{}{}})
+				s.events.Publish(fabricui.Event{Type: fabricui.EventEndpointsChanged, Data: struct{}{}})
 			}
 		},
 	})
 	ctx, cancel := context.WithCancel(base)
-	prov := exposure.New(br, exposure.Options{Input: in, Selection: sel, Logger: log})
-	s := &served{n: n, br: br, prov: prov, events: events, fan: fan, cancel: cancel, done: make(chan struct{})}
+	done := make(chan struct{})
 	go func() {
-		defer close(s.done)
+		defer close(done)
 		_ = br.Run(ctx)
 	}()
-	fan.Add(br)
-	return s, nil
+	s.n, s.br, s.cancel, s.done, s.lost = n, br, cancel, done, nil
+	s.live.Store(true)
+	s.fan.Add(br)
+	// Set only after the new node started, never on a failed one
+	// (go-fabric-ui fabricui/nodeswitch.go at v0.7.1).
+	if s.sw == nil {
+		s.sw = fabricui.NewNodeSwitch(n)
+	} else {
+		s.sw.Set(n)
+	}
+	return nil
+}
+
+// stopRun takes the bridge off the connection and ends its worker; the
+// node is the caller's to stop or reset. s.mu is held and a run exists.
+func (s *served) stopRun() {
+	s.fan.Remove(s.br)
+	s.cancel()
+	<-s.done
+}
+
+// View implements [exposure.Model]: the current bridge's, a zero view
+// without a run.
+func (s *served) View() bridge.View {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.br == nil {
+		return bridge.View{}
+	}
+	return s.br.View()
+}
+
+// Resync is the web UI's reassemble on the current bridge; without a run
+// there is nothing to rebuild, and the next run applies the selection.
+func (s *served) Resync(ctx context.Context) error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.br == nil {
+		return nil
+	}
+	return s.br.Resync(ctx)
+}
+
+// node is the current node, nil without a run.
+func (s *served) node() *node.Node {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.n
+}
+
+// running reports whether s has a run; it does not wait on an erase.
+func (s *served) running() bool { return s.live.Load() }
+
+// Warnings are the provider's and, while the last erase's come-back
+// failed, node_erase_failed.
+func (s *served) Warnings(ctx context.Context) []fabricui.Warning {
+	out := s.prov.Warnings(ctx)
+	s.mu.RLock()
+	lost, at := s.lost, s.lostAt
+	s.mu.RUnlock()
+	if lost != nil {
+		out = append(out, fabricui.Warning{
+			Code:    exposure.WarningNodeEraseFailed,
+			Message: "the node did not come back after the erase: " + lost.Error() + "; Erase again or restart the daemon",
+			Since:   at,
+		})
+	}
+	return out
+}
+
+// erase is the web UI's Erase (go-fabric-ui contract 0.7.0): the run's
+// bridge leaves the connection, the node is reset (go-fabric
+// Node.FactoryReset at v0.18.0: its fabrics leave through RemoveFabric —
+// only on a started node, so no Stop before it —, it stops, its store and
+// endpoint records are erased), and a new run starts from the same
+// configuration on the erased store. Without a run — a come-back that
+// failed — it only starts. A come-back that fails leaves s without a run
+// and the switch on the stopped node; the daemon keeps running. It runs
+// detached from the request, bounded by eraseTimeout.
+func (s *served) erase(ctx context.Context) error {
+	s.op.Lock()
+	defer s.op.Unlock()
+	if s.closed {
+		return errStopping
+	}
+	ectx, cancel := context.WithTimeout(context.WithoutCancel(ctx), eraseTimeout)
+	defer cancel()
+	var rerr error
+	s.mu.Lock()
+	if s.n != nil {
+		// Logged before the come-back, whose fabrics line (count=0) and
+		// pairing codes it explains.
+		began := time.Now()
+		s.stopRun()
+		removed := 0
+		if infos, err := s.n.FabricInfos(ectx); err == nil {
+			removed = len(infos)
+		}
+		rerr = s.n.FactoryReset(ectx)
+		s.n, s.br, s.cancel, s.done = nil, nil, nil, nil
+		s.live.Store(false)
+		attrs := []any{slog.Int("fabrics_removed", removed), slog.Duration("elapsed", time.Since(began))}
+		if rerr != nil {
+			s.log.Warn("ha2fabric.node_erased", append(attrs, slog.String("error", rerr.Error()))...)
+		} else {
+			s.log.Info("ha2fabric.node_erased", attrs...)
+		}
+	}
+	serr := s.start(s.base) //nolint:contextcheck // the new run lives on the daemon's base, as the first one; the request governs only the reset
+	if serr != nil {
+		s.lost, s.lostAt = serr, time.Now()
+	}
+	s.mu.Unlock()
+	if serr != nil {
+		s.log.Error("ha2fabric.node_lost", slog.String("error", serr.Error()),
+			slog.String("hint", "the node did not come back after the erase; the daemon keeps running: Erase again, or restart the daemon, which comes up on the erased store"))
+	}
+	return errors.Join(rerr, serr)
 }
 
 // logFabrics writes the fabrics the store holds at start — their count,
@@ -120,19 +275,26 @@ func logPairing(n *node.Node, logger *slog.Logger) {
 }
 
 // close takes the bridge off the connection, ends its worker and stops
-// the node; a second call does nothing.
-func (s *served) close(ctx context.Context) (err error) {
-	s.once.Do(func() {
-		s.fan.Remove(s.br)
-		s.cancel()
-		<-s.done
-		err = s.n.Stop(ctx)
-	})
-	return err
+// the node; an erase running meanwhile ends first, and a later one
+// answers errStopping. A second call does nothing.
+func (s *served) close(ctx context.Context) error {
+	s.op.Lock()
+	defer s.op.Unlock()
+	if s.closed {
+		return nil
+	}
+	s.closed = true
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.n == nil {
+		return nil
+	}
+	s.stopRun()
+	return s.n.Stop(ctx)
 }
 
-// member is one registry node: its record and, while it runs, its served
-// node (nil when it failed to start).
+// member is one registry node: its record and its served node (nil when
+// it failed to start; without a run when its erase did not come back).
 type member struct {
 	rec nodes.Node
 	s   *served
@@ -142,8 +304,9 @@ type member struct {
 // 0.6.0, concept U6 C.3): the nodes beside the configured one, each a
 // node of its own with its own store, selection and bridge, all on the
 // daemon's one Home Assistant connection. A registry node starts with
-// the daemon and in Create; Delete stops it, removes its fabrics, its
-// files and its record.
+// the daemon and in Create; Erase resets it and starts it again on its
+// erased store; Delete stops it, removes its fabrics, its files and its
+// record.
 //
 // A registry node's exposure is its selection alone: its rule exposes
 // nothing by itself (no Assist, no lists), so a new node serves nothing
@@ -157,8 +320,8 @@ type fleet struct {
 	reg    *nodes.Registry
 	log    *slog.Logger
 
-	// op serialises Create, Rename, Delete and Close; mu guards the list
-	// List reads.
+	// op serialises Create, Rename, Erase, Delete and Close; mu guards
+	// the list List reads.
 	op      sync.Mutex
 	mu      sync.RWMutex
 	members []*member
@@ -229,11 +392,20 @@ func (f *fleet) entry(m *member) fabricui.NodeEntry {
 			Store: m.rec.StoreFile(),
 		},
 	}
-	if m.s != nil {
-		e.Source = m.s.n
-		e.Exposure = m.s.prov
-		e.Reassemble = m.s.br.Resync
-		e.Events = m.s.events
+	if s := m.s; s != nil {
+		// The switch, the provider and the events are the owner's, the
+		// same values across an erase, so the node keeps its handler
+		// (go-fabric-ui fabricui/registry.go:163-177 at v0.7.1). Without
+		// a run Source is nil: listed not enabled, its routes answer as
+		// without a node.
+		if s.running() {
+			e.Source = s.sw
+		}
+		e.Exposure = s.prov
+		e.Reassemble = s.Resync
+		e.Events = s.events
+		key := m.rec.Key
+		e.Erase = func(ctx context.Context) error { return f.Erase(ctx, key) }
 	}
 	return e
 }
@@ -322,7 +494,9 @@ func (f *fleet) Delete(ctx context.Context, key string) error {
 	}
 	left := 0
 	if s := m.s; s != nil {
-		left = leave(ctx, s.n, f.log.With(slog.String("node", key)))
+		if n := s.node(); n != nil {
+			left = leave(ctx, n, f.log.With(slog.String("node", key)))
+		}
 		if err := s.close(ctx); err != nil {
 			f.log.Warn("ha2fabric.node_stop", slog.String("node", key), slog.String("error", err.Error()))
 		}
@@ -341,6 +515,46 @@ func (f *fleet) Delete(ctx context.Context, key string) error {
 	f.mu.Unlock()
 	f.log.Info("ha2fabric.node_deleted", slog.String("node", key), slog.Int("fabrics_removed", left))
 	return nil
+}
+
+// Erase is a registry node's Erase (fabricui.NodeEntry.Erase): served's
+// erase on the member of key.
+func (f *fleet) Erase(ctx context.Context, key string) error {
+	f.op.Lock()
+	defer f.op.Unlock()
+	if f.closed {
+		return errStopping
+	}
+	f.mu.RLock()
+	m := f.find(key)
+	f.mu.RUnlock()
+	if m == nil {
+		return fmt.Errorf("%w: %s", nodes.ErrNotFound, key)
+	}
+	if m.s == nil {
+		return fmt.Errorf("node %s: not started", key)
+	}
+	return m.s.erase(ctx)
+}
+
+// Warnings are every registry node's findings, each message under its
+// key: a registry node's handler reports the default's Warnings
+// (go-fabric-ui fabricui/handler.go:401 at v0.7.1), so every status page
+// shows them.
+func (f *fleet) Warnings(ctx context.Context) []fabricui.Warning {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	var out []fabricui.Warning
+	for _, m := range f.members {
+		if m.s == nil {
+			continue
+		}
+		for _, w := range m.s.Warnings(ctx) {
+			w.Message = "node " + m.rec.Key + ": " + w.Message
+			out = append(out, w)
+		}
+	}
+	return out
 }
 
 // leave removes every fabric of n and returns how many it removed.
