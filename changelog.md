@@ -6,6 +6,31 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.5.7] - 2026-11-08
+
+Every command of an action plug is bound, over go-hamapping `v0.4.6` (#51).
+
+### Fixed
+
+- Off, Toggle, OffWithEffect, OnWithRecallGlobalScene and OnWithTimedOff on
+  a scene's, script's, automation's or button's plug were answered with
+  success and reached nothing: no service call, no log line, and Toggle
+  stored OnOff true on the endpoint (#51). go-hamapping `v0.4.6` binds the
+  on family to the action (`scene.turn_on`, `script.turn_on`,
+  `automation.trigger`, `button.press`) and discards the off family
+  visibly: the daemon logs `bridge.command_discarded` (`entity`, `cluster`,
+  `command`) at info and counts `discards` on the status page
+  (`docs/operations.md`). The same release binds Toggle on an air
+  conditioner and on media players to `climate.toggle` and
+  `media_player.toggle` (`climate/services.yaml:145-151`,
+  `media_player/services.yaml:17-24` at 2026.10.3; the service table in
+  `internal/adapt`), discards Toggle on a speaker's mute plug, and makes a
+  lock's UnlockWithTimeout an `unlock`.
+
+### Changed
+
+- go-hamapping `v0.4.6`.
+
 ## [0.5.6] - 2026-11-08
 
 Scripts, scenes and automations as plug-in units, over go-hamapping `v0.4.5`.

@@ -40,11 +40,12 @@ func (e *env) staysOff(ep uint16, what string) {
 	}
 }
 
-// TestActionPlugs drives go-hamapping v0.4.5's rows script/plug,
-// scene/plug and automation/plug: each action is an OnOffPlugInUnit
-// whose OnOff reads false, whose On calls the action's service (adapt's
-// services table) and which reads false again after the call and while
-// the entity's own state is on.
+// TestActionPlugs drives go-hamapping's rows script/plug, scene/plug and
+// automation/plug: each action is an OnOffPlugInUnit whose OnOff reads
+// false, whose On and Toggle call the action's service (adapt's services
+// table), whose Off is discarded — answered with success, no call, counted
+// and logged as bridge.command_discarded (#51) — and which reads false
+// again after the call and while the entity's own state is on.
 func TestActionPlugs(t *testing.T) {
 	e := newEnv(t, expose.Rule{Assist: true})
 	e.commission()
@@ -84,6 +85,28 @@ func TestActionPlugs(t *testing.T) {
 				t.Fatalf("%s %+v", c.service, call)
 			}
 			e.staysOff(ep, "after the call")
+
+			// Toggle from off activates as On does.
+			mark := len(e.ha.Calls())
+			if _, err := fabrictest.Invoke(e.ctx, e.pair, client.CommandAt(ep, onoffdef.ClusterID, onoffdef.CmdToggle), nil); err != nil {
+				t.Fatal(err)
+			}
+			if call := e.nextCall(mark, c.entity); call.Service != c.service {
+				t.Fatalf("Toggle: %+v", call)
+			}
+			e.staysOff(ep, "after Toggle")
+
+			// Off is discarded: success, no call, counted.
+			before := e.br.Status().Discards
+			mark = len(e.ha.Calls())
+			if _, err := fabrictest.Invoke(e.ctx, e.pair, client.CommandAt(ep, onoffdef.ClusterID, onoffdef.CmdOff), nil); err != nil {
+				t.Fatal(err)
+			}
+			e.noCall(mark, c.entity)
+			if got := e.br.Status().Discards; got != before+1 {
+				t.Fatalf("discards %d, want %d", got, before+1)
+			}
+			e.staysOff(ep, "after Off")
 
 			// A state of on (a script running, an automation enabled)
 			// leaves the plug off.

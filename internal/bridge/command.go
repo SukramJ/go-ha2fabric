@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/SukramJ/go-hamapping"
 	"github.com/SukramJ/go-hamqtt/model"
 
 	"github.com/SukramJ/go-ha2fabric/internal/adapt"
@@ -28,6 +29,16 @@ func (b *Bridge) onCommand(c model.Command) {
 		b.log.Error("bridge.command_dropped", slog.String("entity", c.Entity.Key()), slog.String("hint", "the command queue is full"))
 		b.setStatus(func(s *Status) { s.CommandErrs++; s.LastCommand = "queue full" })
 	}
+}
+
+// onDiscard is the plans' OnDiscard: a controller's command the row
+// answered with the cluster's success and the entity has no action for
+// (an Off on a scene's plug, a Toggle of a mute). It is logged, so a
+// controller's "done" that changed nothing can be traced (#51); nothing
+// is called.
+func (b *Bridge) onDiscard(d hamapping.Discard) {
+	b.log.Info("bridge.command_discarded", slog.String("entity", d.Entity.Key()), slog.String("cluster", d.Cluster), slog.String("command", d.Command))
+	b.setStatus(func(s *Status) { s.Discards++ })
 }
 
 // commandLoop turns each queued command into its call_service, in order.

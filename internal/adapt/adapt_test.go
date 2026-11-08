@@ -262,6 +262,8 @@ func TestService(t *testing.T) {
 		{cmd("climate.a", "temperature_high", "25"), climate, ha.ServiceCall{Domain: "climate", Service: "set_temperature", EntityID: "climate.a", Data: map[string]any{"target_temp_high": 25.0, "target_temp_low": 19.0}}},
 		{cmd("climate.a", hamapping.MethodMode, "dry"), nil, ha.ServiceCall{Domain: "climate", Service: "set_hvac_mode", EntityID: "climate.a", Data: map[string]any{"hvac_mode": "dry"}}},
 		{cmd("climate.a", hamapping.MethodFanMode, "medium"), nil, ha.ServiceCall{Domain: "climate", Service: "set_fan_mode", EntityID: "climate.a", Data: map[string]any{"fan_mode": "medium"}}},
+		{cmd("climate.a", hamapping.MethodToggle, "TOGGLE"), nil, ha.ServiceCall{Domain: "climate", Service: "toggle", EntityID: "climate.a"}},
+		{cmd("media_player.a", hamapping.MethodToggle, "TOGGLE"), nil, ha.ServiceCall{Domain: "media_player", Service: "toggle", EntityID: "media_player.a"}},
 		{cmd("climate.a", hamapping.MethodTurnOn, "ON"), nil, ha.ServiceCall{Domain: "climate", Service: "turn_on", EntityID: "climate.a"}},
 		{cmd("climate.a", hamapping.MethodTurnOff, "OFF"), nil, ha.ServiceCall{Domain: "climate", Service: "turn_off", EntityID: "climate.a"}},
 		{cmd("button.a", hamapping.MethodPress, "PRESS"), nil, ha.ServiceCall{Domain: "button", Service: "press", EntityID: "button.a"}},
