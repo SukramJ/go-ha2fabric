@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.5.5] - 2026-11-08
+
+Erase for the configured node and the registry nodes, over go-fabric-ui `v0.7.1` (#45).
+
 ### Added
 
 - Erase (#45, go-fabric-ui contract 0.7.0): `POST /api/v1/node/maintenance/erase`
