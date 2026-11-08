@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.5.6] - 2026-11-08
+
+Scripts, scenes and automations as plug-in units, over go-hamapping `v0.4.5`.
+
 ### Added
 
 - Scripts, scenes and automations as plugs (the web UI finding of

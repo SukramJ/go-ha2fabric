@@ -5,7 +5,7 @@ tracks the project release; the project's
 [changelog.md](https://github.com/SukramJ/go-ha2fabric/blob/main/changelog.md)
 has the details.
 
-## Unreleased
+## 0.5.6
 
 - Scripts, scenes and automations appear as plugs that always read off;
   switching one on in a controller runs the script, activates the scene
