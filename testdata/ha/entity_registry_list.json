@@ -1,5 +1,5 @@
 {
- "_mirrors": "homeassistant/components/config/entity_registry.py:39-64 (config/entity_registry/list) and homeassistant/helpers/entity_registry.py:369-403 (RegistryEntry.as_partial_dict) @2026.10.3",
+ "_mirrors": "homeassistant/components/config/entity_registry.py:39-64 (config/entity_registry/list) and homeassistant/helpers/entity_registry.py:369-403 (RegistryEntry.as_partial_dict); the C2 actions' unique_id per script/__init__.py:567-568 (the script's key), homeassistant/scene.py:354-358 (the scene's id) and automation/__init__.py:515 (the automation's id) @2026.10.3",
  "result": [
   {
    "area_id": null,
@@ -802,6 +802,90 @@
    "platform": "generic",
    "translation_key": null,
    "unique_id": "generic-doorbell"
+  },
+  {
+   "area_id": null,
+   "categories": {},
+   "config_entry_id": null,
+   "config_subentry_id": null,
+   "created_at": 1761350400.0,
+   "device_id": null,
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "script.markise_einfahren",
+   "has_entity_name": false,
+   "hidden_by": null,
+   "icon": null,
+   "id": "reg-script-markise-einfahren",
+   "labels": [],
+   "modified_at": 1761350400.0,
+   "name": null,
+   "next_name_part": null,
+   "options": {
+    "conversation": {
+     "should_expose": true
+    }
+   },
+   "original_name": "Markise einfahren",
+   "platform": "script",
+   "translation_key": null,
+   "unique_id": "markise_einfahren"
+  },
+  {
+   "area_id": null,
+   "categories": {},
+   "config_entry_id": null,
+   "config_subentry_id": null,
+   "created_at": 1761350400.0,
+   "device_id": null,
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "scene.abend",
+   "has_entity_name": false,
+   "hidden_by": null,
+   "icon": null,
+   "id": "reg-scene-abend",
+   "labels": [],
+   "modified_at": 1761350400.0,
+   "name": null,
+   "next_name_part": null,
+   "options": {
+    "conversation": {
+     "should_expose": true
+    }
+   },
+   "original_name": "Abend",
+   "platform": "homeassistant",
+   "translation_key": null,
+   "unique_id": "1761334200000"
+  },
+  {
+   "area_id": null,
+   "categories": {},
+   "config_entry_id": null,
+   "config_subentry_id": null,
+   "created_at": 1761350400.0,
+   "device_id": null,
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "automation.nachtlicht",
+   "has_entity_name": false,
+   "hidden_by": null,
+   "icon": null,
+   "id": "reg-automation-nachtlicht",
+   "labels": [],
+   "modified_at": 1761350400.0,
+   "name": null,
+   "next_name_part": null,
+   "options": {
+    "conversation": {
+     "should_expose": true
+    }
+   },
+   "original_name": "Nachtlicht",
+   "platform": "automation",
+   "translation_key": null,
+   "unique_id": "1761334200001"
   }
  ]
 }
