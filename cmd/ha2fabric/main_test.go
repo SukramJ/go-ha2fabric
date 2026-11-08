@@ -87,7 +87,11 @@ func TestRun(t *testing.T) {
 	var logs safeBuffer
 	done := make(chan int, 1)
 	go func() { done <- run(ctx, nil, env, io.Discard, &logs) }()
-	deadline := time.Now().Add(20 * time.Second)
+	// The web listener comes up after the node's start, which the Windows
+	// runner took close to 30 s for in CI (PR #49: ha2fabric.start at
+	// 09:34:09, the first device build at 09:34:37); the deadline is the
+	// slowest runner's, not the fast path's, and ends early on success.
+	deadline := time.Now().Add(90 * time.Second)
 	for {
 		// The selection lists the candidates once Home Assistant is read.
 		res, err := http.Get("http://" + webAddr + "/api/v1/node/exposure") //nolint:noctx // the test's own daemon

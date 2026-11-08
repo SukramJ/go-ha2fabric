@@ -79,6 +79,15 @@
    },
    "camera.doorbell_still": {
     "conversation": true
+   },
+   "script.markise_einfahren": {
+    "conversation": true
+   },
+   "scene.abend": {
+    "conversation": true
+   },
+   "automation.nachtlicht": {
+    "conversation": true
    }
   }
  }

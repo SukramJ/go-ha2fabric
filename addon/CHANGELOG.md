@@ -5,6 +5,12 @@ tracks the project release; the project's
 [changelog.md](https://github.com/SukramJ/go-ha2fabric/blob/main/changelog.md)
 has the details.
 
+## 0.5.6
+
+- Scripts, scenes and automations appear as plugs that always read off;
+  switching one on in a controller runs the script, activates the scene
+  or triggers the automation.
+
 ## 0.5.5
 
 - Erase in the web UI: a node leaves its controllers, erases its store and

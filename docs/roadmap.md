@@ -331,10 +331,24 @@ interface.
   question for the brief (**unverified**). go-hamapping's `CONCEPT.md`
   ("Consumers") changes with it.
 
+## C — Actions as plug-in units (2026-11-08)
+
+Owner decision of 2026-11-08 (go-hamapping brief C2).
+
+- [x] **`script`, `scene`, `automation`** → OnOffPlugInUnit that always
+  reads off (go-hamapping v0.4.5, rows `script/plug`, `scene/plug`,
+  `automation/plug`; go-ha2fabric 0.5.6). On calls `script.turn_on`,
+  `scene.turn_on` or `automation.trigger` (`script/services.yaml:4-8`,
+  `scene/services.yaml:3-14`, `automation/services.yaml:22-30` at
+  2026.10.3); `automation` joins `script` and `scene`, which leave "Not planned".
+  Parity with matter-hub as go-hamapping's `docs/by_design.md` cites it
+  (`legacy/script/index.ts:8-14`, `legacy/scene/index.ts:9-19`,
+  `legacy/automation/index.ts:8-14` at `664575a`).
+
 ## Not planned, with the reason
 
-- `alarm_control_panel`, `siren`, `humidifier`, `lawn_mower`, `scene`,
-  `script`, `device_tracker`, `update`, `image`, `text`, `number`: no
+- `alarm_control_panel`, `siren`, `humidifier`, `lawn_mower`,
+  `device_tracker`, `update`, `image`, `text`, `number`: no
   Matter device type in go-fabric's kit (`device/*_gen.go` surveyed
   2026-10-31). matter-hub may expose some as OnOff helpers; whether a
   consumer wants that is a product decision, not a gap.

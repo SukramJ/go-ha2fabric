@@ -69,6 +69,14 @@ var services = map[string]map[string]string{
 		hamapping.MethodTurnOn: "turn_on", hamapping.MethodTurnOff: "turn_off",
 		hamapping.MethodMediaPlay: "media_play", hamapping.MethodMediaPause: "media_pause", hamapping.MethodMediaStop: "media_stop",
 	},
+	// script/services.yaml:4-8 turn_on, no fields; row script/plug.
+	"script": {hamapping.MethodTurnOn: "turn_on"},
+	// scene/services.yaml:3-14 turn_on, optional transition (not sent);
+	// row scene/plug.
+	"scene": {hamapping.MethodTurnOn: "turn_on"},
+	// automation/services.yaml:22-30 trigger, skip_condition default true
+	// (not sent); row automation/plug.
+	"automation": {hamapping.MethodTrigger: "trigger"},
 }
 
 // Service is the call_service of a controller's command. cur is the

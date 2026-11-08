@@ -105,7 +105,8 @@ func (d *daemon) want(method, path, body string, code int) []byte {
 
 func (d *daemon) eventually(what string, cond func() bool) {
 	d.t.Helper()
-	deadline := time.Now().Add(20 * time.Second)
+	// 90 s as TestRun's: the slowest runner's node start (main_test.go).
+	deadline := time.Now().Add(90 * time.Second)
 	for !cond() {
 		if time.Now().After(deadline) {
 			d.t.Fatalf("never: %s\n%s", what, d.logs.String())

@@ -185,6 +185,14 @@ one to an entity or a device (`entity_registry_updated`,
 debounce. The order: disabled, hidden, the web UI's override, `EXCLUDE`
 and `EXCLUDE_LABELS`, `INCLUDE` and `INCLUDE_LABELS`, Assist.
 
+## Scripts, scenes and automations
+
+A served `script`, `scene` or `automation` appears as a plug
+(OnOffPlugInUnit) that always reads off; switching it on runs it —
+`script.turn_on`, `scene.turn_on` or `automation.trigger`, without data
+(go-hamapping `docs/by_design.md`, "A script, scene or automation is a
+plug-in unit that always reads off").
+
 ## Locks with a code
 
 The daemon calls `lock.lock`, `lock.unlock` and `lock.open` without a
