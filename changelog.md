@@ -6,6 +6,28 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.5.8] - 2026-11-08
+
+The lock relocks after UnlockWithTimeout; Toggle on a mute plug acts, over
+go-hamapping `v0.4.7`.
+
+### Fixed
+
+- A lock's UnlockWithTimeout relocks when the timeout is up: go-hamapping
+  `v0.4.7` makes the lock row go-fabric's DoorLock server's actuator, so
+  the server keeps the auto-relock timer and calls `lock.lock` through the
+  row when it fires; `AutoRelockTime` works the same way. The endpoint's
+  LockState is the entity's state — null until known, NotFullyLocked for
+  `jammed` — and a controller's command changes it only once Home
+  Assistant reports it (go-hamapping #23).
+- Toggle on a speaker's mute plug calls `volume_mute` with the inverse of
+  what the controller sees instead of being discarded (go-hamapping #24);
+  `bridge.command_discarded` is left to the action plugs' off family.
+
+### Changed
+
+- go-hamapping `v0.4.7`.
+
 ## [0.5.7] - 2026-11-08
 
 Every command of an action plug is bound, over go-hamapping `v0.4.6` (#51).
