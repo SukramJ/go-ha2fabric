@@ -6,6 +6,22 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Erase (#45, go-fabric-ui contract 0.7.0): `POST /api/v1/node/maintenance/erase`
+  and `/api/v1/nodes/<key>/maintenance/erase` (an administrator, body
+  `{"confirm":"erase-node"}`), the Fabrics page's **Erase**, for the
+  configured node and every registry node. go-fabric's `FactoryReset`
+  removes the node's fabrics (the controllers lose it), erases its store
+  and its endpoint records and stops it; the node comes back at once on
+  the erased store with its commissioning window open, the same pairing
+  codes and its selection, its entities under new endpoint numbers. The
+  web UI follows the new node through go-fabric-ui's `NodeSwitch`. Logged
+  `ha2fabric.node_erased`; a node that does not come back is logged
+  `ha2fabric.node_lost`, the daemon keeps running, and the status pages
+  show `node_erase_failed` until the next Erase or a restart brings it
+  back.
+
 ### Changed
 
 - go-fabric-ui `v0.7.1` (was `v0.6.1`). From 0.7.0: a Re-announce

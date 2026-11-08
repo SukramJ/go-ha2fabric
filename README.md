@@ -158,7 +158,7 @@ environment only and never logged or stored.
 | `WEB_ADMIN` | `false` | Stand-alone: let the web UI write (selection, window, fabrics) and show the pairing code, with the UI's per-process token. The add-on ignores it: the Ingress proxy is the administrator. |
 
 [`docs/operations.md`](docs/operations.md) covers the files, ports, mDNS,
-the token's role, logs, health, pairing and a factory reset.
+the token's role, logs, health, pairing, Erase and a factory reset.
 
 ## Development
 

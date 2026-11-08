@@ -145,7 +145,9 @@ The lines to know:
 | Message | Level | Meaning |
 | --- | --- | --- |
 | `ha2fabric.fabrics` | info | The fabrics the store holds, at start: `count`, and per fabric its index, vendor id and label. `count=0` means no controller has paired — or the store was lost; see Files. |
-| `ha2fabric.pairing` | info | The manual code and the QR payload, at start. |
+| `ha2fabric.pairing` | info | The manual code and the QR payload, at start and after an erase. |
+| `ha2fabric.node_erased` | info | A node was erased in the web UI (`node=<key>` for a registry node): `fabrics_removed`, `elapsed`; the node comes back next, with `ha2fabric.fabrics count=0` and `ha2fabric.pairing`. At warn with `error` when the reset failed part-way. |
+| `ha2fabric.node_lost` | error | The node did not come back after an erase (`node=<key>` for a registry node). The daemon keeps running; the status page shows `node_erase_failed`. See Erase and factory reset. |
 | `ha.connected` / `ha.disconnected` | info / warn | The Home Assistant connection. |
 | `bridge.synced` | info | A sync: candidates, devices, endpoints added, replaced, removed. |
 | `bridge.upstream_unusable` | warn | Home Assistant is away; every endpoint is unreachable. |
@@ -260,7 +262,7 @@ Limits:
 
 go-fabric-ui's interface (`v0.1.2`) at `WEB_LISTEN`, in the add-on through
 Ingress. Who may write — change the selection, open a commissioning window,
-remove a fabric — and read the pairing code: in the add-on the Ingress
+remove a fabric, erase a node — and read the pairing code: in the add-on the Ingress
 proxy (`172.30.32.2`), which has authenticated the Home Assistant user;
 stand-alone nobody, unless `WEB_ADMIN=true`, which selects the UI's token
 mode (every write carries a per-process token the page reads from
@@ -345,6 +347,11 @@ for all its fabrics, so a different scope is a different node.
   controllers lose it), stops, and its store, its selection and its
   record are removed (`ha2fabric.node_deleted`). The configured node
   cannot be deleted (409 `node_is_default`).
+- **Erase** starts the node over for the controllers and keeps it: as
+  for the configured node (Erase and factory reset), its fabrics, its
+  store and its endpoint records are erased, and its record, its
+  selection and its pairing codes stay. Delete, by contrast, ends the
+  node and removes its files.
 - **Restart**: every registry node starts with the daemon. One that
   cannot (its port taken) is logged (`ha2fabric.node_start`) and listed
   as not enabled; deleting it removes its files.
@@ -357,9 +364,27 @@ registry change re-plans every node. Each status page shows its node's
 configuration block — where its values come from, its address,
 discriminator, ids and store — never the passcode.
 
-## Factory reset
+## Erase and factory reset
 
-Stop the daemon and delete the store file (and a `-journal` next to it);
+**Erase**, on a node's Fabrics page (an administrator; two
+confirmations), starts the node over. It erases the fabrics — every
+paired controller loses the node, through the Leave event —, the store
+(ACL, group keys, resumption records, subscriptions, settings and
+counters, the pinned UniqueID; a fresh one is pinned) and the endpoint
+records, so the entities come back under new endpoint numbers at the next
+sync. It keeps the configuration, `selection.json` (a registry node's
+`selection-<key>.json`), a registry node's record, the passcode and the
+discriminator, so the pairing codes stay the same. The node comes back
+at once, with its commissioning window open: the log says
+`ha2fabric.node_erased`, then `ha2fabric.fabrics count=0` and
+`ha2fabric.pairing`. The controllers keep a dead bridge until it is
+removed there. A node that does not come back (`ha2fabric.node_lost`)
+leaves the daemon running, and every node's status page shows
+`node_erase_failed`: Erase again, or restart the daemon, which comes up
+on the erased store. A registry node in that state is listed as not
+enabled; its Delete works.
+
+The manual way: stop the daemon and delete the store file (and a `-journal` next to it);
 for every node, delete the `ha2fabric-*.db` and `selection-*.json` files
 and `nodes.json` too, or delete one node in the web UI.
 The next start pairs from nothing; the controllers keep a dead bridge until
