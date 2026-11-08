@@ -95,6 +95,10 @@ func TestEntitiesMeetTheirRows(t *testing.T) {
 		}), "water_heater/thermostat", eligibility.StatePartial},
 		{"speaker", state("media_player.s", "playing", map[string]any{"volume_level": 0.5, "is_volume_muted": false, "device_class": "speaker", "supported_features": 396.0}), "media_player/speaker", eligibility.StateMappable},
 		{"tv", state("media_player.t", "on", map[string]any{"volume_level": 0.2, "is_volume_muted": false, "device_class": "tv", "supported_features": 21897.0}), "media_player/video_player", eligibility.StatePartial},
+		// The rows of go-hamapping v0.4.5 (C2): actions as plug-in units.
+		{"script", state("script.s", "off", map[string]any{}), "script/plug", eligibility.StateMappable},
+		{"scene", state("scene.s", "2026-11-07T19:30:00.000000+00:00", map[string]any{}), "scene/plug", eligibility.StateMappable},
+		{"automation", state("automation.s", "on", map[string]any{}), "automation/plug", eligibility.StateMappable},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			e := entity(c.st.EntityID, c.st)
@@ -261,6 +265,9 @@ func TestService(t *testing.T) {
 		{cmd("climate.a", hamapping.MethodTurnOn, "ON"), nil, ha.ServiceCall{Domain: "climate", Service: "turn_on", EntityID: "climate.a"}},
 		{cmd("climate.a", hamapping.MethodTurnOff, "OFF"), nil, ha.ServiceCall{Domain: "climate", Service: "turn_off", EntityID: "climate.a"}},
 		{cmd("button.a", hamapping.MethodPress, "PRESS"), nil, ha.ServiceCall{Domain: "button", Service: "press", EntityID: "button.a"}},
+		{cmd("script.a", hamapping.MethodTurnOn, "RUN"), nil, ha.ServiceCall{Domain: "script", Service: "turn_on", EntityID: "script.a"}},
+		{cmd("scene.a", hamapping.MethodTurnOn, "ACTIVATE"), nil, ha.ServiceCall{Domain: "scene", Service: "turn_on", EntityID: "scene.a"}},
+		{cmd("automation.a", hamapping.MethodTrigger, "TRIGGER"), nil, ha.ServiceCall{Domain: "automation", Service: "trigger", EntityID: "automation.a"}},
 		{cmd("select.a", hamapping.MethodSelectOption, "Movie night"), nil, ha.ServiceCall{Domain: "select", Service: "select_option", EntityID: "select.a", Data: map[string]any{"option": "Movie night"}}},
 		{cmd("vacuum.a", hamapping.MethodRunMode, "1"), nil, ha.ServiceCall{Domain: "vacuum", Service: "start", EntityID: "vacuum.a"}},
 		{cmd("vacuum.a", hamapping.MethodRunMode, "0"), vacuumHome, ha.ServiceCall{Domain: "vacuum", Service: "return_to_base", EntityID: "vacuum.a"}},
