@@ -20,7 +20,7 @@ Twin of [`go-hamapping`](https://github.com/SukramJ/go-hamapping); both are buil
 setup (pure Go, `CGO_ENABLED=0`, Apache-2.0 with a contributor licence
 agreement, the same guards in CI).
 
-> **Status: 0.5.4.** The daemon and its Home Assistant add-on run, with
+> **Status: 0.5.5.** The daemon and its Home Assistant add-on run, with
 > cameras as an opt-in (brief R6); a real
 > pairing with Apple Home is the owner's manual step before the release is
 > announced. The design is in [`CONCEPT.md`](CONCEPT.md).
@@ -158,7 +158,7 @@ environment only and never logged or stored.
 | `WEB_ADMIN` | `false` | Stand-alone: let the web UI write (selection, window, fabrics) and show the pairing code, with the UI's per-process token. The add-on ignores it: the Ingress proxy is the administrator. |
 
 [`docs/operations.md`](docs/operations.md) covers the files, ports, mDNS,
-the token's role, logs, health, pairing and a factory reset.
+the token's role, logs, health, pairing, Erase and a factory reset.
 
 ## Development
 

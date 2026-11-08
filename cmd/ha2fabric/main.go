@@ -110,7 +110,7 @@ func run(ctx context.Context, args []string, env config.Env, stdout, stderr io.W
 	webErr := make(chan error, 1)
 	if cfg.WebListen != "" {
 		ws := web.New(web.Options{Listen: cfg.WebListen, Allow: cfg.WebAllow, Logger: logger, UI: fabricui.Options{
-			Node: def.n, Exposure: def.prov, Admin: admin(cfg), Reassemble: def.br.Resync, Events: def.events, Warnings: def.prov.Warnings, Logger: logger,
+			Node: def.sw, Exposure: def.prov, Admin: admin(cfg), Reassemble: def.Resync, Events: def.events, Warnings: warnings(def, fl), Erase: def.erase, Logger: logger,
 			Operations: web.NewOperations(ring, version.Version, started),
 			Registry:   fl, NodeConfig: nodeConfig(cfg),
 		}})
@@ -135,6 +135,16 @@ func run(ctx context.Context, args []string, env config.Env, stdout, stderr io.W
 		logger.Warn("ha2fabric.node_stop", slog.String("error", err.Error()))
 	}
 	return code
+}
+
+// warnings is the web UI's Options.Warnings: the configured node's
+// findings and the registry nodes', which every node's status page
+// reports (a registry node's handler inherits the default's, go-fabric-ui
+// fabricui/handler.go:401 at v0.7.1).
+func warnings(def *served, fl *fleet) func(context.Context) []fabricui.Warning {
+	return func(ctx context.Context) []fabricui.Warning {
+		return append(def.Warnings(ctx), fl.Warnings(ctx)...)
+	}
 }
 
 // nodeConfig is the configured node's configuration block on its status

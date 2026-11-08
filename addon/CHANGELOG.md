@@ -5,6 +5,12 @@ tracks the project release; the project's
 [changelog.md](https://github.com/SukramJ/go-ha2fabric/blob/main/changelog.md)
 has the details.
 
+## 0.5.5
+
+- Erase in the web UI: a node leaves its controllers, erases its store and
+  comes back at once with its commissioning window open — for the
+  configured node and every node created in the page.
+
 ## 0.5.4
 
 - A cover with open and close only (a template cover with scenes) can be

@@ -326,6 +326,11 @@ const WarningLabelUnresolved = "label_unresolved"
 // selection.corrupt).
 const WarningSelectionCorrupt = "selection_corrupt"
 
+// WarningNodeEraseFailed is the web UI's code of a node that did not
+// come back after an erase (the log's ha2fabric.node_lost); the daemon
+// sets it, the provider never does.
+const WarningNodeEraseFailed = "node_erase_failed"
+
 // Warnings are the configuration's half-valid parts for the web UI's
 // status (fabricui.Options.Warnings): the label values of the last sync
 // that name no Home Assistant label, each since its first sighting in an

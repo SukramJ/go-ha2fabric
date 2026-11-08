@@ -6,6 +6,36 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.5.5] - 2026-11-08
+
+Erase for the configured node and the registry nodes, over go-fabric-ui `v0.7.1` (#45).
+
+### Added
+
+- Erase (#45, go-fabric-ui contract 0.7.0): `POST /api/v1/node/maintenance/erase`
+  and `/api/v1/nodes/<key>/maintenance/erase` (an administrator, body
+  `{"confirm":"erase-node"}`), the Fabrics page's **Erase**, for the
+  configured node and every registry node. go-fabric's `FactoryReset`
+  removes the node's fabrics (the controllers lose it), erases its store
+  and its endpoint records and stops it; the node comes back at once on
+  the erased store with its commissioning window open, the same pairing
+  codes and its selection, its entities under new endpoint numbers. The
+  web UI follows the new node through go-fabric-ui's `NodeSwitch`. Logged
+  `ha2fabric.node_erased`; a node that does not come back is logged
+  `ha2fabric.node_lost`, the daemon keeps running, and the status pages
+  show `node_erase_failed` until the next Erase or a restart brings it
+  back.
+
+### Changed
+
+- go-fabric-ui `v0.7.1` (was `v0.6.1`). From 0.7.0: a Re-announce
+  button on the diagnostics page, `attestation_error` and `boot_reason`
+  on the status page, the sessions' parameters on the diagnostics page,
+  and the node stream's `fabric_updated`, `commissioning_complete` and
+  `cluster_event`. From 0.7.1: `fabricui.NodeSwitch`, which the erase
+  uses; its Commission-page fix (Bluetooth LE) is the controller
+  family's, which this daemon does not serve.
+
 ## [0.5.4] - 2026-11-07
 
 Covers with OPEN and CLOSE only, over go-hamapping `v0.4.4` (#40, #42).
