@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -17,6 +18,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/SukramJ/go-fabric/node"
 
 	"github.com/SukramJ/go-ha2fabric/internal/config"
 	"github.com/SukramJ/go-ha2fabric/internal/ha/hatest"
@@ -250,6 +253,194 @@ func TestNodeRegistry(t *testing.T) {
 	if !strings.Contains(d.logs.String(), "ha2fabric.node_deleted") {
 		t.Fatal("no node_deleted line")
 	}
+}
+
+// nodeStatus is the part of GET /api/v1/node/status the erase tests read.
+type nodeStatus struct {
+	Enabled     bool `json:"enabled"`
+	Erase       bool `json:"erase"`
+	FabricCount int  `json:"fabric_count"`
+	Warnings    []struct {
+		Code    string `json:"code"`
+		Message string `json:"message"`
+	} `json:"warnings"`
+}
+
+func (d *daemon) status(path string) nodeStatus {
+	d.t.Helper()
+	var st nodeStatus
+	if err := json.Unmarshal(d.want(http.MethodGet, path, "", http.StatusOK), &st); err != nil {
+		d.t.Fatal(err)
+	}
+	return st
+}
+
+// warned reports whether st holds code with prefix at the start of its
+// message.
+func (st *nodeStatus) warned(code, prefix string) bool {
+	for _, w := range st.Warnings {
+		if w.Code == code && strings.HasPrefix(w.Message, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+// endpointIDs are the bridged endpoints of GET <path>/endpoints.
+func (d *daemon) endpointIDs(path string) []int {
+	d.t.Helper()
+	var l struct {
+		Endpoints []struct {
+			EndpointID int `json:"endpoint_id"`
+		} `json:"endpoints"`
+	}
+	code, b := d.call(http.MethodGet, path+"/endpoints", "")
+	if code != http.StatusOK || json.Unmarshal(b, &l) != nil {
+		return nil
+	}
+	ids := make([]int, 0, len(l.Endpoints))
+	for _, e := range l.Endpoints {
+		ids = append(ids, e.EndpointID)
+	}
+	return ids
+}
+
+func eraseEnv(t *testing.T) (env config.Env, web string) {
+	t.Helper()
+	srv := hatest.New(t)
+	dir := t.TempDir()
+	web = freePort(t, "tcp")
+	env = config.MapEnv(map[string]string{
+		"HA_URL": srv.URL(), "HA_TOKEN": hatest.Token, "STORE_PATH": filepath.Join(dir, "ha2fabric.db"),
+		"LISTEN": freePort(t, "udp"), "WEB_LISTEN": web, "WEB_ADMIN": "true", "NODE_LIMIT": "1", "LOG_LEVEL": "debug",
+	})
+	return env, web
+}
+
+const eraseBody = `{"confirm":"erase-node"}`
+
+// TestNodeErase erases the configured node and a registry node through
+// the web UI (go-fabric-ui contract 0.7.0, brief E1): the node comes back
+// on its erased store, the status reads the new one through the switch,
+// the fixtures' endpoints come back, and Delete works after an erase.
+func TestNodeErase(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("runs the nodes on the host's network: linux only")
+	}
+	env, web := eraseEnv(t)
+	d := startDaemon(t, env, web)
+	var before []int
+	d.eventually("the configured node serves the fixtures", func() bool {
+		before = d.endpointIDs("/api/v1/node")
+		return len(before) > 0
+	})
+	if !d.status("/api/v1/node/status").Erase {
+		t.Fatal("the status does not offer Erase")
+	}
+
+	d.want(http.MethodPost, "/api/v1/node/maintenance/erase", "", http.StatusBadRequest)
+	d.want(http.MethodPost, "/api/v1/node/maintenance/erase", eraseBody, http.StatusNoContent)
+	d.eventually("the erased node answers", func() bool {
+		code, b := d.call(http.MethodGet, "/api/v1/node/status", "")
+		var st nodeStatus
+		return code == http.StatusOK && json.Unmarshal(b, &st) == nil && st.Enabled && st.Erase && st.FabricCount == 0
+	})
+	var after []int
+	d.eventually("the fixtures' endpoints come back", func() bool {
+		after = d.endpointIDs("/api/v1/node")
+		return len(after) == len(before)
+	})
+	// The measurement of brief E1 §4.1 on a store file: reported, not a gate.
+	t.Logf("configured node's endpoints across the erase: before %v, after %v", before, after)
+	logs := d.logs.String()
+	if !strings.Contains(logs, "ha2fabric.node_erased") || strings.Count(logs, "msg=ha2fabric.pairing ") < 2 {
+		t.Fatalf("no node_erased line or no second pairing line\n%s", logs)
+	}
+	if strings.Contains(logs, hatest.Token) {
+		t.Fatal("the log carries the token")
+	}
+
+	d.want(http.MethodPost, "/api/v1/nodes", `{"label":"Alexa"}`, http.StatusCreated)
+	d.want(http.MethodPost, "/api/v1/nodes/alexa/maintenance/erase", eraseBody, http.StatusNoContent)
+	d.eventually("the erased registry node answers", func() bool {
+		code, b := d.call(http.MethodGet, "/api/v1/nodes/alexa/status", "")
+		var st nodeStatus
+		return code == http.StatusOK && json.Unmarshal(b, &st) == nil && st.Enabled && st.FabricCount == 0
+	})
+	if !strings.Contains(d.logs.String(), "node=alexa") || strings.Count(d.logs.String(), "ha2fabric.node_erased") < 2 {
+		t.Fatalf("no node_erased line of the registry node\n%s", d.logs.String())
+	}
+	d.want(http.MethodDelete, "/api/v1/nodes/alexa", "", http.StatusNoContent)
+	d.stop()
+}
+
+// TestNodeEraseFailed is a come-back that fails (brief E1 §3, decided
+// 2026-11-08): the erase answers 500, the daemon keeps running, every
+// status page shows node_erase_failed, and the next Erase starts the node
+// again. A registry node in that state is listed not enabled and can be
+// deleted.
+func TestNodeEraseFailed(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("runs the nodes on the host's network: linux only")
+	}
+	env, web := eraseEnv(t)
+	d := startDaemon(t, env, web)
+	sentinel := errors.New("the sentinel's come-back fails")
+	t.Cleanup(func() { newNode = node.New })
+	fail := func() { newNode = func(context.Context, node.Config) (*node.Node, error) { return nil, sentinel } }
+
+	fail()
+	d.want(http.MethodPost, "/api/v1/node/maintenance/erase", eraseBody, http.StatusInternalServerError)
+	// The switch keeps the stopped node (go-fabric-ui fabricui/nodeswitch.go
+	// at v0.7.1: Set panics on nil), so the status is the stopped node's.
+	st := d.status("/api/v1/node/status")
+	if !st.warned("node_erase_failed", "the node did not come back after the erase: node: "+sentinel.Error()) {
+		t.Fatalf("no node_erase_failed: %+v", st)
+	}
+	if !st.Enabled {
+		t.Fatalf("a switch on the stopped node lists the node not enabled: %+v", st)
+	}
+	code, b := d.call(http.MethodGet, "/api/v1/node/fabrics", "")
+	t.Logf("GET /node/fabrics after a failed come-back: %d %s", code, b)
+	if code != http.StatusInternalServerError {
+		t.Fatalf("fabrics of the stopped node: %d %s", code, b)
+	}
+	if logs := d.logs.String(); !strings.Contains(logs, "ha2fabric.node_lost") || !strings.Contains(logs, sentinel.Error()) {
+		t.Fatalf("no node_lost line\n%s", logs)
+	}
+	select {
+	case c := <-d.done:
+		t.Fatalf("the daemon exited %d", c)
+	default:
+	}
+
+	newNode = node.New
+	d.want(http.MethodPost, "/api/v1/node/maintenance/erase", eraseBody, http.StatusNoContent)
+	d.eventually("the retried node answers", func() bool {
+		code, b := d.call(http.MethodGet, "/api/v1/node/status", "")
+		var st nodeStatus
+		return code == http.StatusOK && json.Unmarshal(b, &st) == nil && st.Enabled && st.FabricCount == 0 && !st.warned("node_erase_failed", "")
+	})
+	d.eventually("the retried node serves the fixtures", func() bool { return len(d.endpointIDs("/api/v1/node")) > 0 })
+
+	d.want(http.MethodPost, "/api/v1/nodes", `{"label":"Alexa"}`, http.StatusCreated)
+	fail()
+	d.want(http.MethodPost, "/api/v1/nodes/alexa/maintenance/erase", eraseBody, http.StatusInternalServerError)
+	newNode = node.New
+	if l := d.nodes(); len(l.Nodes) != 2 || l.Nodes[1].Key != "alexa" || l.Nodes[1].Enabled {
+		t.Fatalf("nodes after the registry node's failed erase %+v", l)
+	}
+	for _, path := range []string{"/api/v1/node/status", "/api/v1/nodes/alexa/status"} {
+		if st := d.status(path); !st.warned("node_erase_failed", "node alexa: the node did not come back after the erase") {
+			t.Fatalf("%s without the registry node's node_erase_failed: %+v", path, st)
+		}
+	}
+	d.want(http.MethodPost, "/api/v1/nodes/alexa/maintenance/erase", eraseBody, http.StatusServiceUnavailable)
+	d.want(http.MethodDelete, "/api/v1/nodes/alexa", "", http.StatusNoContent)
+	if st := d.status("/api/v1/node/status"); st.warned("node_erase_failed", "") {
+		t.Fatalf("the deleted node's warning stays: %+v", st)
+	}
+	d.stop()
 }
 
 func readRegistry(t *testing.T, dir string) []nodes.Node {
