@@ -6,6 +6,21 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Scripts, scenes and automations as plugs (the web UI finding of
+  2026-11-08): go-hamapping `v0.4.5` maps a `script`, `scene` or
+  `automation` to an OnOffPlugInUnit that always reads off; a
+  controller's On calls `script.turn_on`, `scene.turn_on` or
+  `automation.trigger` on the entity, without data
+  (`script/services.yaml:4-8`, `scene/services.yaml:3-14`,
+  `automation/services.yaml:22-30` at 2026.10.3).
+
+### Changed
+
+- go-hamapping `v0.4.5` (was `v0.4.4`): the rows `script/plug`,
+  `scene/plug` and `automation/plug` with the method `trigger`.
+
 ## [0.5.5] - 2026-11-08
 
 Erase for the configured node and the registry nodes, over go-fabric-ui `v0.7.1` (#45).
