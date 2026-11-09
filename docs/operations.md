@@ -94,6 +94,25 @@ daemon and the controllers (a container without host networking, a VLAN
 boundary, a Wi-Fi network that filters multicast) no controller finds the
 bridge.
 
+**Interfaces** (`MDNS_INTERFACES`, the add-on's `mdns_interfaces`; empty is
+every multicast-capable interface). The responder announces and answers on
+the named host interfaces alone, with their addresses (go-fabric
+`node.MDNS.Interfaces` at v0.19.1); every node of the daemon, the
+configured one and the registry's, uses the same list. The UDP listen
+socket is not scoped by it. The case is a dual-homed host behind an mDNS
+reflector (go-ha2fabric#40: a Home Assistant OS host on a home VLAN and an
+IoT VLAN, whose gateway's mDNS proxy relays the record set it hears on one
+VLAN onto the other): the controllers then see the bridge with both
+networks' addresses and may try the one they cannot reach. Naming the
+interface on the controllers' network keeps the other network's addresses
+out of the records. An empty or doubled name is refused at start; a name
+the host does not have is allowed (an interface may appear later), and
+go-fabric's diagnosis (`Node.DiagnoseMDNS`) reports it, as it reports a
+named container bridge (`docker0`, `hassio`, which stays filtered) and a
+named interface without an address: at start as one
+`ha2fabric.mdns_interface` warning per finding (Logs, below), and on the
+web UI's mDNS page.
+
 ## The token
 
 The daemon reaches Home Assistant as an administrator:
@@ -148,6 +167,7 @@ The lines to know:
 | `ha2fabric.pairing` | info | The manual code and the QR payload, at start and after an erase. |
 | `ha2fabric.node_erased` | info | A node was erased in the web UI (`node=<key>` for a registry node): `fabrics_removed`, `elapsed`; the node comes back next, with `ha2fabric.fabrics count=0` and `ha2fabric.pairing`. At warn with `error` when the reset failed part-way. |
 | `ha2fabric.node_lost` | error | The node did not come back after an erase (`node=<key>` for a registry node). The daemon keeps running; the status page shows `node_erase_failed`. See Erase and factory reset. |
+| `ha2fabric.mdns_interface` | warn | At start, with `MDNS_INTERFACES` set: go-fabric's diagnosis of the list (`code`: `interface_not_found`, `interface_filtered`, `interface_no_addresses`; `node=<key>` for a registry node). See mDNS. |
 | `ha.connected` / `ha.disconnected` | info / warn | The Home Assistant connection. |
 | `bridge.synced` | info | A sync: candidates, devices, endpoints added, replaced, removed. |
 | `bridge.upstream_unusable` | warn | Home Assistant is away; every endpoint is unreachable. |

@@ -72,6 +72,7 @@ modes are not mapped.
 | `exclude_labels` | list | `[]` | Home Assistant labels (name or id) whose entities are never served. |
 | `log_level` | list | `info` | `debug`, `info`, `warn` or `error`. |
 | `node_limit` | int | `8` | How many nodes the web UI may create beside this one (0 to 32; see Nodes). |
+| `mdns_interfaces` | list | `[]` | Host interfaces the bridge announces itself on over mDNS, by name (`enp0s18`, `vlan30`); empty is every interface. For a host on two networks whose router relays mDNS between them: name the one the controllers are on (the project's `docs/operations.md`, mDNS). Applies to every node. |
 
 ## Nodes
 

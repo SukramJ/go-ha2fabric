@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -100,6 +101,7 @@ func (s *served) start(base context.Context) error {
 	}
 	logFabrics(base, n, s.log)
 	logPairing(n, s.log)
+	logMDNSInterfaces(n, s.ncfg.Network.MDNS.Interfaces, s.log)
 	// The web UI's event stream observes the node itself (Node.Observe,
 	// go-fabric-ui v0.1.2); s.events carries the bridge's own.
 	br := bridge.New(n, s.client, bridge.Options{
@@ -260,6 +262,26 @@ func logFabrics(ctx context.Context, n *node.Node, logger *slog.Logger) {
 		attrs = append(attrs, slog.String("hint", "no controller has paired, so the commissioning window opens; a store lost with its fabrics comes back from the add-on's backup (docs/operations.md, Files)"))
 	}
 	logger.Info("ha2fabric.fabrics", attrs...)
+}
+
+// logMDNSInterfaces writes, at start, what go-fabric's diagnosis finds
+// about the configured mDNS interfaces (MDNS_INTERFACES): a name the host
+// does not have, a named bridge the default filter keeps out, a named
+// interface without an advertised address (Node.DiagnoseMDNS, the
+// interface_* codes, at v0.19.1). Warnings carry no mDNS finding, so the
+// start-up log is where an operator who set the list reads it; the web
+// UI's mDNS page shows the whole diagnosis. Without the list nothing is
+// written.
+func logMDNSInterfaces(n *node.Node, names []string, logger *slog.Logger) {
+	if len(names) == 0 {
+		return
+	}
+	for _, f := range n.DiagnoseMDNS() {
+		if !strings.HasPrefix(f.Code, "interface_") {
+			continue
+		}
+		logger.Warn("ha2fabric.mdns_interface", slog.String("code", f.Code), slog.String("severity", string(f.Severity)), slog.String("message", f.Message))
+	}
 }
 
 // logPairing writes the pairing codes to the log (cookbook §7).

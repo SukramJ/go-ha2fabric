@@ -148,6 +148,9 @@ func TestNodeRegistry(t *testing.T) {
 	env := config.MapEnv(map[string]string{
 		"HA_URL": srv.URL(), "HA_TOKEN": hatest.Token, "STORE_PATH": filepath.Join(dir, "ha2fabric.db"),
 		"LISTEN": listen, "WEB_LISTEN": web, "WEB_ADMIN": "true", "NODE_LIMIT": "1", "LOG_LEVEL": "debug",
+		// A name no host has: go-fabric's diagnosis names it at start
+		// (issue #41), for the configured node and the registry's alike.
+		"MDNS_INTERFACES": mdnsAbsent,
 	})
 	d := startDaemon(t, env, web)
 
@@ -230,6 +233,9 @@ func TestNodeRegistry(t *testing.T) {
 	if !strings.Contains(d.logs.String(), "node=alexa") {
 		t.Fatal("no log line of the registry node")
 	}
+	if !mdnsLogged(d.logs.String(), "") || !mdnsLogged(d.logs.String(), "alexa") {
+		t.Fatalf("no ha2fabric.mdns_interface line for %s on both nodes\n%s", mdnsAbsent, d.logs.String())
+	}
 
 	d.want(http.MethodDelete, "/api/v1/nodes/alexa", "", http.StatusNoContent)
 	if l := d.nodes(); len(l.Nodes) != 1 {
@@ -250,6 +256,25 @@ func TestNodeRegistry(t *testing.T) {
 	if !strings.Contains(d.logs.String(), "ha2fabric.node_deleted") {
 		t.Fatal("no node_deleted line")
 	}
+}
+
+// mdnsAbsent is an interface name no test host has (at most 15 bytes,
+// IFNAMSIZ-1).
+const mdnsAbsent = "ha2fabric-none"
+
+// mdnsLogged reports whether logs hold the start-up line of mdnsAbsent's
+// interface_not_found for the node key (the configured node's when key is
+// empty, which carries no node attribute).
+func mdnsLogged(logs, key string) bool {
+	for _, line := range strings.Split(logs, "\n") {
+		if !strings.Contains(line, "msg=ha2fabric.mdns_interface ") || !strings.Contains(line, "code=interface_not_found") || !strings.Contains(line, mdnsAbsent) {
+			continue
+		}
+		if key == "" && !strings.Contains(line, "node=") || key != "" && strings.Contains(line, "node="+key) {
+			return true
+		}
+	}
+	return false
 }
 
 // nodeStatus is the part of GET /api/v1/node/status the erase tests read.

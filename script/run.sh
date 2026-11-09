@@ -56,6 +56,13 @@ export LOG_LEVEL="$(bashio::config 'log_level')"
 if bashio::config.has_value 'node_limit'; then
   export NODE_LIMIT="$(bashio::config 'node_limit')"
 fi
+# The mDNS responder's interfaces (docs/operations.md "mDNS"); empty, or an
+# installation from before 0.6.0 without the option, is every interface.
+MDNS_INTERFACES=""
+if bashio::config.has_value 'mdns_interfaces'; then
+  MDNS_INTERFACES="$(bashio::config 'mdns_interfaces')"
+fi
+export MDNS_INTERFACES
 
 # --- Web UI through Ingress ---
 # On the host's network: listen on ingress_port and serve only the Ingress

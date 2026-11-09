@@ -6,6 +6,17 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `MDNS_INTERFACES` (`--mdns-interfaces`; the add-on's `mdns_interfaces`):
+  the host interfaces the mDNS responder announces and answers on, for
+  every node; empty is every interface (go-fabric `node.MDNS.Interfaces`).
+  For a dual-homed host behind an mDNS reflector, whose controllers would
+  otherwise cache the far network's address too (#40, #41). An empty or
+  doubled name is refused at start; go-fabric's diagnosis of the list — a
+  name the host lacks, a named container bridge, a named interface without
+  an address — is logged at start as `ha2fabric.mdns_interface`.
+
 ## [0.5.8] - 2026-11-08
 
 The lock relocks after UnlockWithTimeout; Toggle on a mute plug acts, over

@@ -60,6 +60,7 @@ options:
   exclude_labels: []
   log_level: info
   node_limit: 8
+  mdns_interfaces: []
 
 schema:
   port: port
@@ -80,3 +81,5 @@ schema:
     - str
   log_level: list(debug|info|warn|error)
   node_limit: int(0,32)
+  mdns_interfaces:
+    - str
