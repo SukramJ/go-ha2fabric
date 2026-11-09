@@ -5,6 +5,7 @@ package config
 
 import (
 	"log/slog"
+	"slices"
 
 	"github.com/SukramJ/go-fabric/node"
 
@@ -28,7 +29,8 @@ const spake2Iterations = 1000
 // Node is the node's configuration from the daemon's (go-fabric's
 // cookbook "Embed in a daemon", §2): the listen address, the
 // commissioning values, the identity with the daemon's version, the store
-// file, the daemon's logger and the health probe; everything else is
+// file, the mDNS interfaces (MDNS_INTERFACES), the daemon's logger and
+// the health probe; everything else is
 // go-fabric's default. With the camera on, the node also accepts Matter
 // over TCP: a camera's signals carry an SDP, which rarely fits one UDP
 // message, and the node sends them over the controller's TCP session
@@ -36,7 +38,11 @@ const spake2Iterations = 1000
 // v0.15.5). The configured node and every registry node get theirs here.
 func (c *Config) Node(logger *slog.Logger) node.Config {
 	return node.Config{
-		Network: node.Network{Listen: c.Listen, TCP: node.TCPConfig{Incoming: c.Camera}},
+		Network: node.Network{
+			Listen: c.Listen,
+			TCP:    node.TCPConfig{Incoming: c.Camera},
+			MDNS:   node.MDNS{Interfaces: slices.Clone(c.MDNSInterfaces)},
+		},
 		Commissioning: node.Commissioning{
 			Passcode:        c.Passcode,
 			Discriminator:   c.Discriminator,

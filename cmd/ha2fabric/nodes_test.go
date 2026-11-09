@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -148,6 +149,9 @@ func TestNodeRegistry(t *testing.T) {
 	env := config.MapEnv(map[string]string{
 		"HA_URL": srv.URL(), "HA_TOKEN": hatest.Token, "STORE_PATH": filepath.Join(dir, "ha2fabric.db"),
 		"LISTEN": listen, "WEB_LISTEN": web, "WEB_ADMIN": "true", "NODE_LIMIT": "1", "LOG_LEVEL": "debug",
+		// A name no host has: go-fabric's diagnosis names it at start
+		// (issue #41), for the configured node and the registry's alike.
+		"MDNS_INTERFACES": mdnsAbsent,
 	})
 	d := startDaemon(t, env, web)
 
@@ -200,6 +204,13 @@ func TestNodeRegistry(t *testing.T) {
 	if bytes.Contains(raw, []byte(strconv.Itoa(int(reg[0].Passcode)))) {
 		t.Fatal("the status carries the passcode")
 	}
+	// The host's counters (go-fabric-ui contract 0.8.0) on both nodes'
+	// status: discards, host-wide (the #51 comment).
+	for _, p := range []string{"/api/v1/node/status", "/api/v1/nodes/alexa/status"} {
+		if b := d.want(http.MethodGet, p, "", http.StatusOK); !bytes.Contains(b, []byte(`"counters":[{"code":"discards","value":0,"message":"Controller commands answered`)) {
+			t.Fatalf("%s without the discards counter: %s", p, b)
+		}
+	}
 
 	// The node joined the running connection: its selection lists Home
 	// Assistant's candidates, and none is exposed until picked.
@@ -215,9 +226,17 @@ func TestNodeRegistry(t *testing.T) {
 		t.Fatal("the node's choice reached the configured node's selection")
 	}
 
+	if b := d.want(http.MethodGet, "/api/v1/nodes/alexa/endpoints/0", "", http.StatusOK); !bytes.Contains(b, []byte(`"Alexa"`)) {
+		t.Fatalf("the root's NodeLabel before the rename: %s", b)
+	}
 	d.want(http.MethodPut, "/api/v1/nodes/alexa/label", `{"label":"Echo"}`, http.StatusNoContent)
 	if l := d.nodes(); l.Nodes[1].Label != "Echo" {
 		t.Fatalf("renamed %+v", l)
+	}
+	// The running node's own NodeLabel follows at once (Node.SetNodeLabel,
+	// go-fabric v0.19.1): the root's BasicInformation serves it.
+	if b := d.want(http.MethodGet, "/api/v1/nodes/alexa/endpoints/0", "", http.StatusOK); !bytes.Contains(b, []byte(`"Echo"`)) || bytes.Contains(b, []byte(`"Alexa"`)) {
+		t.Fatalf("the root's NodeLabel after the rename: %s", b)
 	}
 	d.want(http.MethodDelete, "/api/v1/nodes/default", "", http.StatusConflict)
 	d.stop()
@@ -229,6 +248,9 @@ func TestNodeRegistry(t *testing.T) {
 	}
 	if !strings.Contains(d.logs.String(), "node=alexa") {
 		t.Fatal("no log line of the registry node")
+	}
+	if !mdnsLogged(d.logs.String(), "") || !mdnsLogged(d.logs.String(), "alexa") {
+		t.Fatalf("no ha2fabric.mdns_interface line for %s on both nodes\n%s", mdnsAbsent, d.logs.String())
 	}
 
 	d.want(http.MethodDelete, "/api/v1/nodes/alexa", "", http.StatusNoContent)
@@ -250,6 +272,25 @@ func TestNodeRegistry(t *testing.T) {
 	if !strings.Contains(d.logs.String(), "ha2fabric.node_deleted") {
 		t.Fatal("no node_deleted line")
 	}
+}
+
+// mdnsAbsent is an interface name no test host has (at most 15 bytes,
+// IFNAMSIZ-1).
+const mdnsAbsent = "ha2fabric-none"
+
+// mdnsLogged reports whether logs hold the start-up line of mdnsAbsent's
+// interface_not_found for the node key (the configured node's when key is
+// empty, which carries no node attribute).
+func mdnsLogged(logs, key string) bool {
+	for _, line := range strings.Split(logs, "\n") {
+		if !strings.Contains(line, "msg=ha2fabric.mdns_interface ") || !strings.Contains(line, "code=interface_not_found") || !strings.Contains(line, mdnsAbsent) {
+			continue
+		}
+		if key == "" && !strings.Contains(line, "node=") || key != "" && strings.Contains(line, "node="+key) {
+			return true
+		}
+	}
+	return false
 }
 
 // nodeStatus is the part of GET /api/v1/node/status the erase tests read.
@@ -344,8 +385,17 @@ func TestNodeErase(t *testing.T) {
 		after = d.endpointIDs("/api/v1/node")
 		return len(after) == len(before)
 	})
-	// The measurement of brief E1 §4.1 on a store file: reported, not a gate.
+	// go-fabric v0.19.1's FactoryReset erases the numbering with the rows
+	// (EraseEndpoints, go-fabric issue 457): the node that comes back
+	// numbers from the first bridged number again, so the entities take
+	// the numbers they had (issue #50; brief E1 §4.1 measured 2–n becoming
+	// n+1–2n before).
+	slices.Sort(before)
+	slices.Sort(after)
 	t.Logf("configured node's endpoints across the erase: before %v, after %v", before, after)
+	if !slices.Equal(before, after) || before[0] != 2 {
+		t.Fatalf("the erased node's numbers %v, want the first bridged numbers %v from 2", after, before)
+	}
 	logs := d.logs.String()
 	if !strings.Contains(logs, "ha2fabric.node_erased") || strings.Count(logs, "msg=ha2fabric.pairing ") < 2 {
 		t.Fatalf("no node_erased line or no second pairing line\n%s", logs)

@@ -110,7 +110,7 @@ func run(ctx context.Context, args []string, env config.Env, stdout, stderr io.W
 	webErr := make(chan error, 1)
 	if cfg.WebListen != "" {
 		ws := web.New(web.Options{Listen: cfg.WebListen, Allow: cfg.WebAllow, Logger: logger, UI: fabricui.Options{
-			Node: def.sw, Exposure: def.prov, Admin: admin(cfg), Reassemble: def.Resync, Events: def.events, Warnings: warnings(def, fl), Erase: def.erase, Logger: logger,
+			Node: def.sw, Exposure: def.prov, Admin: admin(cfg), Reassemble: def.Resync, Events: def.events, Warnings: warnings(def, fl), Counters: counters(def, fl), Erase: def.erase, Logger: logger,
 			Operations: web.NewOperations(ring, version.Version, started),
 			Registry:   fl, NodeConfig: nodeConfig(cfg),
 		}})
@@ -144,6 +144,20 @@ func run(ctx context.Context, args []string, env config.Env, stdout, stderr io.W
 func warnings(def *served, fl *fleet) func(context.Context) []fabricui.Warning {
 	return func(ctx context.Context) []fabricui.Warning {
 		return append(def.Warnings(ctx), fl.Warnings(ctx)...)
+	}
+}
+
+// discardsMessage is the discards counter's line on the status page.
+const discardsMessage = "Controller commands answered with success that called nothing (an Off on a scene's, script's, automation's or button's plug)"
+
+// counters is the web UI's Options.Counters (go-fabric-ui contract
+// 0.8.0): host-wide as warnings are — every node's status reads the
+// default's list (go-fabric-ui fabricui/handler.go:393 at v0.8.0) —, so discards is the sum
+// over the configured node's bridge and the registry nodes' (the
+// bridge.command_discarded lines, docs/operations.md).
+func counters(def *served, fl *fleet) func(context.Context) []fabricui.Counter {
+	return func(context.Context) []fabricui.Counter {
+		return []fabricui.Counter{{Code: "discards", Value: def.Discards() + fl.Discards(), Message: discardsMessage}}
 	}
 }
 

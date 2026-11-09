@@ -20,7 +20,7 @@ Twin of [`go-hamapping`](https://github.com/SukramJ/go-hamapping); both are buil
 setup (pure Go, `CGO_ENABLED=0`, Apache-2.0 with a contributor licence
 agreement, the same guards in CI).
 
-> **Status: 0.5.8.** The daemon and its Home Assistant add-on run, with
+> **Status: 0.6.0.** The daemon and its Home Assistant add-on run, with
 > cameras as an opt-in (brief R6); a real
 > pairing with Apple Home is the owner's manual step before the release is
 > announced. The design is in [`CONCEPT.md`](CONCEPT.md).
@@ -143,6 +143,7 @@ environment only and never logged or stored.
 | `HA_URL` | add-on: `ws://supervisor/core/websocket` | Home Assistant's WebSocket API. |
 | `HA_TOKEN` | add-on: `SUPERVISOR_TOKEN` | An administrator's long-lived access token. |
 | `LISTEN` | `:5540` | UDP address of the Matter node. |
+| `MDNS_INTERFACES` | empty (every interface) | Host interfaces the mDNS responder announces on (comma- or newline-separated), for a dual-homed host behind an mDNS reflector ([`docs/operations.md`](docs/operations.md), mDNS). |
 | `PASSCODE` | `20202021` | Setup passcode; trivial ones are refused. Change it. |
 | `DISCRIMINATOR` | `3840` | 12-bit discriminator. |
 | `VENDOR_ID`, `PRODUCT_ID` | `0xFFF1`, `0x8001` | The CSA test vendor and product. |

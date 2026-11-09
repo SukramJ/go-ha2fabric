@@ -175,3 +175,35 @@ func TestNodeConfig(t *testing.T) {
 		t.Fatalf("TCP with the camera: %+v %v", nc.Network.TCP, err)
 	}
 }
+
+// TestMDNSInterfaces: MDNS_INTERFACES and the flag split on commas and
+// newlines (the add-on's list), refuse an empty or doubled name, and reach
+// the node's configuration (issue #41).
+func TestMDNSInterfaces(t *testing.T) {
+	base := map[string]string{"HA_URL": "ws://a/api/websocket", "HA_TOKEN": "t"}
+	store := func() string { return t.TempDir() + "/s.db" }
+	c, err := Load([]string{"--store-path", store()}, MapEnv(base), io.Discard)
+	if err != nil || c.MDNSInterfaces != nil || c.Node(nil).Network.MDNS.Interfaces != nil {
+		t.Fatalf("default: %+v %v", c, err)
+	}
+	base["MDNS_INTERFACES"] = "eth0\nbr30 "
+	c, err = Load([]string{"--store-path", store()}, MapEnv(base), io.Discard)
+	if err != nil || !slices.Equal(c.MDNSInterfaces, []string{"eth0", "br30"}) {
+		t.Fatalf("env: %+v %v", c, err)
+	}
+	nc := c.Node(nil)
+	if err := nc.Validate(); err != nil || !slices.Equal(nc.Network.MDNS.Interfaces, []string{"eth0", "br30"}) {
+		t.Fatalf("node config: %+v %v", nc.Network.MDNS, err)
+	}
+	c, err = Load([]string{"--store-path", store(), "--mdns-interfaces", "enp1s0"}, MapEnv(base), io.Discard)
+	if err != nil || !slices.Equal(c.MDNSInterfaces, []string{"enp1s0"}) {
+		t.Fatalf("flag: %+v %v", c, err)
+	}
+	for _, bad := range []string{"eth0,,br30", "eth0, ", "eth0,eth0", "eth0\n\nbr30"} {
+		base["MDNS_INTERFACES"] = bad
+		var v *ValidationError
+		if _, err := Load([]string{"--store-path", store()}, MapEnv(base), io.Discard); !errors.As(err, &v) || !strings.Contains(err.Error(), "MDNS_INTERFACES") {
+			t.Errorf("%q: %v", bad, err)
+		}
+	}
+}

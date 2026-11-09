@@ -17,6 +17,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -74,13 +75,18 @@ type Config struct {
 	// set).
 	Addon bool
 
-	Listen        string
-	Passcode      uint32
-	Discriminator uint16
-	VendorID      uint16
-	ProductID     uint16
-	Label         string
-	StorePath     string
+	Listen string
+	// MDNSInterfaces restricts the nodes' mDNS responder to these host
+	// interfaces (MDNS_INTERFACES, comma- or newline-separated); empty
+	// advertises on every multicast-capable one (go-fabric node.MDNS
+	// Interfaces at v0.19.1). One host, one set: every node gets it.
+	MDNSInterfaces []string
+	Passcode       uint32
+	Discriminator  uint16
+	VendorID       uint16
+	ProductID      uint16
+	Label          string
+	StorePath      string
 
 	Include, Exclude []string
 	// IncludeLabels and ExcludeLabels are Home Assistant labels, by name
@@ -174,6 +180,7 @@ func Load(args []string, env Env, out io.Writer) (*Config, error) {
 	}
 	haURL := str("ha-url", "HA_URL", "", "Home Assistant WebSocket URL, e.g. ws://homeassistant.local:8123/api/websocket")
 	listen := str("listen", "LISTEN", DefaultListen, "UDP listen address of the Matter node")
+	mdnsIfaces := str("mdns-interfaces", "MDNS_INTERFACES", "", "host interfaces the mDNS responder announces on (comma-separated); empty is every interface")
 	passcode := str("passcode", "PASSCODE", strconv.Itoa(DefaultPasscode), "setup passcode")
 	discr := str("discriminator", "DISCRIMINATOR", strconv.Itoa(DefaultDiscriminator), "12-bit discriminator")
 	vendor := str("vendor-id", "VENDOR_ID", "0xFFF1", "vendor id")
@@ -212,6 +219,7 @@ func Load(args []string, env Env, out io.Writer) (*Config, error) {
 		c.HAURL = SupervisorURL
 	}
 	c.Listen = *listen
+	c.MDNSInterfaces = splitInterfaces(*mdnsIfaces, add)
 	c.Label = strings.TrimSpace(*label)
 	c.StorePath = *store
 	if c.StorePath == "" {
@@ -327,6 +335,30 @@ func hostPort(s string) error {
 		return fmt.Errorf("port must be 1..65535, got %q", port)
 	}
 	return nil
+}
+
+// splitInterfaces reads MDNS_INTERFACES: comma- or newline-separated (the
+// add-on hands a list one item per line). Blank is every interface; an
+// empty name between separators or a name given twice is refused, as
+// go-fabric's node.Config.Validate refuses them (node/mdns.go at v0.19.1),
+// so the operator reads it here, with the variable's name, first.
+func splitInterfaces(s string, add func(string, ...any)) []string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil
+	}
+	var out []string
+	for _, f := range strings.Split(strings.ReplaceAll(s, "\n", ","), ",") {
+		switch f = strings.TrimSpace(f); {
+		case f == "":
+			add("MDNS_INTERFACES holds an empty interface name, got %q", s)
+		case slices.Contains(out, f):
+			add("MDNS_INTERFACES names %q twice", f)
+		default:
+			out = append(out, f)
+		}
+	}
+	return out
 }
 
 // SplitLabels reads a label list: comma- or newline-separated, since a

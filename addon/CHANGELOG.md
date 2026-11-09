@@ -5,6 +5,16 @@ tracks the project release; the project's
 [changelog.md](https://github.com/SukramJ/go-ha2fabric/blob/main/changelog.md)
 has the details.
 
+## 0.6.0
+
+- `mdns_interfaces`: the network interfaces the bridge announces itself
+  on, for a host on two networks whose router relays mDNS between them;
+  empty is every interface.
+- The status page counts `discards`: commands a controller sent that did
+  nothing, such as an Off on a scene's plug.
+- Erase brings the entities back under the first endpoint numbers again.
+- Renaming a node in the web UI renames it in its controllers at once.
+
 ## 0.5.6
 
 - Scripts, scenes and automations appear as plugs that always read off;

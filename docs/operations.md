@@ -24,7 +24,8 @@ its pair in the same directory, `ha2fabric-<key>.db` and
 The store holds the fabrics with their operational keys, the access control
 lists, the subscriptions to re-establish and the endpoint numbers of the
 bridged entities. Losing it unpairs the bridge from every controller, and
-the entities come back under new endpoint numbers. Keep it on storage that
+the entities are numbered afresh from the first bridged number (2), as on
+a new installation. Keep it on storage that
 survives restarts and upgrades, protect it like a key (it holds private
 keys unencrypted), back it up only with the daemon stopped (the add-on
 sets `backup: cold`, so the Supervisor stops it for a backup), and never
@@ -94,6 +95,25 @@ daemon and the controllers (a container without host networking, a VLAN
 boundary, a Wi-Fi network that filters multicast) no controller finds the
 bridge.
 
+**Interfaces** (`MDNS_INTERFACES`, the add-on's `mdns_interfaces`; empty is
+every multicast-capable interface). The responder announces and answers on
+the named host interfaces alone, with their addresses (go-fabric
+`node.MDNS.Interfaces` at v0.19.1); every node of the daemon, the
+configured one and the registry's, uses the same list. The UDP listen
+socket is not scoped by it. The case is a dual-homed host behind an mDNS
+reflector (go-ha2fabric#40: a Home Assistant OS host on a home VLAN and an
+IoT VLAN, whose gateway's mDNS proxy relays the record set it hears on one
+VLAN onto the other): the controllers then see the bridge with both
+networks' addresses and may try the one they cannot reach. Naming the
+interface on the controllers' network keeps the other network's addresses
+out of the records. An empty or doubled name is refused at start; a name
+the host does not have is allowed (an interface may appear later), and
+go-fabric's diagnosis (`Node.DiagnoseMDNS`) reports it, as it reports a
+named container bridge (`docker0`, `hassio`, which stays filtered) and a
+named interface without an address: at start as one
+`ha2fabric.mdns_interface` warning per finding (Logs, below), and on the
+web UI's mDNS page.
+
 ## The token
 
 The daemon reaches Home Assistant as an administrator:
@@ -148,13 +168,14 @@ The lines to know:
 | `ha2fabric.pairing` | info | The manual code and the QR payload, at start and after an erase. |
 | `ha2fabric.node_erased` | info | A node was erased in the web UI (`node=<key>` for a registry node): `fabrics_removed`, `elapsed`; the node comes back next, with `ha2fabric.fabrics count=0` and `ha2fabric.pairing`. At warn with `error` when the reset failed part-way. |
 | `ha2fabric.node_lost` | error | The node did not come back after an erase (`node=<key>` for a registry node). The daemon keeps running; the status page shows `node_erase_failed`. See Erase and factory reset. |
+| `ha2fabric.mdns_interface` | warn | At start, with `MDNS_INTERFACES` set: go-fabric's diagnosis of the list (`code`: `interface_not_found`, `interface_filtered`, `interface_no_addresses`; `node=<key>` for a registry node). See mDNS. |
 | `ha.connected` / `ha.disconnected` | info / warn | The Home Assistant connection. |
 | `bridge.synced` | info | A sync: candidates, devices, endpoints added, replaced, removed. |
 | `bridge.upstream_unusable` | warn | Home Assistant is away; every endpoint is unreachable. |
 | `bridge.build_failed` | warn | go-fabric refused a device go-hamapping planned; its entities have no endpoint (the plan says why). |
 | `bridge.call_service_failed` | warn | A controller's command failed in Home Assistant; the entity's state goes back onto its endpoint. |
 | `bridge.command_unmapped` | warn | A command the daemon's service table has no service for. |
-| `bridge.command_discarded` | info | A controller's command the entity has no action for (`entity`, `cluster`, `command`): an Off or OffWithEffect on a scene's, script's, automation's or button's plug. It was answered with success and nothing was called — the controller's "done" changed nothing. Counted on the status page as `discards`. |
+| `bridge.command_discarded` | info | A controller's command the entity has no action for (`entity`, `cluster`, `command`): an Off or OffWithEffect on a scene's, script's, automation's or button's plug. It was answered with success and nothing was called — the controller's "done" changed nothing. Counted as `discards` in the status JSON (`counters`) and on the status page, over every node (Health). |
 | `bridge.label_unresolved` | warn | A label of `INCLUDE_LABELS`/`EXCLUDE_LABELS` names no Home Assistant label; it is used as a label id. Logged when the set changes; also on the web UI's status page. |
 | `bridge.selection_applied` | info | The web UI stored overrides. |
 | `bridge.forget` | info | An entity removed from Home Assistant's registry: its endpoint number is forgotten (`entity`, `key`); created again, it gets a fresh one. |
@@ -193,6 +214,15 @@ A served `script`, `scene` or `automation` appears as a plug
 `script.turn_on`, `scene.turn_on` or `automation.trigger`, without data
 (go-hamapping `docs/by_design.md`, "A script, scene or automation is a
 plug-in unit that always reads off").
+
+Switching it off does nothing: the command is answered with success,
+logged `bridge.command_discarded` and counted as `discards` (Logs,
+Health). Observed on an Alexa fabric (go-ha2fabric#51, 2026-11-09): since
+the plug always reads off, the app's tile drifts to the state it last
+commanded, so tapping it sends Off again and lands in the discard path —
+"the tile does nothing" —, and one voice command may arrive as two Offs
+about a second apart, counted twice. Voice "turn on" is the control that
+works there.
 
 ## Locks with a code
 
@@ -269,7 +299,7 @@ Limits:
 
 ## The web UI
 
-go-fabric-ui's interface (`v0.1.2`) at `WEB_LISTEN`, in the add-on through
+go-fabric-ui's interface (`v0.8.0`) at `WEB_LISTEN`, in the add-on through
 Ingress. Who may write — change the selection, open a commissioning window,
 remove a fabric, erase a node — and read the pairing code: in the add-on the Ingress
 proxy (`172.30.32.2`), which has authenticated the Home Assistant user;
@@ -295,7 +325,9 @@ as typed (its node label, at most 32 bytes), without the device name
 go-hamapping puts in front of an entity name otherwise. The status page
 lists the configuration's warnings: unresolved label values
 (`label_unresolved`) and an overrides file moved aside at start
-(`selection_corrupt`).
+(`selection_corrupt`); under them the daemon's counters (`discards`,
+Health).
+
 The Operation page shows the daemon's version and uptime, its recent log
 and the log level (see Logs); changing the level is a write.
 
@@ -303,7 +335,12 @@ and the log level (see Logs); changing the level is a write.
 
 `GET /api/v1/node/status` (go-fabric-ui's contract) is the node's health
 sample, its listen address, its endpoint and fabric counts and whether the
-commissioning window is open; `GET
+commissioning window is open, and `counters`, the daemon's own counts
+since it started (go-fabric-ui contract 0.8.0), host-wide as the warnings
+are, so every node's status carries the same list: `discards`, the
+controller commands answered with success that called nothing
+(`bridge.command_discarded`), summed over every node, the runs an erase
+ended included. `GET
 /api/v1/node/exposure` is every candidate entity with the exposure rule's
 word, its labels, the deciding layer and go-hamapping's verdict, the same
 as `--dump-plan` prints, and stays empty until Home Assistant has been read
@@ -349,9 +386,13 @@ for all its fabrics, so a different scope is a different node.
 - **Pairing**: each node has its own pairing page and codes, and opens
   its commissioning window while no controller has paired it; its codes
   are in the log at its start (`ha2fabric.pairing node=<key>`).
-- **Rename** changes the name in the selector and the status page at
-  once; the node's `NodeLabel` takes it at the next start (a name a
-  controller wrote wins, as for the configured node).
+- **Rename** changes the name in the selector and the status page, and
+  the running node's `NodeLabel` (cut to 32 bytes), at once: the node
+  persists it and reports it to its controllers' subscriptions (go-fabric
+  `Node.SetNodeLabel`), so a rename reaches the controllers without a
+  restart (`ha2fabric.node_renamed`; at warn with `error` when the node
+  refused it, which leaves the registry's name standing). A controller
+  that writes a name later wins in turn.
 - **Delete** is final: the node leaves every fabric it holds (its
   controllers lose it), stops, and its store, its selection and its
   record are removed (`ha2fabric.node_deleted`). The configured node
@@ -380,8 +421,12 @@ confirmations), starts the node over. It erases the fabrics — every
 paired controller loses the node, through the Leave event —, the store
 (ACL, group keys, resumption records, subscriptions, settings and
 counters, the pinned UniqueID; a fresh one is pinned) and the endpoint
-records, so the entities come back under new endpoint numbers at the next
-sync. It keeps the configuration, `selection.json` (a registry node's
+records with their number counter (go-fabric `Node.FactoryReset`, which
+calls `endpoint.Store.EraseEndpoints` since v0.19.0), so at the next sync
+the entities are numbered from the first bridged number (2) again, as on
+a new installation; the daemon test measures it (`TestNodeErase`: the
+fixtures' entities take the numbers they had before the erase). The
+controllers see a new device either way: the fabric is new. It keeps the configuration, `selection.json` (a registry node's
 `selection-<key>.json`), a registry node's record, the passcode and the
 discriminator, so the pairing codes stay the same. The node comes back
 at once, with its commissioning window open: the log says

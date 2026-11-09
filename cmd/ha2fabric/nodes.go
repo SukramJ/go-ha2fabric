@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -63,6 +64,10 @@ type served struct {
 	lost   error
 	lostAt time.Time
 	live   atomic.Bool
+	// discarded is the discards of the runs an erase ended, so Discards
+	// counts since the daemon started (go-fabric-ui contract 0.8.0,
+	// Counter.Value).
+	discarded uint64
 }
 
 // newNode is node.New; the daemon test swaps it to fail a come-back.
@@ -100,6 +105,7 @@ func (s *served) start(base context.Context) error {
 	}
 	logFabrics(base, n, s.log)
 	logPairing(n, s.log)
+	logMDNSInterfaces(n, s.ncfg.Network.MDNS.Interfaces, s.log)
 	// The web UI's event stream observes the node itself (Node.Observe,
 	// go-fabric-ui v0.1.2); s.events carries the bridge's own.
 	br := bridge.New(n, s.client, bridge.Options{
@@ -172,6 +178,19 @@ func (s *served) node() *node.Node {
 // running reports whether s has a run; it does not wait on an erase.
 func (s *served) running() bool { return s.live.Load() }
 
+// Discards is how many controller commands this node's bridges answered
+// with success and acted on nothing (bridge.Status.Discards), since the
+// daemon started: the current run's and those an erase ended.
+func (s *served) Discards() uint64 {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	n := s.discarded
+	if s.br != nil {
+		n += s.br.Status().Discards
+	}
+	return n
+}
+
 // Warnings are the provider's and, while the last erase's come-back
 // failed, node_erase_failed.
 func (s *served) Warnings(ctx context.Context) []fabricui.Warning {
@@ -217,6 +236,7 @@ func (s *served) erase(ctx context.Context) error {
 		if infos, err := s.n.FabricInfos(ectx); err == nil {
 			removed = len(infos)
 		}
+		s.discarded += s.br.Status().Discards
 		rerr = s.n.FactoryReset(ectx)
 		s.n, s.br, s.cancel, s.done = nil, nil, nil, nil
 		s.live.Store(false)
@@ -260,6 +280,26 @@ func logFabrics(ctx context.Context, n *node.Node, logger *slog.Logger) {
 		attrs = append(attrs, slog.String("hint", "no controller has paired, so the commissioning window opens; a store lost with its fabrics comes back from the add-on's backup (docs/operations.md, Files)"))
 	}
 	logger.Info("ha2fabric.fabrics", attrs...)
+}
+
+// logMDNSInterfaces writes, at start, what go-fabric's diagnosis finds
+// about the configured mDNS interfaces (MDNS_INTERFACES): a name the host
+// does not have, a named bridge the default filter keeps out, a named
+// interface without an advertised address (Node.DiagnoseMDNS, the
+// interface_* codes, at v0.19.1). Warnings carry no mDNS finding, so the
+// start-up log is where an operator who set the list reads it; the web
+// UI's mDNS page shows the whole diagnosis. Without the list nothing is
+// written.
+func logMDNSInterfaces(n *node.Node, names []string, logger *slog.Logger) {
+	if len(names) == 0 {
+		return
+	}
+	for _, f := range n.DiagnoseMDNS() {
+		if !strings.HasPrefix(f.Code, "interface_") {
+			continue
+		}
+		logger.Warn("ha2fabric.mdns_interface", slog.String("code", f.Code), slog.String("severity", string(f.Severity)), slog.String("message", f.Message))
+	}
 }
 
 // logPairing writes the pairing codes to the log (cookbook §7).
@@ -456,10 +496,14 @@ func (f *fleet) find(key string) *member {
 }
 
 // Rename implements [fabricui.NodeRegistry]: the label in the registry
-// and the selector at once; the node's own NodeLabel follows at its next
-// start (go-fabric's facade sets BasicInformation from node.Config only,
-// and a NodeLabel a controller wrote wins over it).
-func (f *fleet) Rename(_ context.Context, key, label string) error {
+// and the selector, then the running node's own NodeLabel
+// (Node.SetNodeLabel, go-fabric node/node_label.go:39 at v0.19.1: a host
+// write, persisted, reported to the controllers' subscriptions), cut as
+// at start (nodeLabel). The node's error is logged and leaves the
+// registry's rename standing; a node without a run takes the label from
+// its record at its next start, unless its store holds one written since
+// (go-fabric restores a persisted label over the configured one).
+func (f *fleet) Rename(ctx context.Context, key, label string) error {
 	f.op.Lock()
 	defer f.op.Unlock()
 	if f.closed {
@@ -469,11 +513,24 @@ func (f *fleet) Rename(_ context.Context, key, label string) error {
 		return err
 	}
 	f.mu.Lock()
-	if m := f.find(key); m != nil {
+	m := f.find(key)
+	if m != nil {
 		m.rec.Label = label
 	}
 	f.mu.Unlock()
-	f.log.Info("ha2fabric.node_renamed", slog.String("node", key))
+	var n *node.Node
+	if m != nil && m.s != nil {
+		n = m.s.node()
+	}
+	if n == nil {
+		f.log.Info("ha2fabric.node_renamed", slog.String("node", key))
+		return nil
+	}
+	if err := n.SetNodeLabel(ctx, nodeLabel(label)); err != nil {
+		f.log.Warn("ha2fabric.node_renamed", slog.String("node", key), slog.String("error", err.Error()))
+		return nil
+	}
+	f.log.Info("ha2fabric.node_renamed", slog.String("node", key), slog.Bool("node_label", true))
 	return nil
 }
 
@@ -555,6 +612,20 @@ func (f *fleet) Warnings(ctx context.Context) []fabricui.Warning {
 		}
 	}
 	return out
+}
+
+// Discards is the sum of every registry node's [served.Discards]; a
+// deleted node's leave with it.
+func (f *fleet) Discards() uint64 {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	var n uint64
+	for _, m := range f.members {
+		if m.s != nil {
+			n += m.s.Discards()
+		}
+	}
+	return n
 }
 
 // leave removes every fabric of n and returns how many it removed.
