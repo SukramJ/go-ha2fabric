@@ -16,6 +16,12 @@ All notable changes to this project are documented here. The format follows
   doubled name is refused at start; go-fabric's diagnosis of the list — a
   name the host lacks, a named container bridge, a named interface without
   an address — is logged at start as `ha2fabric.mdns_interface`.
+- `discards` in the status JSON (`counters` on `/api/v1/node/status` and
+  every `/api/v1/nodes/<key>/status`) and on the status page, through
+  go-fabric-ui `v0.8.0`'s host counters: the controller commands answered
+  with success that called nothing (`bridge.command_discarded`), summed
+  over every node since the daemon started. 0.5.7's notes promised the
+  count on the status page; only the log line was there (#51).
 
 ### Changed
 

@@ -204,6 +204,13 @@ func TestNodeRegistry(t *testing.T) {
 	if bytes.Contains(raw, []byte(strconv.Itoa(int(reg[0].Passcode)))) {
 		t.Fatal("the status carries the passcode")
 	}
+	// The host's counters (go-fabric-ui contract 0.8.0) on both nodes'
+	// status: discards, host-wide (the #51 comment).
+	for _, p := range []string{"/api/v1/node/status", "/api/v1/nodes/alexa/status"} {
+		if b := d.want(http.MethodGet, p, "", http.StatusOK); !bytes.Contains(b, []byte(`"counters":[{"code":"discards","value":0,"message":"Controller commands answered`)) {
+			t.Fatalf("%s without the discards counter: %s", p, b)
+		}
+	}
 
 	// The node joined the running connection: its selection lists Home
 	// Assistant's candidates, and none is exposed until picked.

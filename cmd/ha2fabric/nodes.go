@@ -64,6 +64,10 @@ type served struct {
 	lost   error
 	lostAt time.Time
 	live   atomic.Bool
+	// discarded is the discards of the runs an erase ended, so Discards
+	// counts since the daemon started (go-fabric-ui contract 0.8.0,
+	// Counter.Value).
+	discarded uint64
 }
 
 // newNode is node.New; the daemon test swaps it to fail a come-back.
@@ -174,6 +178,19 @@ func (s *served) node() *node.Node {
 // running reports whether s has a run; it does not wait on an erase.
 func (s *served) running() bool { return s.live.Load() }
 
+// Discards is how many controller commands this node's bridges answered
+// with success and acted on nothing (bridge.Status.Discards), since the
+// daemon started: the current run's and those an erase ended.
+func (s *served) Discards() uint64 {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	n := s.discarded
+	if s.br != nil {
+		n += s.br.Status().Discards
+	}
+	return n
+}
+
 // Warnings are the provider's and, while the last erase's come-back
 // failed, node_erase_failed.
 func (s *served) Warnings(ctx context.Context) []fabricui.Warning {
@@ -219,6 +236,7 @@ func (s *served) erase(ctx context.Context) error {
 		if infos, err := s.n.FabricInfos(ectx); err == nil {
 			removed = len(infos)
 		}
+		s.discarded += s.br.Status().Discards
 		rerr = s.n.FactoryReset(ectx)
 		s.n, s.br, s.cancel, s.done = nil, nil, nil, nil
 		s.live.Store(false)
@@ -577,6 +595,20 @@ func (f *fleet) Warnings(ctx context.Context) []fabricui.Warning {
 		}
 	}
 	return out
+}
+
+// Discards is the sum of every registry node's [served.Discards]; a
+// deleted node's leave with it.
+func (f *fleet) Discards() uint64 {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	var n uint64
+	for _, m := range f.members {
+		if m.s != nil {
+			n += m.s.Discards()
+		}
+	}
+	return n
 }
 
 // leave removes every fabric of n and returns how many it removed.

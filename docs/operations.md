@@ -175,7 +175,7 @@ The lines to know:
 | `bridge.build_failed` | warn | go-fabric refused a device go-hamapping planned; its entities have no endpoint (the plan says why). |
 | `bridge.call_service_failed` | warn | A controller's command failed in Home Assistant; the entity's state goes back onto its endpoint. |
 | `bridge.command_unmapped` | warn | A command the daemon's service table has no service for. |
-| `bridge.command_discarded` | info | A controller's command the entity has no action for (`entity`, `cluster`, `command`): an Off or OffWithEffect on a scene's, script's, automation's or button's plug. It was answered with success and nothing was called — the controller's "done" changed nothing. Counted on the status page as `discards`. |
+| `bridge.command_discarded` | info | A controller's command the entity has no action for (`entity`, `cluster`, `command`): an Off or OffWithEffect on a scene's, script's, automation's or button's plug. It was answered with success and nothing was called — the controller's "done" changed nothing. Counted as `discards` in the status JSON (`counters`) and on the status page, over every node (Health). |
 | `bridge.label_unresolved` | warn | A label of `INCLUDE_LABELS`/`EXCLUDE_LABELS` names no Home Assistant label; it is used as a label id. Logged when the set changes; also on the web UI's status page. |
 | `bridge.selection_applied` | info | The web UI stored overrides. |
 | `bridge.forget` | info | An entity removed from Home Assistant's registry: its endpoint number is forgotten (`entity`, `key`); created again, it gets a fresh one. |
@@ -214,6 +214,15 @@ A served `script`, `scene` or `automation` appears as a plug
 `script.turn_on`, `scene.turn_on` or `automation.trigger`, without data
 (go-hamapping `docs/by_design.md`, "A script, scene or automation is a
 plug-in unit that always reads off").
+
+Switching it off does nothing: the command is answered with success,
+logged `bridge.command_discarded` and counted as `discards` (Logs,
+Health). Observed on an Alexa fabric (go-ha2fabric#51, 2026-11-09): since
+the plug always reads off, the app's tile drifts to the state it last
+commanded, so tapping it sends Off again and lands in the discard path —
+"the tile does nothing" —, and one voice command may arrive as two Offs
+about a second apart, counted twice. Voice "turn on" is the control that
+works there.
 
 ## Locks with a code
 
@@ -290,7 +299,7 @@ Limits:
 
 ## The web UI
 
-go-fabric-ui's interface (`v0.1.2`) at `WEB_LISTEN`, in the add-on through
+go-fabric-ui's interface (`v0.8.0`) at `WEB_LISTEN`, in the add-on through
 Ingress. Who may write — change the selection, open a commissioning window,
 remove a fabric, erase a node — and read the pairing code: in the add-on the Ingress
 proxy (`172.30.32.2`), which has authenticated the Home Assistant user;
@@ -316,7 +325,9 @@ as typed (its node label, at most 32 bytes), without the device name
 go-hamapping puts in front of an entity name otherwise. The status page
 lists the configuration's warnings: unresolved label values
 (`label_unresolved`) and an overrides file moved aside at start
-(`selection_corrupt`).
+(`selection_corrupt`); under them the daemon's counters (`discards`,
+Health).
+
 The Operation page shows the daemon's version and uptime, its recent log
 and the log level (see Logs); changing the level is a write.
 
@@ -324,7 +335,12 @@ and the log level (see Logs); changing the level is a write.
 
 `GET /api/v1/node/status` (go-fabric-ui's contract) is the node's health
 sample, its listen address, its endpoint and fabric counts and whether the
-commissioning window is open; `GET
+commissioning window is open, and `counters`, the daemon's own counts
+since it started (go-fabric-ui contract 0.8.0), host-wide as the warnings
+are, so every node's status carries the same list: `discards`, the
+controller commands answered with success that called nothing
+(`bridge.command_discarded`), summed over every node, the runs an erase
+ended included. `GET
 /api/v1/node/exposure` is every candidate entity with the exposure rule's
 word, its labels, the deciding layer and go-hamapping's verdict, the same
 as `--dump-plan` prints, and stays empty until Home Assistant has been read
