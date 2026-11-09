@@ -496,10 +496,14 @@ func (f *fleet) find(key string) *member {
 }
 
 // Rename implements [fabricui.NodeRegistry]: the label in the registry
-// and the selector at once; the node's own NodeLabel follows at its next
-// start (go-fabric's facade sets BasicInformation from node.Config only,
-// and a NodeLabel a controller wrote wins over it).
-func (f *fleet) Rename(_ context.Context, key, label string) error {
+// and the selector, then the running node's own NodeLabel
+// (Node.SetNodeLabel, go-fabric node/node_label.go:39 at v0.19.1: a host
+// write, persisted, reported to the controllers' subscriptions), cut as
+// at start (nodeLabel). The node's error is logged and leaves the
+// registry's rename standing; a node without a run takes the label from
+// its record at its next start, unless its store holds one written since
+// (go-fabric restores a persisted label over the configured one).
+func (f *fleet) Rename(ctx context.Context, key, label string) error {
 	f.op.Lock()
 	defer f.op.Unlock()
 	if f.closed {
@@ -509,11 +513,24 @@ func (f *fleet) Rename(_ context.Context, key, label string) error {
 		return err
 	}
 	f.mu.Lock()
-	if m := f.find(key); m != nil {
+	m := f.find(key)
+	if m != nil {
 		m.rec.Label = label
 	}
 	f.mu.Unlock()
-	f.log.Info("ha2fabric.node_renamed", slog.String("node", key))
+	var n *node.Node
+	if m != nil && m.s != nil {
+		n = m.s.node()
+	}
+	if n == nil {
+		f.log.Info("ha2fabric.node_renamed", slog.String("node", key))
+		return nil
+	}
+	if err := n.SetNodeLabel(ctx, nodeLabel(label)); err != nil {
+		f.log.Warn("ha2fabric.node_renamed", slog.String("node", key), slog.String("error", err.Error()))
+		return nil
+	}
+	f.log.Info("ha2fabric.node_renamed", slog.String("node", key), slog.Bool("node_label", true))
 	return nil
 }
 

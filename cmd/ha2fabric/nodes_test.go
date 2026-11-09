@@ -226,9 +226,17 @@ func TestNodeRegistry(t *testing.T) {
 		t.Fatal("the node's choice reached the configured node's selection")
 	}
 
+	if b := d.want(http.MethodGet, "/api/v1/nodes/alexa/endpoints/0", "", http.StatusOK); !bytes.Contains(b, []byte(`"Alexa"`)) {
+		t.Fatalf("the root's NodeLabel before the rename: %s", b)
+	}
 	d.want(http.MethodPut, "/api/v1/nodes/alexa/label", `{"label":"Echo"}`, http.StatusNoContent)
 	if l := d.nodes(); l.Nodes[1].Label != "Echo" {
 		t.Fatalf("renamed %+v", l)
+	}
+	// The running node's own NodeLabel follows at once (Node.SetNodeLabel,
+	// go-fabric v0.19.1): the root's BasicInformation serves it.
+	if b := d.want(http.MethodGet, "/api/v1/nodes/alexa/endpoints/0", "", http.StatusOK); !bytes.Contains(b, []byte(`"Echo"`)) || bytes.Contains(b, []byte(`"Alexa"`)) {
+		t.Fatalf("the root's NodeLabel after the rename: %s", b)
 	}
 	d.want(http.MethodDelete, "/api/v1/nodes/default", "", http.StatusConflict)
 	d.stop()

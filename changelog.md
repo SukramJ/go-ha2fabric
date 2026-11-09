@@ -30,6 +30,10 @@ All notable changes to this project are documented here. The format follows
   high-water mark: go-fabric `v0.19.1`'s `FactoryReset` erases the
   numbering with the endpoint records (go-fabric issue 457, #50). The
   daemon test asserts it.
+- Renaming a registry node in the web UI renames the running node's own
+  NodeLabel at once — persisted and reported to its controllers —
+  instead of at its next start (go-fabric `Node.SetNodeLabel`).
+- go-fabric `v0.19.1`, go-fabric-ui `v0.8.0`, go-hamapping `v0.4.8`.
 
 ## [0.5.8] - 2026-11-08
 

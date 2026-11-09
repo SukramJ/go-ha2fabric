@@ -386,9 +386,13 @@ for all its fabrics, so a different scope is a different node.
 - **Pairing**: each node has its own pairing page and codes, and opens
   its commissioning window while no controller has paired it; its codes
   are in the log at its start (`ha2fabric.pairing node=<key>`).
-- **Rename** changes the name in the selector and the status page at
-  once; the node's `NodeLabel` takes it at the next start (a name a
-  controller wrote wins, as for the configured node).
+- **Rename** changes the name in the selector and the status page, and
+  the running node's `NodeLabel` (cut to 32 bytes), at once: the node
+  persists it and reports it to its controllers' subscriptions (go-fabric
+  `Node.SetNodeLabel`), so a rename reaches the controllers without a
+  restart (`ha2fabric.node_renamed`; at warn with `error` when the node
+  refused it, which leaves the registry's name standing). A controller
+  that writes a name later wins in turn.
 - **Delete** is final: the node leaves every fabric it holds (its
   controllers lose it), stops, and its store, its selection and its
   record are removed (`ha2fabric.node_deleted`). The configured node
