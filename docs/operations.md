@@ -24,7 +24,8 @@ its pair in the same directory, `ha2fabric-<key>.db` and
 The store holds the fabrics with their operational keys, the access control
 lists, the subscriptions to re-establish and the endpoint numbers of the
 bridged entities. Losing it unpairs the bridge from every controller, and
-the entities come back under new endpoint numbers. Keep it on storage that
+the entities are numbered afresh from the first bridged number (2), as on
+a new installation. Keep it on storage that
 survives restarts and upgrades, protect it like a key (it holds private
 keys unencrypted), back it up only with the daemon stopped (the add-on
 sets `backup: cold`, so the Supervisor stops it for a backup), and never
@@ -400,8 +401,12 @@ confirmations), starts the node over. It erases the fabrics — every
 paired controller loses the node, through the Leave event —, the store
 (ACL, group keys, resumption records, subscriptions, settings and
 counters, the pinned UniqueID; a fresh one is pinned) and the endpoint
-records, so the entities come back under new endpoint numbers at the next
-sync. It keeps the configuration, `selection.json` (a registry node's
+records with their number counter (go-fabric `Node.FactoryReset`, which
+calls `endpoint.Store.EraseEndpoints` since v0.19.0), so at the next sync
+the entities are numbered from the first bridged number (2) again, as on
+a new installation; the daemon test measures it (`TestNodeErase`: the
+fixtures' entities take the numbers they had before the erase). The
+controllers see a new device either way: the fabric is new. It keeps the configuration, `selection.json` (a registry node's
 `selection-<key>.json`), a registry node's record, the passcode and the
 discriminator, so the pairing codes stay the same. The node comes back
 at once, with its commissioning window open: the log says

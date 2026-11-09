@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -369,8 +370,17 @@ func TestNodeErase(t *testing.T) {
 		after = d.endpointIDs("/api/v1/node")
 		return len(after) == len(before)
 	})
-	// The measurement of brief E1 §4.1 on a store file: reported, not a gate.
+	// go-fabric v0.19.1's FactoryReset erases the numbering with the rows
+	// (EraseEndpoints, go-fabric issue 457): the node that comes back
+	// numbers from the first bridged number again, so the entities take
+	// the numbers they had (issue #50; brief E1 §4.1 measured 2–n becoming
+	// n+1–2n before).
+	slices.Sort(before)
+	slices.Sort(after)
 	t.Logf("configured node's endpoints across the erase: before %v, after %v", before, after)
+	if !slices.Equal(before, after) || before[0] != 2 {
+		t.Fatalf("the erased node's numbers %v, want the first bridged numbers %v from 2", after, before)
+	}
 	logs := d.logs.String()
 	if !strings.Contains(logs, "ha2fabric.node_erased") || strings.Count(logs, "msg=ha2fabric.pairing ") < 2 {
 		t.Fatalf("no node_erased line or no second pairing line\n%s", logs)

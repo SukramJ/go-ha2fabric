@@ -17,6 +17,14 @@ All notable changes to this project are documented here. The format follows
   name the host lacks, a named container bridge, a named interface without
   an address — is logged at start as `ha2fabric.mdns_interface`.
 
+### Changed
+
+- An erased node numbers its bridged endpoints from the first bridged
+  number (2) again, as a new installation does, instead of above the old
+  high-water mark: go-fabric `v0.19.1`'s `FactoryReset` erases the
+  numbering with the endpoint records (go-fabric issue 457, #50). The
+  daemon test asserts it.
+
 ## [0.5.8] - 2026-11-08
 
 The lock relocks after UnlockWithTimeout; Toggle on a mute plug acts, over
@@ -96,7 +104,9 @@ Erase for the configured node and the registry nodes, over go-fabric-ui `v0.7.1`
   removes the node's fabrics (the controllers lose it), erases its store
   and its endpoint records and stops it; the node comes back at once on
   the erased store with its commissioning window open, the same pairing
-  codes and its selection, its entities under new endpoint numbers. The
+  codes and its selection, its entities under new endpoint numbers. [Corrected
+  in 0.6.0: since go-fabric `v0.19.0` the erase restarts the numbering, and
+  the entities come back under the first bridged numbers again.] The
   web UI follows the new node through go-fabric-ui's `NodeSwitch`. Logged
   `ha2fabric.node_erased`; a node that does not come back is logged
   `ha2fabric.node_lost`, the daemon keeps running, and the status pages
