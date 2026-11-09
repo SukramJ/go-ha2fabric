@@ -82,11 +82,11 @@ type Config struct {
 	// Interfaces at v0.19.1). One host, one set: every node gets it.
 	MDNSInterfaces []string
 	Passcode       uint32
-	Discriminator uint16
-	VendorID      uint16
-	ProductID     uint16
-	Label         string
-	StorePath     string
+	Discriminator  uint16
+	VendorID       uint16
+	ProductID      uint16
+	Label          string
+	StorePath      string
 
 	Include, Exclude []string
 	// IncludeLabels and ExcludeLabels are Home Assistant labels, by name
