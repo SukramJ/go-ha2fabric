@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-09
+
+The mDNS interface allow-list, `discards` in the status JSON, an erase
+that numbers from 2 again and a rename that reaches the controllers at
+once, over go-fabric `v0.19.1`, go-fabric-ui `v0.8.0` and go-hamapping
+`v0.4.8`.
+
 ### Added
 
 - `MDNS_INTERFACES` (`--mdns-interfaces`; the add-on's `mdns_interfaces`):
