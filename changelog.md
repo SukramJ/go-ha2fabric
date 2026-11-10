@@ -6,6 +6,30 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-11-10
+
+The bump to go-fabric `v0.21.0`, go-fabric-ui `v0.9.0` and go-hamapping
+`v0.4.10`; an erase no longer waits on a controller that never answers.
+
+### Changed
+
+- go-fabric `v0.21.0`: `v0.19.2` bounds the fabric-leaving flush of
+  `Node.FactoryReset` and `Node.RemoveFabric` (one report per
+  subscription, the Leave event with the attributes owed, without
+  retransmissions; go-fabric issue 473); `v0.20.0` and `v0.21.0` are
+  controller-side (go-fabric issues 478, 483, 488), and `node`'s
+  diagnostics types are now aliases of the new `diag` package, with no
+  change for this daemon.
+- go-fabric-ui `v0.9.0`: the controller family's Diagnostics tab is not
+  mounted here; the node family's `SessionInfo` gains optional fields the
+  node side leaves absent.
+- go-hamapping `v0.4.10`: the version bump alone.
+
+### Fixed
+
+- An erase no longer waits ~14 s for a report the controller never
+  answers (go-fabric 0.19.2, issue 473).
+
 ## [0.6.0] - 2026-11-09
 
 The mDNS interface allow-list, `discards` in the status JSON, an erase

@@ -5,6 +5,13 @@ tracks the project release; the project's
 [changelog.md](https://github.com/SukramJ/go-ha2fabric/blob/main/changelog.md)
 has the details.
 
+## 0.6.1
+
+- Erase finishes promptly again instead of sometimes waiting about 14
+  seconds for a controller that does not answer.
+- Updated libraries (go-fabric 0.21.0, go-fabric-ui 0.9.0,
+  go-hamapping 0.4.10).
+
 ## 0.6.0
 
 - `mdns_interfaces`: the network interfaces the bridge announces itself
