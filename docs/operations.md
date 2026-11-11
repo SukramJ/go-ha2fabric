@@ -5,7 +5,9 @@ addresses, mDNS, the token, the logs, the health endpoint, pairing and the
 nodes created in the web UI. The
 node's side of each is go-fabric's
 [operations guide](https://github.com/SukramJ/go-fabric/blob/v0.11.0/docs/guides/operations.md);
-this page is the daemon's version.
+this page is the daemon's version. Terms such as fabric, commissioning
+window, bridged node and served surface are defined in go-fabric's
+[glossary](https://sukramj.github.io/go-fabric/reference/glossary/).
 
 ## Files
 
