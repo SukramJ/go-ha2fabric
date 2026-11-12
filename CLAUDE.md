@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Home Assistant entities as a bridge for Matter controllers, in pure Go on go-fabric. Twin of `go-hamapping`; both are built on
 [go-fabric](https://github.com/SukramJ/go-fabric) and share its project
-setup. **State: 0.6.1** (brief H3, two follow-ups, the family bump F1 and its follow-ups F2, brief R1–R5, brief R6, the go-fabric v0.15.6 and v0.17.0 bumps, the go-fabric v0.18.0 bump, brief C1, brief A1, brief E1, brief C2, brief C3 — go-hamapping v0.4.6, #51, the go-hamapping v0.4.7 bump, brief D1 — go-fabric v0.19.1, go-fabric-ui v0.8.0, go-hamapping v0.4.8, #41, #50, brief D2 — go-fabric v0.21.0, go-fabric-ui v0.9.0, go-hamapping v0.4.10): the daemon `cmd/ha2fabric` and its
+setup. **State: 0.6.2** (brief H3, two follow-ups, the family bump F1 and its follow-ups F2, brief R1–R5, brief R6, the go-fabric v0.15.6 and v0.17.0 bumps, the go-fabric v0.18.0 bump, brief C1, brief A1, brief E1, brief C2, brief C3 — go-hamapping v0.4.6, #51, the go-hamapping v0.4.7 bump, brief D1 — go-fabric v0.19.1, go-fabric-ui v0.8.0, go-hamapping v0.4.8, #41, #50, brief D2 — go-fabric v0.21.0, go-fabric-ui v0.9.0, go-hamapping v0.4.10, the go-fabric v0.22.0 bump): the daemon `cmd/ha2fabric` and its
 add-on. `CONCEPT.md` is the design, `docs/operations.md` the operator's
 page, `docs/by_design.md` the differences from matter-hub,
 `docs/reports/H2.md`, `H3.md`, `F1.md` and `F2.md` the waves' reports. Layout: `cmd/ha2fabric`
@@ -40,7 +40,7 @@ make race      # go test -race (CGO_ENABLED=1 for this run only)
 make fmt       # gofumpt -w .
 ```
 
-Go 1.27.3, `CGO_ENABLED=0`. Dependencies: go-fabric, go-fabric-ui,
+Go 1.27.4, `CGO_ENABLED=0`. Dependencies: go-fabric, go-fabric-ui,
 go-hamapping, go-hamqtt (`model`), go-ha-catalog, coder/websocket — `THIRD-PARTY-NOTICES.md`.
 Every further dependency is a decision: Apache-2.0 / MIT / BSD / ISC only,
 and it updates the notices.

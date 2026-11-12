@@ -5,6 +5,12 @@ tracks the project release; the project's
 [changelog.md](https://github.com/SukramJ/go-ha2fabric/blob/main/changelog.md)
 has the details.
 
+## 0.6.2
+
+- Built with Go 1.27.4 (a security fix in its HTTP server).
+- Updated library (go-fabric 0.22.0): the mDNS responder joins network
+  interfaces that come up after the add-on started.
+
 ## 0.6.1
 
 - Erase finishes promptly again instead of sometimes waiting about 14

@@ -7,7 +7,7 @@
 #     -e HA_URL=ws://homeassistant.local:8123/api/websocket -e HA_TOKEN=... \
 #     ghcr.io/sukramj/go-ha2fabric
 
-FROM golang:1.27.3-alpine AS build
+FROM golang:1.27.4-alpine AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
