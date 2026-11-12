@@ -6,6 +6,19 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-11-12
+
+The bump to go-fabric `v0.22.0`; go-fabric-ui stays at `v0.9.0` and
+go-hamapping at `v0.4.10` until their own releases carry it.
+
+### Changed
+
+- go-fabric `v0.22.0`: milestone 7 (BLE and Wi-Fi commissioning on the
+  device side, `node.Network.BLE` and `node.Network.WiFi.Driver`; not wired
+  here, the node stays on the host's network); the mDNS responder joins
+  interfaces that come up after start; the removed
+  `fabrictest.UseWiFiCommissioning` is not used here. No source change.
+
 ## [0.6.1] - 2026-11-10
 
 The bump to go-fabric `v0.21.0`, go-fabric-ui `v0.9.0` and go-hamapping
