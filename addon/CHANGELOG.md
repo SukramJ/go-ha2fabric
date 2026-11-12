@@ -7,6 +7,7 @@ has the details.
 
 ## 0.6.2
 
+- Built with Go 1.27.4 (a security fix in its HTTP server).
 - Updated library (go-fabric 0.22.0): the mDNS responder joins network
   interfaces that come up after the add-on started.
 

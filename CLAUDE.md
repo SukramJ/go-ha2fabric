@@ -40,7 +40,7 @@ make race      # go test -race (CGO_ENABLED=1 for this run only)
 make fmt       # gofumpt -w .
 ```
 
-Go 1.27.3, `CGO_ENABLED=0`. Dependencies: go-fabric, go-fabric-ui,
+Go 1.27.4, `CGO_ENABLED=0`. Dependencies: go-fabric, go-fabric-ui,
 go-hamapping, go-hamqtt (`model`), go-ha-catalog, coder/websocket — `THIRD-PARTY-NOTICES.md`.
 Every further dependency is a decision: Apache-2.0 / MIT / BSD / ISC only,
 and it updates the notices.

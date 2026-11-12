@@ -13,6 +13,7 @@ go-hamapping at `v0.4.10` until their own releases carry it.
 
 ### Changed
 
+- Built with Go 1.27.4: `GO-2026-6859` (`net/http`, fixed in 1.27.4); `go.mod`, the workflows and the Dockerfiles move together.
 - go-fabric `v0.22.0`: milestone 7 (BLE and Wi-Fi commissioning on the
   device side, `node.Network.BLE` and `node.Network.WiFi.Driver`; not wired
   here, the node stays on the host's network); the mDNS responder joins
