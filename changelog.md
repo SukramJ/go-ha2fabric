@@ -8,17 +8,21 @@ All notable changes to this project are documented here. The format follows
 
 ## [0.6.2] - 2026-11-12
 
-The bump to go-fabric `v0.22.0`; go-fabric-ui stays at `v0.9.0` and
+The bump to go-fabric `v0.22.1`; go-fabric-ui stays at `v0.9.0` and
 go-hamapping at `v0.4.10` until their own releases carry it.
 
 ### Changed
 
 - Built with Go 1.27.4: `GO-2026-6859` (`net/http`, fixed in 1.27.4); `go.mod`, the workflows and the Dockerfiles move together.
-- go-fabric `v0.22.0`: milestone 7 (BLE and Wi-Fi commissioning on the
+- go-fabric `v0.22.1`; `v0.22.0` is milestone 7 (BLE and Wi-Fi commissioning on the
   device side, `node.Network.BLE` and `node.Network.WiFi.Driver`; not wired
   here, the node stays on the host's network); the mDNS responder joins
   interfaces that come up after start; the removed
   `fabrictest.UseWiFiCommissioning` is not used here. No source change.
+- go-fabric `v0.22.1` (patch, issue 507): the reconnect fix in `client/peer`
+  for a Thread node behind a border router whose SRV set flips to the border
+  router's own host; it reaches this bridge through `node`'s binding client
+  (a bound Thread target), the daemon controls no nodes itself.
 
 ## [0.6.1] - 2026-11-10
 
