@@ -29,7 +29,7 @@ in-process controller (`fabrictest`).
 The table: which Home Assistant entity becomes which device type and
 cluster, and which controller command becomes which entity command.
 
-- Source: <https://github.com/SukramJ/go-hamapping>, pinned `v0.4.11`.
+- Source: <https://github.com/SukramJ/go-hamapping>, pinned `v0.4.12`.
 - Copyright (C) 2026 SukramJ. Apache License 2.0.
 - Decision: CONCEPT.md, Shape — the mapping is go-hamapping's.
 
@@ -39,7 +39,7 @@ The web interface: the `fabricui` handlers and the built bundle embedded in
 the module (Svelte 5 pages compiled at go-fabric-ui's release; no Node.js
 in this build).
 
-- Source: <https://github.com/SukramJ/go-fabric-ui>, pinned `v0.9.1`.
+- Source: <https://github.com/SukramJ/go-fabric-ui>, pinned `v0.9.2`.
 - Copyright (C) 2026 SukramJ. Apache License 2.0; the bundle's own
   notices travel in its `THIRD-PARTY-NOTICES.md`.
 - Decision: go-fabric concept v9 — one UI for the family's daemons

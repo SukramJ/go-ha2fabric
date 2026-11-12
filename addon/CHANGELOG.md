@@ -7,7 +7,8 @@ has the details.
 
 ## 0.6.3
 
-- Updated library (go-fabric 0.22.2): the release fixes only go-fabric's
+- Updated libraries (go-fabric 0.22.2, go-fabric-ui 0.9.2,
+  go-hamapping 0.4.12): the releases fix only go-fabric's
   ESPHome Bluetooth proxy support, which the add-on does not use; no change
   in behaviour.
 

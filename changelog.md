@@ -8,8 +8,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [0.6.3] - 2026-11-12
 
-The bump to go-fabric `v0.22.2`; go-fabric-ui stays at `v0.9.1` and
-go-hamapping at `v0.4.11`.
+The bump to go-fabric `v0.22.2`, go-fabric-ui `v0.9.2` and go-hamapping
+`v0.4.12`.
 
 ### Changed
 
@@ -18,6 +18,7 @@ go-hamapping at `v0.4.11`.
   answers with a GATT error is reported as the peripheral's disconnect); the
   root module has no code change and this bridge does not use
   `ble/esphome`. Alignment only, no behaviour change.
+- go-fabric-ui `v0.9.1` → `v0.9.2`, go-hamapping `v0.4.11` → `v0.4.12`: the dependency only (each on go-fabric `v0.22.2` and Go 1.27.4; the UI contract stays 0.9.0).
 
 ## [0.6.2] - 2026-11-12
 
