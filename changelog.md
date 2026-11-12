@@ -6,6 +6,19 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.6.3] - 2026-11-12
+
+The bump to go-fabric `v0.22.2`; go-fabric-ui stays at `v0.9.1` and
+go-hamapping at `v0.4.11`.
+
+### Changed
+
+- go-fabric `v0.22.1` → `v0.22.2` (patch, go-fabric PR 512): a fix in the
+  nested module `ble/esphome` only (a C1 write an ESPHome Bluetooth proxy
+  answers with a GATT error is reported as the peripheral's disconnect); the
+  root module has no code change and this bridge does not use
+  `ble/esphome`. Alignment only, no behaviour change.
+
 ## [0.6.2] - 2026-11-12
 
 The bump to go-fabric `v0.22.1`, go-fabric-ui `v0.9.1` and go-hamapping

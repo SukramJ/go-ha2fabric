@@ -5,6 +5,12 @@ tracks the project release; the project's
 [changelog.md](https://github.com/SukramJ/go-ha2fabric/blob/main/changelog.md)
 has the details.
 
+## 0.6.3
+
+- Updated library (go-fabric 0.22.2): the release fixes only go-fabric's
+  ESPHome Bluetooth proxy support, which the add-on does not use; no change
+  in behaviour.
+
 ## 0.6.2
 
 - Built with Go 1.27.4 (a security fix in its HTTP server).
