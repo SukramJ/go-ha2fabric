@@ -8,8 +8,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [0.6.2] - 2026-11-12
 
-The bump to go-fabric `v0.22.1`; go-fabric-ui stays at `v0.9.0` and
-go-hamapping at `v0.4.10` until their own releases carry it.
+The bump to go-fabric `v0.22.1`, go-fabric-ui `v0.9.1` and go-hamapping
+`v0.4.11`.
 
 ### Changed
 
@@ -23,6 +23,7 @@ go-hamapping at `v0.4.10` until their own releases carry it.
   for a Thread node behind a border router whose SRV set flips to the border
   router's own host; it reaches this bridge through `node`'s binding client
   (a bound Thread target), the daemon controls no nodes itself.
+- go-fabric-ui `v0.9.0` → `v0.9.1`, go-hamapping `v0.4.10` → `v0.4.11`: the dependency only (each on go-fabric `v0.22.1` and Go 1.27.4; the UI contract stays 0.9.0).
 
 ## [0.6.1] - 2026-11-10
 
