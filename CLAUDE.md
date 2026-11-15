@@ -158,21 +158,28 @@ directly, each in its own pull request.
 
 ## Which model does which work
 
-As go-fabric's CLAUDE.md, adapted: a statement about Home Assistant or
-matter-hub that lands in the repo is cited later as fact, so the work that
-produces such statements gets the strongest model, and the work a guard
-checks may use a cheaper one.
+As go-fabric's CLAUDE.md, adapted; re-cut by the owner on 2026-11-15,
+mirrored from go-fabric #529 and openccu-loom #1108 (in the owner's words:
+"Wichtig ist, dass die Qualität hoch ist, aber Fable gezielt für die Dinge
+eingesetzt wird, die es wirklich besser kann"). The bar is unchanged: a
+statement about Home Assistant or matter-hub that lands in the repo is cited
+later as fact, so it comes from the strongest model. But the strongest model
+does only the part that needs it: reading the reference and judging. The
+writing, the mechanics and the code review are Opus.
 
 | Work | Model |
 | --- | --- |
-| Analysis, planning, briefs, the wave report; anything written into `docs/by_design.md`, `CONCEPT.md` or a comment that cites `home-assistant/core` or matter-hub `file:line`; the translation in `internal/adapt` and the exposure rule in `internal/expose` (both are facts about Home Assistant); credential handling (`internal/config`, the token's path to the client); rebases and merge conflicts where upstream may have overtaken the change; a question to go-hamapping or go-fabric | **Fable** (the default for this repo) |
-| Implementation of a finished brief with guards behind it: a bridge or web change whose tests and fixtures already hold the behaviour, a dependency bump with its notices, a `changelog.md` entry for a finished diff | **Opus** (also what fast mode runs on) |
-| **Review of a wave's pull request, split (owner decision 2026-11-08, go-fabric #456).** The code review — correctness, concurrency, error paths, tests, the fixed report shape — is **Opus**. On top of it **Fable** reads, bounded: every new citation line against the pinned source (`home-assistant/core` 2026.10.3, matter-hub `664575a`, go-fabric at its tag), every line that enters `docs/by_design.md` or `CONCEPT.md`, the credential paths of the first row, and the brief's decisions against Home Assistant and matter-hub — the behavioural gaps a code review does not see. The load-bearing claims of the Opus review are verified before they reach the implementer. | **Opus**, then **Fable** |
+| **Coordination** of a wave: starting agents, integrating, guards, pull requests, status | **Opus**, in a fresh session per wave (the state is in the notes and the memory, never in a long context) |
+| **Planning and decisions:** the wave plan and its brief; the decisions put to the owner, with the architecture reasoning ([The architecture standard](#the-architecture-standard)); *which* guard gets built and its bite line; a question to go-hamapping or go-fabric; the verdict where `home-assistant/core`, matter-hub, go-hamapping and go-fabric contradict each other | **Fable**, as a targeted agent |
+| **Reading the reference and judging:** what `home-assistant/core` (2026.10.3) and matter-hub (`664575a`) do at the pin, and whether a difference is a deliberate divergence or a gap — for `docs/by_design.md`, `CONCEPT.md`, a report's decisions, every comment that cites `home-assistant/core` or matter-hub `file:line`, and the Home Assistant facts the translation in `internal/adapt` and the exposure rule in `internal/expose` rest on | **Fable** gives the verdict with the lines as a short fact note; **Opus** writes the entry or the comment in the file's form; **Fable** reads the finished text once against its note. Every reference statement comes from Fable |
+| **Implementation**, also on `internal/adapt`, `internal/expose` and the credential handling (`internal/config`, the token's path to the client); test ports; a dependency bump with its notices; a `changelog.md` entry, the wave report and docs; rebases and merge conflicts | **Opus** (also what fast mode runs on) — with the Fable read of the next row before it merges where it touches one of those paths or mirrors Home Assistant or matter-hub |
+| **Review** of a wave's pull request | **Opus** does the code review — correctness, concurrency, error paths, tests, the fixed report shape. **Fable** reads on top, bounded: behaviour against `home-assistant/core` 2026.10.3, matter-hub `664575a` and go-fabric at its tag, the paths of the row above, and every finding of high or medium severity for confirmation before it reaches an implementer |
+| **Citations** | **Opus** checks every range (the file, the lines, the construct the sentence names). **Fable** reads every citation that is the reason for behaviour ("as Home Assistant does", "as matter-hub"), every doubtful one and a sample of the rest |
 | Work a test or formatter checks immediately: `gofumpt`, regenerating the coverage floors, adding a test case to an existing pattern; search and first reading of a source tree (`home-assistant/core`, matter-hub, go-hamapping, this repo) whose result a stronger model or the owner reads again | **Sonnet**, including as the model of a delegated search subagent |
 
 Sonnet never writes a fact about Home Assistant or matter-hub into the
-repo, and never touches the credential paths named in the first row. When
-in doubt about which row a task is in, it is in the first.
+repo. Opus does not either: it writes what Fable's fact note states. When in
+doubt whether a statement is a reference fact, it is one.
 
 ## Agents and token use
 
@@ -217,6 +224,32 @@ doubling.
 - **Edit by script.** Several replacements in several files are one
   scripted call with asserted anchors, not a chain of interactive
   edits; a generated file is regenerated, never patched.
+- **The strongest model for the part that needs it.** Set by the owner on
+  2026-11-15. Fable reads references, judges and plans (the table above);
+  it does not coordinate, format, write prose or run mechanics. A Fable
+  agent's brief is bounded: the lines to read, the question to answer, a
+  fact note back.
+- **Few turns in a long session.** A coordinator waits for several agents
+  at once and integrates them together; a status message carries new
+  information or is not sent; a wave starts in a fresh session.
+- **The assistant says when to clear the context.** Set by the owner on
+  2026-11-15. It does not wait to be asked: it proposes a fresh session
+  when a wave or a pull request is merged; when the context has been
+  summarised once and the work that remains is of another kind; or when
+  what it still needs fits in a short hand-over and the turns are mostly
+  waiting for agents or pipelines. It does NOT propose one while agents of
+  the session are running or a decision of the owner is open. The proposal
+  comes with the hand-over already written — the state, the open points
+  with where each goes, the next step, the lessons — into the memory file
+  and the notes (never only into the chat), and with the exact way to go
+  on: `/clear`, the model to switch to (`/model`), and the first message
+  to send, which names the files to read.
+- **The pipeline's guards before the pull request, not after.** The local
+  guard set is what the jobs of `.github/workflows/ci.yml` run: `make ci`,
+  `make race`, `make cover-check`, `make fuzz-smoke`,
+  `make vuln licenses secrets`, `make release` (with `make version-check`)
+  and `make docker addon-image`. A red pipeline costs a round of
+  coordinator turns.
 - **Agents read what the brief names.** An implementing agent gets the
   file list and the pinned sources in the brief, reads those, and reports
   in the fixed shape; it does not survey the tree. The brief is copied to
