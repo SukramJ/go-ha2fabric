@@ -4,13 +4,19 @@
 package bridge_test
 
 import (
+	"context"
 	"strings"
 	"testing"
 
+	onoffdef "thingfabric.dev/go-fabric/cluster/spec/onoff"
+	"thingfabric.dev/go-fabric/controller/client"
 	"thingfabric.dev/go-fabric/device"
+	"thingfabric.dev/go-fabric/fabrictest"
 	"thingfabric.dev/go-fabric/node"
 
+	"github.com/SukramJ/go-ha2fabric/internal/bridge"
 	"github.com/SukramJ/go-ha2fabric/internal/expose"
+	"github.com/SukramJ/go-ha2fabric/internal/ha"
 )
 
 // served is the endpoint the node serves under key, or nil.
@@ -65,4 +71,51 @@ func TestFailedBatchOperationIsRetried(t *testing.T) {
 	if s := e.br.Status(); s.SyncError != "" {
 		t.Fatalf("status %+v", s)
 	}
+}
+
+// gated holds every call_service on one entity until hold is closed.
+type gated struct {
+	bridge.Upstream
+	entity string
+	held   chan struct{}
+	hold   chan struct{}
+}
+
+func (g *gated) CallService(ctx context.Context, sc ha.ServiceCall) error {
+	if sc.EntityID == g.entity {
+		g.held <- struct{}{}
+		<-g.hold
+	}
+	return g.Upstream.CallService(ctx, sc)
+}
+
+// TestQueuedCommandOfUnexposedEntity (HR-P1-conc-33): a command queued
+// while its entity was exposed is not called once a sync took the
+// entity's endpoint away.
+func TestQueuedCommandOfUnexposedEntity(t *testing.T) {
+	g := &gated{entity: "light.kitchen", held: make(chan struct{}, 1), hold: make(chan struct{})}
+	e := newEnv(t, expose.Rule{Assist: true}, func(s *setup) {
+		s.wrap = func(up bridge.Upstream) bridge.Upstream { g.Upstream = up; return g }
+	})
+	e.commission()
+	light, coffee := e.mustEndpoint("light.kitchen"), e.mustEndpoint("switch.coffee")
+	mark := len(e.ha.Calls())
+	if _, err := fabrictest.Invoke(e.ctx, e.pair, client.CommandAt(light, onoffdef.ClusterID, onoffdef.CmdOff), nil); err != nil {
+		t.Fatal(err)
+	}
+	<-g.held // the light's call is running
+	if _, err := fabrictest.Invoke(e.ctx, e.pair, client.CommandAt(coffee, onoffdef.ClusterID, onoffdef.CmdOn), nil); err != nil {
+		t.Fatal(err)
+	}
+	e.ha.SetExposed("switch.coffee", false)
+	if err := e.br.Resync(e.ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := e.endpoint("switch.coffee"); ok {
+		t.Fatal("the switch is still served")
+	}
+	close(g.hold)
+	e.nextCall(mark, "light.kitchen")
+	e.noCall(mark, "switch.coffee")
+	e.eventually("the dropped command is counted", func() bool { return e.br.Status().CommandErrs == 1 })
 }

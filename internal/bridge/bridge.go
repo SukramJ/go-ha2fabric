@@ -168,6 +168,9 @@ type Bridge struct {
 	// sync forgets it instead of removing it ([Bridge.noteRemoved]).
 	// Recorded under mu at the event, never through the droppable queue.
 	forget map[string]device.SourceKey
+	// serving are the entity ids the last sync serves on an endpoint: a
+	// queued command runs only for one of them ([Bridge.command]).
+	serving map[string]bool
 	// ranges are the heat/cool ranges the command loop last sent, by
 	// entity id, until a state shows them ([Bridge.sentRangeLocked]).
 	ranges map[string]sentRange
@@ -530,7 +533,17 @@ func (b *Bridge) sync(ctx context.Context) {
 		}
 	}
 	slices.Sort(moved)
+	serving := map[string]bool{}
+	for _, g := range next {
+		if len(g.devices) == 0 {
+			continue
+		}
+		for _, e := range g.Entities {
+			serving[e.Key()] = true
+		}
+	}
 	b.mu.Lock()
+	b.serving = serving
 	b.verdicts = verdicts
 	b.last = snap
 	b.all = all

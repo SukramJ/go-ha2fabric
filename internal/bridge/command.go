@@ -70,6 +70,14 @@ func (b *Bridge) commandLoop(ctx context.Context) {
 func (b *Bridge) command(ctx context.Context, c model.Command) {
 	id := c.Entity.Key()
 	b.mu.Lock()
+	// A command waits in the queue; the sync before it runs may have
+	// taken its entity off the bridge (HR-P1-conc-33).
+	if !b.serving[id] {
+		b.mu.Unlock()
+		b.log.Warn("bridge.command_unserved", slog.String("entity", id), slog.String("hint", "the entity left the bridge while its command was queued"))
+		b.setStatus(func(s *Status) { s.CommandErrs++; s.LastCommand = id + ": no longer exposed" })
+		return
+	}
 	cur := b.states[id]
 	if c.Method == hamapping.MethodTemperatureLow || c.Method == hamapping.MethodTemperatureHigh {
 		cur = b.sentRangeLocked(id, cur)

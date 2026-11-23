@@ -166,6 +166,7 @@ func rangeBridge(t *testing.T) (*Bridge, *fakeUp) {
 	}
 	b := New(nil, up, Options{Logger: slog.New(slog.DiscardHandler), Input: func() plan.Input { return plan.Input{} }})
 	b.states["climate.a"] = &ha.State{EntityID: "climate.a", State: "heat_cool", Attributes: map[string]any{"target_temp_low": 18.0, "target_temp_high": 24.0}}
+	b.serving = map[string]bool{"climate.a": true}
 	return b, up
 }
 
