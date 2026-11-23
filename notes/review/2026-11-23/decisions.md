@@ -68,3 +68,16 @@ took every recommendation and, in row 30, also the third issue. Sources:
 | 28 | HR-P1-ha-07, -ha-08, a refused token and the back-off | **Slow down and warn**: the back-off no longer resets on an authentication that is followed by a drop; after `auth_invalid` minutes, then hourly; a status warning; no exit, in the add-on and stand-alone alike |
 | 29 | HR-P1-err-64, the stop budget | **`timeout: 30` and one deadline**: `addon/config.yaml` `timeout: 30`; one deadline for the whole stop; the configured node stopped in parallel with the registry nodes; the web server's shutdown error logged |
 | 30 | go-hamapping issues (decision 9) | **Three issues**: the range command (HR-P1-adpt-30), an exported stable-key helper (HR-P1-adpt-69), and the primary endpoint's independence of input order as a question (HR-P1-adpt-68) |
+
+## 2026-11-23, after phase 1's fix wave
+
+Put as one wizard of four questions, the recommendation first; the owner
+took every recommendation and both further issues. Sources:
+`phase-1-fix-F1.md`, `phase-1-fix-F2.md`.
+
+| # | Subject | Decision |
+| --- | --- | --- |
+| 31 | HR-P1-conc-03, the idle end of a camera session | **1 h**, beside the cap of 8 sessions per camera; replaced by go-fabric's signal that a session's controller is gone once it exists |
+| 32 | HR-P1-adpt-30, how long the range last sent is held | **30 s** (or until a state shows it); the stop-gap goes with go-hamapping #39 |
+| 33 | HR-P1-cfg-34, the label ids a renamed label is followed by | **In memory only**; the warning says the exclusion lapsed, the docs recommend the label id |
+| 34 | Follow-up issues after phase 1's pull request | **Three**: go-fabric's camera kit (a session cap option, a signal that a session's controller is gone, whether CameraAvStreamManagement serialises its commands; a Fable-checked hand-over); here a `--health` flag for an image health check (HR-P1-sup-19); here the add-on as an unprivileged user with a profile and a watchdog after the live Ingress test (HR-P1-sup-18) |
