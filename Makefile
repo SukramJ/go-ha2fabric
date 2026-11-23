@@ -75,8 +75,19 @@ cover: ## coverage profile of every package, as the floors count it
 cover-check: cover ## fail when a package is below its floor (script/coverfloor/floors.txt)
 	$(GO) run ./script/coverfloor coverage.out
 
+# Every fuzz target as <package>:<name>; go test -fuzz takes one target of
+# one package per run.
+FUZZ_TARGETS := \
+	./internal/ha/:FuzzDecode ./internal/ha/:FuzzEventData ./internal/ha/:FuzzSnapshotResults ./internal/ha/:FuzzHTTPBase \
+	./internal/config/:FuzzLoad ./internal/selection/:FuzzOpen ./internal/nodes/:FuzzOpen ./internal/nodes/:FuzzSlug \
+	./internal/camera/:FuzzCandidateFromHA ./internal/camera/:FuzzCandidateToHA ./internal/camera/:FuzzCaptureSnapshot \
+	./internal/adapt/:FuzzEntityState ./internal/adapt/:FuzzService
+
 fuzz-smoke: ## every fuzz target, $(FUZZTIME) each
-	$(GO) test -run '^$$' -fuzz '^FuzzDecode$$' -fuzztime $(FUZZTIME) ./internal/ha/
+	@set -e; for t in $(FUZZ_TARGETS); do \
+	  pkg=$${t%%:*}; name=$${t##*:}; echo "==> $$name $$pkg"; \
+	  $(GO) test -run '^$$' -fuzz "^$$name$$" -fuzztime $(FUZZTIME) $$pkg; \
+	done
 
 vuln: ## govulncheck ./...
 	govulncheck ./...
