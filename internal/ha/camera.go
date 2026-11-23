@@ -91,11 +91,16 @@ const DefaultImageLimit = 64000
 // "websocket", is dropped. Stand-alone, ws://host:8123/api/websocket gives
 // http://host:8123/api; in the add-on, ws://supervisor/core/websocket —
 // the Supervisor's proxy of the core API — gives
-// http://supervisor/core/api.
+// http://supervisor/core/api. The URL must name a host, an IPv6 literal
+// in brackets (RFC 3986 §3.2.2), and the base is re-parsed before it is
+// returned: url.Parse takes "ws://::/websocket", whose base it refuses.
 func HTTPBase(wsURL string) (string, error) {
 	u, err := url.Parse(wsURL)
 	if err != nil {
 		return "", fmt.Errorf("ha: the URL: %w", err)
+	}
+	if u.Hostname() == "" {
+		return "", fmt.Errorf("ha: the URL %q names no host", u.Redacted())
 	}
 	switch u.Scheme {
 	case "ws":
@@ -113,7 +118,16 @@ func HTTPBase(wsURL string) (string, error) {
 		p += "/api"
 	}
 	u.Path, u.RawQuery, u.Fragment = p, "", ""
-	return u.String(), nil
+	base := u.String()
+	if _, err := url.Parse(base); err != nil {
+		// url.Error carries the whole URL, user info included: the
+		// cause only.
+		if ue, ok := errors.AsType[*url.Error](err); ok {
+			err = ue.Err
+		}
+		return "", fmt.Errorf("ha: the URL's host %q: %w", u.Host, err)
+	}
+	return base, nil
 }
 
 // Image is the camera proxy's still (GET /api/camera_proxy/<entity_id>,
