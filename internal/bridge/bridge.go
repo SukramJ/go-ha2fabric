@@ -136,6 +136,10 @@ type Bridge struct {
 	// everything and marks every endpoint unreachable while Home
 	// Assistant is away, so nothing a dropped closure carried is lost.
 	owed atomic.Bool
+	// wake tells a waiting worker that a sync is owed: the failed send and
+	// the mark are two steps, so the worker can drain the queue between
+	// them and would otherwise wait with the sync owed (HR-P1-conc-96).
+	wake chan struct{}
 
 	// worker-owned
 	groups map[string]*group
@@ -195,6 +199,7 @@ func New(n *node.Node, up Upstream, opts Options) *Bridge {
 	return &Bridge{
 		n: n, up: up, opts: opts, log: log,
 		work:   make(chan func(context.Context), 1024),
+		wake:   make(chan struct{}, 1),
 		cmds:   make(chan model.Command, 256),
 		groups: map[string]*group{}, owner: map[string]*group{}, known: map[string]bool{},
 		forget: map[string]device.SourceKey{}, ranges: map[string]sentRange{},
@@ -231,6 +236,10 @@ func (b *Bridge) Run(ctx context.Context) error {
 			if len(b.work) == 0 && b.owed.Swap(false) {
 				b.sync(ctx)
 			}
+		case <-b.wake:
+			if len(b.work) == 0 && b.owed.Swap(false) {
+				b.sync(ctx)
+			}
 		}
 	}
 }
@@ -243,8 +252,18 @@ func (b *Bridge) enqueue(fn func(context.Context)) {
 	select {
 	case b.work <- fn:
 	default:
-		b.owed.Store(true)
+		b.owe()
 		b.log.Error("bridge.queue_full", slog.String("hint", "Home Assistant sends faster than the bridge applies; a re-sync follows once the queue is drained"))
+	}
+}
+
+// owe marks a sync owed and wakes the worker if it waits; a worker busy
+// with the queue finds the mark after its next function.
+func (b *Bridge) owe() {
+	b.owed.Store(true)
+	select {
+	case b.wake <- struct{}{}:
+	default:
 	}
 }
 
@@ -357,7 +376,7 @@ func (b *Bridge) resyncSoon() {
 		select {
 		case b.work <- func(ctx context.Context) { b.sync(ctx) }:
 		default:
-			b.owed.Store(true)
+			b.owe()
 		}
 	})
 }

@@ -120,6 +120,20 @@ func TestQueueFullResyncIsOwed(t *testing.T) {
 	waitFor(t, "a sync after the overflow", func() bool { return up.reads.Load() > 0 })
 }
 
+// TestOwedAfterDrain (HR-P1-conc-96): the overflow's failed send and its
+// mark are two steps, so the worker can drain the queue between them and
+// wait with a sync owed. Built here by marking the sync owed while the
+// worker waits on an empty queue: the sync still runs.
+func TestOwedAfterDrain(t *testing.T) {
+	up := &fakeUp{}
+	up.connected.Store(true)
+	b, _ := floodBridge(t, up)
+	run(t, b)
+	waitFor(t, "the worker waiting", func() bool { return len(b.work) == 0 })
+	b.owe()
+	waitFor(t, "the owed sync", func() bool { return up.reads.Load() > 0 })
+}
+
 // TestQueueFullDisconnected (HR-P1-conc-32): a Disconnected while the
 // queue is full still leaves every endpoint unreachable.
 func TestQueueFullDisconnected(t *testing.T) {
