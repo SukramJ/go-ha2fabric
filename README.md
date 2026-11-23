@@ -177,7 +177,7 @@ make test      # go test -count=1 ./...
 make race      # go test -race (CGO_ENABLED=1 for this run only)
 make lint      # gofumpt + golangci-lint + go mod tidy -diff
 make ci        # build vet test lint
-make cover-check fuzz-smoke   # the coverage floors, the decoder's fuzz target
+make cover-check fuzz-smoke   # the coverage floors; every fuzz target of the Makefile's FUZZ_TARGETS
 make docker addon-image       # both images (amd64)
 make release                  # the release dry run into dist/
 ```
