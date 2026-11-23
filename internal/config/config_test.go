@@ -235,3 +235,19 @@ func TestMDNSInterfaces(t *testing.T) {
 		}
 	}
 }
+
+// TestHelpHidesPasscode: the usage text does not show an environment
+// PASSCODE as the flag's default (HR-P0-leak-29).
+func TestHelpHidesPasscode(t *testing.T) {
+	var out strings.Builder
+	if _, err := Load([]string{"-h"}, MapEnv(map[string]string{"PASSCODE": "34567890"}), &out); !IsHelp(err) {
+		t.Fatalf("-h: %v", err)
+	}
+	if strings.Contains(out.String(), "34567890") || !strings.Contains(out.String(), "-passcode") {
+		t.Fatalf("usage text:\n%s", out.String())
+	}
+	c, err := Load(nil, MapEnv(map[string]string{"HA_URL": "ws://a", "HA_TOKEN": "t", "PASSCODE": "34567890"}), io.Discard)
+	if err != nil || c.Passcode != 34567890 {
+		t.Fatalf("environment passcode: %+v %v", c, err)
+	}
+}

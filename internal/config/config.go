@@ -188,7 +188,10 @@ func Load(args []string, env Env, out io.Writer) (*Config, error) {
 	haURL := str("ha-url", "HA_URL", "", "Home Assistant WebSocket URL, e.g. ws://homeassistant.local:8123/api/websocket")
 	listen := str("listen", "LISTEN", DefaultListen, "UDP listen address of the Matter node")
 	mdnsIfaces := str("mdns-interfaces", "MDNS_INTERFACES", "", "host interfaces the mDNS responder announces on (comma-separated); empty is every interface")
-	passcode := str("passcode", "PASSCODE", strconv.Itoa(DefaultPasscode), "setup passcode")
+	// The passcode's flag shows no default: the environment's value would
+	// be printed by -h. The environment is the place for it; the flag puts
+	// it in the process list.
+	passcode := fs.String("passcode", "", "setup passcode (PASSCODE; set it in the environment, a flag shows in the process list)")
 	discr := str("discriminator", "DISCRIMINATOR", strconv.Itoa(DefaultDiscriminator), "12-bit discriminator")
 	vendor := str("vendor-id", "VENDOR_ID", "0xFFF1", "vendor id")
 	product := str("product-id", "PRODUCT_ID", "0x8001", "product id")
@@ -213,6 +216,12 @@ func Load(args []string, env Env, out io.Writer) (*Config, error) {
 	}
 	if fs.NArg() > 0 {
 		add("unexpected arguments %q", fs.Args())
+	}
+	if *passcode == "" {
+		*passcode = get("PASSCODE")
+	}
+	if *passcode == "" {
+		*passcode = strconv.Itoa(DefaultPasscode)
 	}
 
 	c := &Config{DumpPlan: *dump, Version: *ver}
