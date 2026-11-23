@@ -47,6 +47,7 @@ func (r *Registry) ConfiguredPasscode() (p uint32, created bool, err error) {
 	defer r.mu.Unlock()
 	path := r.Path(PasscodeFile)
 	var keep error // why the drawn passcode cannot be kept
+	r.tighten(path)
 	b, err := os.ReadFile(r.Path(PasscodeFile))
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
@@ -65,6 +66,7 @@ func (r *Registry) ConfiguredPasscode() (p uint32, created bool, err error) {
 			keep = fmt.Errorf("%s is unusable (%w) and cannot be moved aside: %w", path, perr, rerr)
 			break
 		}
+		r.tighten(moved)
 		r.log.Error("nodes.passcode_corrupt", slog.String("moved_to", moved), slog.String("error", perr.Error()),
 			slog.String("hint", "the configured node gets a new random passcode; a paired node keeps its fabrics, the new code is on the pairing page"))
 	}

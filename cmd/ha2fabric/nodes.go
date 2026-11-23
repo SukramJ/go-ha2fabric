@@ -383,9 +383,15 @@ type fleet struct {
 }
 
 // newFleet starts every node of reg on base; a node that does not start
-// is logged and listed as not enabled.
+// is logged and listed as not enabled. NODE_LIMIT bounds what the web UI
+// creates: more nodes in the registry than it allows all start, with a
+// warning.
 func newFleet(base context.Context, cfg *config.Config, client *ha.Client, fan *ha.Fanout, reg *nodes.Registry, log *slog.Logger) *fleet {
 	f := &fleet{base: base, cfg: cfg, client: client, fan: fan, reg: reg, log: log}
+	if n := reg.Len(); n > cfg.NodeLimit {
+		log.Warn("ha2fabric.node_limit", slog.Int("nodes", n), slog.Int("limit", cfg.NodeLimit),
+			slog.String("hint", "nodes.json holds more nodes than NODE_LIMIT allows; all of them start, and the web UI creates no more until enough are deleted"))
+	}
 	for _, rec := range reg.Nodes() {
 		s, err := f.start(&rec)
 		if err != nil {

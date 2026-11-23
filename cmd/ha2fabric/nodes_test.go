@@ -146,13 +146,14 @@ func TestNodeRegistry(t *testing.T) {
 	dir := t.TempDir()
 	web := freePort(t, "tcp")
 	listen := freePort(t, "udp")
-	env := config.MapEnv(map[string]string{
+	vars := map[string]string{
 		"HA_URL": srv.URL(), "HA_TOKEN": hatest.Token, "STORE_PATH": filepath.Join(dir, "ha2fabric.db"),
 		"LISTEN": listen, "WEB_LISTEN": web, "WEB_ADMIN": "true", "NODE_LIMIT": "1", "LOG_LEVEL": "debug",
 		// A name no host has: go-fabric's diagnosis names it at start
 		// (issue #41), for the configured node and the registry's alike.
 		"MDNS_INTERFACES": mdnsAbsent,
-	})
+	}
+	env := config.MapEnv(vars)
 	d := startDaemon(t, env, web)
 
 	// The configured node's block names its source and never the passcode.
@@ -271,6 +272,18 @@ func TestNodeRegistry(t *testing.T) {
 	d.stop()
 	if !strings.Contains(d.logs.String(), "ha2fabric.node_deleted") {
 		t.Fatal("no node_deleted line")
+	}
+
+	// A NODE_LIMIT lowered below the registry's nodes starts them all,
+	// with a warning (HR-P1-cfg-66: the limit bounds creation).
+	vars["NODE_LIMIT"] = "0"
+	d = startDaemon(t, env, web)
+	if l := d.nodes(); len(l.Nodes) != 2 || !l.Nodes[1].Enabled {
+		t.Fatalf("under a lowered limit %+v\n%s", l, d.logs.String())
+	}
+	d.stop()
+	if !strings.Contains(d.logs.String(), "ha2fabric.node_limit") {
+		t.Fatalf("no ha2fabric.node_limit line\n%s", d.logs.String())
 	}
 }
 

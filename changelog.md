@@ -144,6 +144,12 @@ set `WEB_ALLOW` or a loopback `WEB_LISTEN` before updating (Changed).
   when neither helps does the configured node start without overrides,
   and the status warning now says that entities turned off are exposed
   again. Keys that are not entity ids are ignored, names cut to 256 bytes.
+- A `nodes.json` or `passcode.json` that is there with a mode wider than
+  0600 (a restored backup, a copy) is set to 0600 when read, and so is a
+  copy moved aside as corrupt (`nodes.mode_tightened`).
+- `NODE_LIMIT` is documented as what it is, the bound on the nodes the web
+  UI creates; a registry with more nodes than the limit starts them all
+  and says so (`ha2fabric.node_limit`).
 
 ## [0.6.3] - 2026-11-12
 

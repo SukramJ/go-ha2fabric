@@ -37,6 +37,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -118,6 +119,7 @@ func Open(dir string, log *slog.Logger) (*Registry, error) {
 		log = slog.Default()
 	}
 	r := &Registry{dir: dir, log: log, rand: rand.Reader, free: bindable, now: time.Now}
+	r.tighten(r.Path(File))
 	b, err := os.ReadFile(r.Path(File))
 	if errors.Is(err, fs.ErrNotExist) {
 		return r, nil
@@ -134,6 +136,7 @@ func Open(dir string, log *slog.Logger) (*Registry, error) {
 		if rerr := os.Rename(r.Path(File), moved); rerr != nil {
 			return nil, fmt.Errorf("nodes: %s does not parse (%w) and cannot be moved aside: %w", r.Path(File), err, rerr)
 		}
+		r.tighten(moved)
 		log.Error("nodes.corrupt", slog.String("moved_to", moved), slog.String("error", err.Error()),
 			slog.String("hint", "the daemon starts with the configured node only; the nodes' stores stay on disk, restore the file to bring them back"))
 		return r, nil
@@ -161,6 +164,27 @@ func (f *file) check() error {
 		seen[n.Key] = true
 	}
 	return nil
+}
+
+// tighten sets a secret file that is there with a mode wider than 0600 —
+// restored from a backup, copied between hosts — to 0600, and logs it:
+// nodes.json and passcode.json hold passcodes, and the daemon writes them
+// 0600. A file that is not there, or a mode that cannot be changed, is
+// left as it is (the latter logged).
+func (r *Registry) tighten(path string) {
+	if runtime.GOOS == "windows" {
+		return // no POSIX modes; the data directory's ACL is the service's concern
+	}
+	fi, err := os.Stat(path)
+	if err != nil || fi.Mode().Perm()&0o077 == 0 {
+		return
+	}
+	if err := os.Chmod(path, 0o600); err != nil {
+		r.log.Warn("nodes.mode_wide", slog.String("file", path), slog.String("mode", fi.Mode().Perm().String()), slog.String("error", err.Error()))
+		return
+	}
+	r.log.Warn("nodes.mode_tightened", slog.String("file", path), slog.String("was", fi.Mode().Perm().String()),
+		slog.String("hint", "the file holds passcodes; it was readable beyond the daemon's user and is now 0600"))
 }
 
 // Path is name in the registry's directory.

@@ -74,7 +74,10 @@ whose key, address, discriminator or passcode is unusable, is renamed to
 `nodes.json.corrupt-<unix seconds>`, logged (`nodes.corrupt`), and the
 daemon starts with its configured node only; the nodes' files stay, and no
 new node takes a key whose files exist, so restoring the file brings them
-back. On Windows, which has no POSIX file modes, the ACL of the data
+back. A `nodes.json` or `passcode.json` that is there with a wider mode —
+restored from a backup, copied from another host — is set to 0600 when it
+is read, and so is one moved aside as corrupt (`nodes.mode_tightened`).
+On Windows, which has no POSIX file modes, the ACL of the data
 directory protects it, as it does the store: that is the service's
 concern.
 
@@ -230,6 +233,8 @@ The lines to know:
 | `ha2fabric.supervisor` | info, warn | Add-on: the Supervisor's `version` and whether the web UI has an `admin` (2026.10.4 or later; a pre-release of 2026.10.4 counts as older); at warn when it is older, read again every 10 minutes (`recheck_in`) until it is not. |
 | `ha2fabric.supervisor_unreadable` | warn, then debug | Add-on: `GET /info` failed (`error`); retried every 30 s (every 10 minutes once a version below 2026.10.4 was read), the web UI is the status page only meanwhile. |
 | `ha2fabric.node_erased` | info | A node was erased in the web UI (`node=<key>` for a registry node): `fabrics_removed`, `elapsed`; the node comes back next, with `ha2fabric.fabrics count=0` and `ha2fabric.pairing`. At warn with `error` when the reset failed part-way. |
+| `ha2fabric.node_limit` | warn | At start: `nodes.json` holds more nodes (`nodes`) than `NODE_LIMIT` (`limit`) allows; all start, the web UI creates no more (Nodes). |
+| `nodes.mode_tightened` | warn | `nodes.json` or `passcode.json` (`file`) had a mode wider than 0600 (`was`) and was set to 0600 (Files). |
 | `ha2fabric.node_lost` | error | The node did not come back after an erase (`node=<key>` for a registry node). The daemon keeps running; the status page shows `node_erase_failed`. See Erase and factory reset. |
 | `ha2fabric.mdns_interface` | warn | At start, with `MDNS_INTERFACES` set: go-fabric's diagnosis of the list (`code`: `interface_not_found`, `interface_filtered`, `interface_no_addresses`; `node=<key>` for a registry node). See mDNS. |
 | `ha.connected` / `ha.disconnected` | info / warn | The Home Assistant connection. |
@@ -558,8 +563,10 @@ for all its fabrics, so a different scope is a different node.
   cannot (its port taken) is logged (`ha2fabric.node_start`) and listed
   as not enabled; deleting it removes its files.
 - **Limit**: `NODE_LIMIT` (`--node-limit`, the add-on's `node_limit`,
-  default 8, 0 to 32) bounds the nodes beside the configured one; one more
-  is refused with 409 `node_limit`.
+  default 8, 0 to 32) bounds how many nodes the web UI may create beside
+  the configured one; one more is refused with 409 `node_limit`. Nodes
+  already in `nodes.json` all start when the limit is lowered below their
+  number, with the log line `ha2fabric.node_limit`.
 
 Every node's bridge rides the daemon's one Home Assistant connection; a
 registry change re-plans every node. Each status page shows its node's
