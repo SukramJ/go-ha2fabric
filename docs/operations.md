@@ -60,7 +60,9 @@ does not parse is renamed to `selection.json.corrupt-<unix seconds>`,
 logged (`selection.corrupt`), and the last-good copy is read instead and
 written back as `selection.json`, which loses at most the last change; a
 missing `selection.json` beside a last-good copy is restored the same way
-(`selection.missing`). Only when that does not parse either does the
+(`selection.missing`). To start without overrides, clear them in the web
+UI, or delete `selection.json` and `selection.json.bak` together: deleting
+`selection.json` alone restores the last-good copy. Only when that does not parse either does the
 configured node start without overrides — and then entities turned off in
 the web UI are exposed again wherever `EXPOSE_ASSIST`, `INCLUDE` and the
 labels expose them; the status warning says so. A web UI node's rule is
