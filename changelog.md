@@ -125,6 +125,18 @@ set `WEB_ALLOW` or a loopback `WEB_LISTEN` before updating (Changed).
   logged once per list (`ha.entry_skipped`).
 - A command whose caller gave up while it was being written no longer
   closes the Home Assistant connection every node shares.
+- A camera holds at most 8 WebRTC sessions: a further offer ends the
+  session idle longest (a minute or more), or is answered
+  `RESOURCE_EXHAUSTED`; a session without signalling for an hour ends,
+  which also ends what a controller that went away left open.
+- A controller's ICE candidates are bounded after Home Assistant's session
+  event too: 64 per call, 256 per session (`RESOURCE_EXHAUSTED` beyond).
+- Concurrent snapshots of one camera share one camera proxy request, and a
+  still younger than a second is reused for the same size.
+- A camera re-offer whose new Home Assistant session fails ends the
+  session and tells the controller, instead of leaving it listed without a
+  stream; an answer without an SDP ends the session as Home Assistant's
+  error does.
 
 ## [0.6.3] - 2026-11-12
 

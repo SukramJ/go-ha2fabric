@@ -241,6 +241,8 @@ The lines to know:
 | `camera.signal_failed` | warn | A signal did not reach the controller (`command`, `error`); the session ends. |
 | `camera.snapshot_failed` | warn | A controller's snapshot failed at the camera proxy (`error`: off, refused, too large). |
 | `camera.session_lost` | info | The Home Assistant connection dropped; its camera sessions ended with it. |
+| `camera.session_evicted` / `camera.session_idle` | info | A session ended to make room for a new offer at the camera's 8 (`session`, `for`), or after an hour without signalling (Cameras). |
+| `camera.answer_empty` | warn | Home Assistant's answer carried no SDP; the session ends. |
 
 ## Labels
 
@@ -350,6 +352,23 @@ Limits:
   Home Assistant scales a JPEG down only, by fixed factors
   (`camera/img_util.py:18-36`): a controller that asks for a large
   resolution of a large camera may get no snapshot.
+- A camera holds at most 8 WebRTC sessions. A further offer ends the
+  session idle longest — no command and no Home Assistant event for a
+  minute — with `End` (reason 12) to its controller
+  (`camera.session_evicted`), or, when every session is more recent, is
+  answered RESOURCE_EXHAUSTED. A session with no signalling for an hour
+  ends the same way (`camera.session_idle`): a controller that went away
+  never ends its session, and a live view signals nothing once it stands,
+  so a view kept open longer than an hour must be opened again.
+- A controller's `ProvideIceCandidates` carries at most 64 candidates and
+  a session at most 256; beyond, the call is answered RESOURCE_EXHAUSTED.
+  Before Home Assistant names its session at most 64 wait.
+- One camera proxy request runs per camera at a time: snapshots that
+  arrive meanwhile share its still, and a still younger than a second is
+  handed to a further snapshot of the same size.
+- A re-offer whose new Home Assistant session fails ends the session with
+  `End` (reason 0); an answer without an SDP ends it the same way
+  (`camera.answer_empty`).
 
 ## The web UI
 

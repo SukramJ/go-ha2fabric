@@ -119,6 +119,7 @@ func FuzzCaptureSnapshot(f *testing.F) {
 	h := New("camera.fuzz", nil, Options{Logger: slog.New(slog.DiscardHandler)})
 	f.Fuzz(func(t *testing.T, b []byte) {
 		h.up = stillUpstream{data: b}
+		h.still = nil // each body its own request, not the last one's reuse (StillReuse)
 		got, err := h.CaptureSnapshot(context.Background(), nil, csdef.VideoResolutionStruct{Width: 640, Height: 480})
 		if err != nil {
 			return
