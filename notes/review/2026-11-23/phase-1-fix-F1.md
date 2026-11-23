@@ -1,7 +1,7 @@
 # Phase 1 fix wave — F1, the security and daemon paths
 
 Implementer F1 (Opus). Brief `notes/briefs/2026-11-23-review-p1-fix.md`,
-section F1. Branch `review/p1`, base `27b68ec`. Rows from `phase-1-S.md`,
+section F1. Branch `review/p1`, base `0dfc440`. Rows from `phase-1-S.md`,
 `phase-1-GB.md`, `phase-1-verify.md` (verdicts used) and decisions 23–30.
 No path of F2's was touched.
 
@@ -9,17 +9,17 @@ No path of F2's was touched.
 
 | Commit | Rows |
 | --- | --- |
-| `01cec31` fix(ha): unsubscribe an abandoned offer, back-off after short connections and refused tokens, lenient lists, detached writes, joined reader | ha-62 (+ ha-04), ha-07, ha-08, data-09, conc-22, conc-71 |
-| `8ce56ed` fix(ha): read the states before the registries | data-67 |
-| `36c706e` fix(camera): bound sessions per camera with an idle end, candidates per call and session, one still request; end a failed re-offer and an empty answer | bound-02, conc-03, bound-17, err-05, data-20 (answer) |
-| `68d9beb` fix(selection): keep a last-good copy, read another version leniently, say what an empty start exposes; check keys and names | err-06 (+ cfg-35), data-20 (keys, names) |
-| `66dc114` fix(nodes): tighten a secret file's wide mode; warn when the registry exceeds NODE_LIMIT | cfg-10, cfg-66 |
-| `9c33110` fix(image): the web UI on loopback by default, 5540/tcp declared, a .dockerignore | cfg-12, sup-19 |
-| `9ba8ad2` test(cmd): hold every administrator route of the contract at the daemon's wiring | test-16 |
-| `3c7f9e2` fix(cmd): one stop budget with the nodes in parallel and timeout 30; keep a node whose reset failed; erase without the status lock; exit 0 on a stop during start | err-64, err-61, conc-63, err-72, test-70 |
-| `7b24efe` test(ha): Add and Remove racing Event on the fan-out | test-70 |
-| `e1bb75f` fix(cmd): the Supervisor gate's client follows no redirect and takes no proxy | ha-13, ha-14 |
-| `8099d1a` fix(config): LABEL as text; the web UI refuses a non-loopback bind under WEB_ADMIN without WEB_ALLOW; label commas documented | cfg-15, data-20 (LABEL), cfg-21 |
+| `6c5ae3c` fix(ha): unsubscribe an abandoned offer, back-off after short connections and refused tokens, lenient lists, detached writes, joined reader | ha-62 (+ ha-04), ha-07, ha-08, data-09, conc-22, conc-71 |
+| `1c889a3` fix(ha): read the states before the registries | data-67 |
+| `3dc88b0` fix(camera): bound sessions per camera with an idle end, candidates per call and session, one still request; end a failed re-offer and an empty answer | bound-02, conc-03, bound-17, err-05, data-20 (answer) |
+| `080c027` fix(selection): keep a last-good copy, read another version leniently, say what an empty start exposes; check keys and names | err-06 (+ cfg-35), data-20 (keys, names) |
+| `259490a` fix(nodes): tighten a secret file's wide mode; warn when the registry exceeds NODE_LIMIT | cfg-10, cfg-66 |
+| `9928fba` fix(image): the web UI on loopback by default, 5540/tcp declared, a .dockerignore | cfg-12, sup-19 |
+| `3783e6e` test(cmd): hold every administrator route of the contract at the daemon's wiring | test-16 |
+| `c82697d` fix(cmd): one stop budget with the nodes in parallel and timeout 30; keep a node whose reset failed; erase without the status lock; exit 0 on a stop during start | err-64, err-61, conc-63, err-72, test-70 |
+| `0cfd567` test(ha): Add and Remove racing Event on the fan-out | test-70 |
+| `75b059f` fix(cmd): the Supervisor gate's client follows no redirect and takes no proxy | ha-13, ha-14 |
+| `04c6175` fix(config): LABEL as text; the web UI refuses a non-loopback bind under WEB_ADMIN without WEB_ALLOW; label commas documented | cfg-15, data-20 (LABEL), cfg-21 |
 
 Commits group a class where the fixes share one file (`internal/ha/client.go`,
 `internal/camera/camera.go`, `cmd/ha2fabric/nodes.go`); interactive
@@ -27,7 +27,7 @@ staging is not available, so one commit per row was not practical there.
 
 ## Guards
 
-At HEAD `8099d1a` (before and after the run; the report commit is
+At HEAD `04c6175` (before and after the run; the report commit is
 notes-only, no second run): `make ci` 0, `make race` 0,
 `make cover-check` 0 (every package above its floor; floors not raised),
 `make fuzz-smoke` 0. Logs:

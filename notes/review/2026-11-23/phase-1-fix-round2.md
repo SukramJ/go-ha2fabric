@@ -2,23 +2,23 @@
 
 Implementer (Opus). Brief `notes/briefs/2026-11-23-review-p1-fix2.md`,
 common rules of `2026-11-23-review-p1-fix.md`. Branch `review/p1`, base
-`5f86ed3`. Rows from the Fable pre-merge read of `27b68ec..2fe4944`;
+`c009690`. Rows from the Fable pre-merge read of `0dfc440..122a8ad`;
 decisions 25, 28, 29, 31, 32.
 
 ## Commits
 
 | Commit | Row |
 | --- | --- |
-| `660517d` test(bridge): the queue tests count a snapshot's first read, get_states since HR-P1-data-67 | red guard |
-| `a0988fe` fix(bridge): an owed sync wakes a waiting worker | conc-96 |
-| `5a2e93b` fix(ha): a refused token is cleared at the next authentication | ha-92 |
-| `6608e85` fix(selection): a restored last-good copy is written back, a missing file beside it restored; nothing understood says the overrides started empty | err-91, cfg-95 |
-| `0b413b9` fix(bridge): a removal noted during a sync's read is forgotten by the next sync | conc-93 |
-| `6f6105f` fix(cmd): a stop lets a running erase finish its reset inside the stop budget | err-94 |
-| `2f1ee6d` fix(ha,plan): a skipped entity or device registry entry leaves its entities unexposed, a skipped label entry fails the sync while the rule names labels | data-90 |
-| `ab2bcee` fix(cmd): the erase's detached context marked for contextcheck | err-94 (lint) |
-| `0f9f37c` docs(changelog): F1's lines say what round 2 changed | data-90, err-91, ha-92, err-94 |
-| `4765b95` test(plan): the skipped-entry tests live where the layers allow plan and hatest | data-90 (arch guard) |
+| `4acd709` test(bridge): the queue tests count a snapshot's first read, get_states since HR-P1-data-67 | red guard |
+| `f4e79bb` fix(bridge): an owed sync wakes a waiting worker | conc-96 |
+| `5f8474b` fix(ha): a refused token is cleared at the next authentication | ha-92 |
+| `7d12be9` fix(selection): a restored last-good copy is written back, a missing file beside it restored; nothing understood says the overrides started empty | err-91, cfg-95 |
+| `3b3c64d` fix(bridge): a removal noted during a sync's read is forgotten by the next sync | conc-93 |
+| `7497f9f` fix(cmd): a stop lets a running erase finish its reset inside the stop budget | err-94 |
+| `a0a1970` fix(ha,plan): a skipped entity or device registry entry leaves its entities unexposed, a skipped label entry fails the sync while the rule names labels | data-90 |
+| `a2054f6` fix(cmd): the erase's detached context marked for contextcheck | err-94 (lint) |
+| `28ecd76` docs(changelog): F1's lines say what round 2 changed | data-90, err-91, ha-92, err-94 |
+| `0a54177` test(plan): the skipped-entry tests live where the layers allow plan and hatest | data-90 (arch guard) |
 | this report | — |
 
 err-91 and cfg-95 share one commit: both change `Recovery.Message`'s
@@ -26,15 +26,15 @@ cases and `Open`'s reading of the file.
 
 ## Guards
 
-At HEAD `4765b95` (before and after the run): `make ci` 0, `make race`
+At HEAD `0a54177` (before and after the run): `make ci` 0, `make race`
 0, `make cover-check` 0, `make fuzz-smoke` 0, `make vuln licenses
 secrets` 0, `make version-check` 0, `make release` 0, `make docker
 addon-image` 0. Summary log
 `/tmp/claude-1000/-home-markus-Dokumente-GitHub/700e1304-db09-4033-9c98-588d8ec93391/scratchpad/R2/summary.log`.
 
-A first run at `0f9f37c` had `make ci` 2: `internal/arch` `TestImports`
+A first run at `28ecd76` had `make ci` 2: `internal/arch` `TestImports`
 refused `internal/ha/skipped_test.go` importing `plan` and `expose`; the
-tests moved to `internal/plan` (`4765b95`), and the run was stopped and
+tests moved to `internal/plan` (`0a54177`), and the run was stopped and
 restarted at the new HEAD (its logs in `R2/first/`). The report commit is
 notes only, no further run.
 
@@ -100,7 +100,7 @@ and the stop paragraph (err-94). The `ha_token_refused` sentence
 - data-90's end-to-end tests are in `internal/plan`, not `internal/ha`:
   the architecture guard (`internal/arch` `TestImports`) refuses `plan`
   and `expose` in `internal/ha`'s tests — this is what turned the first
-  guard run's `make ci` red (fixed in `4765b95`).
+  guard run's `make ci` red (fixed in `0a54177`).
 - `hatest.Server.UpdateLabelFields` added (a test needs a label field of
   another type).
 - err-94: besides the grace, the come-back no longer starts while the

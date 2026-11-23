@@ -3,7 +3,7 @@
 Brief `notes/briefs/2026-11-23-review-p1-fix.md`, section F2; findings in
 `phase-1-GA.md` and `phase-1-GB.md` (conc-60); the verdicts of
 `phase-1-verify.md`; decisions 26 and 30. Branch `review/p1-F2` from
-`27b68ec`. Paths: `internal/bridge`, `internal/adapt`, `internal/plan`,
+`0dfc440`. Paths: `internal/bridge`, `internal/adapt`, `internal/plan`,
 `internal/expose`, `internal/exposure`.
 
 ## Commits

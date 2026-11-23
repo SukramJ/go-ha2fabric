@@ -10,7 +10,7 @@ M = read or probe ran, I = inferred.
 fails open and none regresses. Four new rows, one low (a docs sentence)
 and three notes; none blocks the merge.
 
-## Round 1 (`27b68ec..2fe4944`): rows 90–98
+## Round 1 (`0dfc440..122a8ad`): rows 90–98
 
 The first read found two fixes that failed open and one warning that did
 not clear; verdict then: not ready.
@@ -27,10 +27,10 @@ not clear; verdict then: not ready.
 | HR-P1-adpt-97 | note | The held thermostat range, 30 s (decision 32) |
 | HR-P1-bound-98 | note | The camera cap's "idle longest" (decision 31) |
 
-## Round 2 (`5f86ed3..4765b95`, notes excluded)
+## Round 2 (`c009690..0a54177`, notes excluded)
 
 Read: the diff, `phase-1-fix-round2.md`, the brief, the commit messages
-`5f86ed3..HEAD`. Lines at `4765b95`. Probes in a `git archive 4765b95`
+`c009690..HEAD`. Lines at `0a54177`. Probes in a `git archive 0a54177`
 copy (`…/scratchpad/PM2/src`, files `internal/plan/probe_pm2_test.go`,
 `internal/selection/probe_pm2_test.go`); nothing in the worktree was run
 or changed except this file.
@@ -90,13 +90,13 @@ closed, no row.
   `selection.restore_failed`, and the erase and stop paragraphs match the
   code (M, read). `ha2fabric.node_erased` is at warn when the reset
   fails, as written.
-- The eleven commit messages `5f86ed3..HEAD` are one subject line each;
+- The eleven commit messages `c009690..HEAD` are one subject line each;
   none speaks of the held row, and no added tracked line does. No attribution lines.
 
 ### Not done here
 
 The full guard set was not run again (the fix report has it green at
-`4765b95`); the probes and the tests named above ran in the copy only.
+`0a54177`); the probes and the tests named above ran in the copy only.
 
 ## Before the push
 
