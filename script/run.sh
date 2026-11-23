@@ -14,7 +14,13 @@ bashio::log.info "Starting go-ha2fabric add-on..."
 
 # --- The Matter node ---
 export LISTEN=":$(bashio::config 'port')"
-export PASSCODE="$(bashio::config 'passcode')"
+# Unset, the daemon draws a random passcode on the first start and keeps it
+# in /data/passcode.json. Options saved before 0.7.0 keep the value they
+# stored (the old default 20202021 gets a warning); options never saved
+# have no passcode after the update.
+if bashio::config.has_value 'passcode'; then
+  export PASSCODE="$(bashio::config 'passcode')"
+fi
 export DISCRIMINATOR="$(bashio::config 'discriminator')"
 export VENDOR_ID="$(bashio::config 'vendor_id')"
 export PRODUCT_ID="$(bashio::config 'product_id')"
@@ -66,7 +72,8 @@ export MDNS_INTERFACES
 
 # --- Web UI through Ingress ---
 # On the host's network: listen on ingress_port and serve only the Ingress
-# proxy (172.30.32.2), which is also the web UI's administrator.
+# proxy (172.30.32.2); the daemon's administrator there is a Home Assistant
+# administrator (docs/operations.md, The web UI).
 export WEB_LISTEN="0.0.0.0:8486"
 export WEB_ALLOW="172.30.32.2"
 

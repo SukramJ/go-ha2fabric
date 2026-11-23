@@ -15,6 +15,7 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -36,11 +37,11 @@ const (
 
 // Defaults. The commissioning values are the public test values of
 // go-fabric's cookbook (docs/guides/embed-in-a-daemon.md §2, CSA test
-// vendor 0xFFF1, product 0x8001); change the passcode before a real
-// pairing.
+// vendor 0xFFF1, product 0x8001). The passcode has no default: without
+// PASSCODE the configured node's is random, drawn on the first start and
+// kept beside the store (internal/nodes ConfiguredPasscode).
 const (
 	DefaultListen        = ":5540"
-	DefaultPasscode      = 20202021
 	DefaultDiscriminator = 3840
 	DefaultVendorID      = 0xFFF1
 	DefaultProductID     = 0x8001
@@ -57,6 +58,12 @@ const (
 	AddonStorePath = "/data/" + DefaultStoreFile
 	// SelectionFile is the web UI's overrides file, beside the store.
 	SelectionFile = "selection.json"
+	// TestPasscode is the public test passcode of go-fabric's examples and
+	// test harness (fabrictest.DefaultPasscode, fabrictest/device.go:35 at
+	// v0.25.0) and the default before 0.7.0: valid, so it is honoured when
+	// set explicitly, with a warning. go-fabric exposes no list of such
+	// values; its validator refuses only the trivial ones.
+	TestPasscode = 20202021
 	// IngressProxy is the Supervisor's Ingress proxy address, the only
 	// client an add-on's Ingress port may serve
 	// (developers.home-assistant.io docs/apps/presentation.md "Ingress").
@@ -74,6 +81,10 @@ type Config struct {
 	// Addon is whether the daemon runs as an add-on (SUPERVISOR_TOKEN
 	// set).
 	Addon bool
+	// SupervisorToken is SUPERVISOR_TOKEN: in the add-on the daemon reads
+	// the Supervisor's version with it (cmd/ha2fabric supervisorGate). It
+	// is never logged or persisted.
+	SupervisorToken string
 
 	Listen string
 	// MDNSInterfaces restricts the nodes' mDNS responder to these host
@@ -81,12 +92,15 @@ type Config struct {
 	// advertises on every multicast-capable one (go-fabric node.MDNS
 	// Interfaces at v0.19.1). One host, one set: every node gets it.
 	MDNSInterfaces []string
-	Passcode       uint32
-	Discriminator  uint16
-	VendorID       uint16
-	ProductID      uint16
-	Label          string
-	StorePath      string
+	// Passcode is PASSCODE; 0 when unset, and the daemon then uses the
+	// random one kept beside the store (internal/nodes
+	// ConfiguredPasscode) before it builds the node.
+	Passcode      uint32
+	Discriminator uint16
+	VendorID      uint16
+	ProductID     uint16
+	Label         string
+	StorePath     string
 
 	Include, Exclude []string
 	// IncludeLabels and ExcludeLabels are Home Assistant labels, by name
@@ -101,8 +115,9 @@ type Config struct {
 	LogLevel slog.Level
 	// WebListen is the web UI's address; empty disables it.
 	WebListen string
-	// WebAllow restricts the web UI to these client addresses (the
-	// Ingress proxy's 172.30.32.2 in the add-on); empty allows every one.
+	// WebAllow restricts the web UI to these client addresses; empty
+	// allows every one. In the add-on it is the Ingress proxy's
+	// 172.30.32.2, the default there, and nothing else is accepted.
 	WebAllow []string
 	// WebAllowedHosts are the DNS names a stand-alone web UI answers under
 	// besides loopback names and IP addresses (WEB_ALLOWED_HOSTS, comma-
@@ -114,8 +129,9 @@ type Config struct {
 	// open the window, remove a fabric) and show the pairing code, with
 	// the UI's per-process token against cross-site requests. Default
 	// false: the stand-alone UI serves the status page only (go-fabric-ui
-	// v0.10's administrator reading routes). The add-on ignores it: the
-	// Ingress proxy is the administrator there.
+	// v0.10's administrator reading routes). The add-on ignores it: there
+	// a Home Assistant administrator, through Ingress, is the web UI's
+	// administrator (cmd/ha2fabric admin).
 	WebAdmin bool
 
 	// Camera maps camera entities onto go-fabric's Camera device type and
@@ -140,6 +156,30 @@ type Config struct {
 func (c *Config) Exposure() expose.Rule {
 	return expose.Rule{Assist: c.ExposeAssist, Include: c.Include, Exclude: c.Exclude, IncludeLabels: c.IncludeLabels, ExcludeLabels: c.ExcludeLabels}
 }
+
+// TokenInClear reports whether the token travels unencrypted to another
+// host: HA_URL is ws:// and its host is neither a loopback address nor
+// "localhost" nor the Supervisor's internal name (the add-on's hop). The
+// daemon warns about it and does not refuse it (owner decision 17 of the
+// 2026-11-23 review): Home Assistant serves plain HTTP by default, so
+// for many installations there is no wss:// endpoint to prefer.
+func (c *Config) TokenInClear() bool {
+	u, err := url.Parse(c.HAURL)
+	if err != nil || u.Scheme != "ws" {
+		return false
+	}
+	h := u.Hostname()
+	if h == "localhost" || h == "supervisor" {
+		return false
+	}
+	ip := net.ParseIP(h)
+	return ip == nil || !ip.IsLoopback()
+}
+
+// PasscodeIsTestValue reports whether the passcode is the public
+// [TestPasscode], which anyone in reach of the commissioning window can
+// use; the daemon warns about it.
+func (c *Config) PasscodeIsTestValue() bool { return c.Passcode == TestPasscode }
 
 // ValidationError aggregates every problem [Load] found.
 type ValidationError struct{ Issues []string }
@@ -185,10 +225,15 @@ func Load(args []string, env Env, out io.Writer) (*Config, error) {
 		}
 		return fs.String(name, v, usage+" ("+envKey+")")
 	}
-	haURL := str("ha-url", "HA_URL", "", "Home Assistant WebSocket URL, e.g. ws://homeassistant.local:8123/api/websocket")
+	// HA_URL's flag shows no default either: the environment's value may
+	// carry a credential that Load refuses only after -h printed it.
+	haURL := fs.String("ha-url", "", "Home Assistant WebSocket URL, e.g. wss://homeassistant.local:8123/api/websocket (HA_URL)")
 	listen := str("listen", "LISTEN", DefaultListen, "UDP listen address of the Matter node")
 	mdnsIfaces := str("mdns-interfaces", "MDNS_INTERFACES", "", "host interfaces the mDNS responder announces on (comma-separated); empty is every interface")
-	passcode := str("passcode", "PASSCODE", strconv.Itoa(DefaultPasscode), "setup passcode")
+	// The passcode's flag shows no default: the environment's value would
+	// be printed by -h. The environment is the place for it; the flag puts
+	// it in the process list.
+	passcode := fs.String("passcode", "", "setup passcode (PASSCODE; set it in the environment, a flag shows in the process list)")
 	discr := str("discriminator", "DISCRIMINATOR", strconv.Itoa(DefaultDiscriminator), "12-bit discriminator")
 	vendor := str("vendor-id", "VENDOR_ID", "0xFFF1", "vendor id")
 	product := str("product-id", "PRODUCT_ID", "0x8001", "product id")
@@ -214,15 +259,22 @@ func Load(args []string, env Env, out io.Writer) (*Config, error) {
 	if fs.NArg() > 0 {
 		add("unexpected arguments %q", fs.Args())
 	}
+	if *passcode == "" {
+		*passcode = get("PASSCODE")
+	}
 
 	c := &Config{DumpPlan: *dump, Version: *ver}
 	supervisor := get(SupervisorTokenEnv)
 	c.Addon = supervisor != ""
+	c.SupervisorToken = supervisor
 	c.HAToken = get("HA_TOKEN")
 	if c.HAToken == "" {
 		c.HAToken = supervisor
 	}
 	c.HAURL = *haURL
+	if c.HAURL == "" {
+		c.HAURL = get("HA_URL")
+	}
 	if c.HAURL == "" && c.Addon {
 		c.HAURL = SupervisorURL
 	}
@@ -241,6 +293,11 @@ func Load(args []string, env Env, out io.Writer) (*Config, error) {
 	c.SelectionPath = filepath.Join(filepath.Dir(c.StorePath), SelectionFile)
 	c.WebListen = strings.TrimSpace(*web)
 	c.WebAllow = expose.Split(*allow)
+	if c.Addon && len(c.WebAllow) == 0 {
+		// The add-on's web UI serves the Ingress proxy only, whatever
+		// started the daemon; the admin check relies on it.
+		c.WebAllow = []string{IngressProxy}
+	}
 	c.WebAllowedHosts = expose.Split(*allowedHosts)
 
 	if c.Version {
@@ -248,8 +305,8 @@ func Load(args []string, env Env, out io.Writer) (*Config, error) {
 	}
 	if c.HAURL == "" {
 		add("HA_URL is required outside the add-on")
-	} else if !strings.HasPrefix(c.HAURL, "ws://") && !strings.HasPrefix(c.HAURL, "wss://") {
-		add("HA_URL must be a ws:// or wss:// URL, got %q", c.HAURL)
+	} else if msg := checkHAURL(c.HAURL); msg != "" {
+		add("HA_URL %s", msg)
 	}
 	if c.HAToken == "" {
 		add("HA_TOKEN is required outside the add-on (a long-lived access token)")
@@ -257,7 +314,9 @@ func Load(args []string, env Env, out io.Writer) (*Config, error) {
 	if err := hostPort(c.Listen); err != nil {
 		add("LISTEN %v", err)
 	}
-	if p, err := strconv.ParseUint(*passcode, 10, 32); err != nil {
+	if *passcode == "" {
+		// Unset: the daemon's random one (Passcode).
+	} else if p, err := strconv.ParseUint(*passcode, 10, 32); err != nil {
 		add("PASSCODE must be a number, got %q", *passcode)
 	} else if err := node.ValidateSetupPIN(uint32(p)); err != nil {
 		add("PASSCODE %d is invalid or trivially guessable (%v)", p, err)
@@ -319,6 +378,17 @@ func Load(args []string, env Env, out io.Writer) (*Config, error) {
 			add("WEB_ALLOW %q is not an IP address", a)
 		}
 	}
+	if c.Addon && !slices.Equal(c.WebAllow, []string{IngressProxy}) {
+		add("WEB_ALLOW in the add-on is the Ingress proxy %s only, got %q", IngressProxy, strings.Join(c.WebAllow, ","))
+	}
+	// WEB_ADMIN makes whoever reaches the port the administrator, over
+	// plain HTTP: off loopback only with WEB_ALLOW naming who that is.
+	// An address filter is not authentication; it is the explicit
+	// statement (decision 15 of the 2026-11-23 review). The add-on
+	// ignores WEB_ADMIN.
+	if c.WebAdmin && !c.Addon && c.WebListen != "" && len(c.WebAllow) == 0 && !loopback(c.WebListen) {
+		add("WEB_ADMIN=true on WEB_LISTEN %q, which is not a loopback address, makes every client that reaches it the administrator: set WEB_ALLOW to the administrators' addresses, or bind WEB_LISTEN to loopback (%s)", c.WebListen, DefaultWebListen)
+	}
 	for _, h := range c.WebAllowedHosts {
 		if msg := allowedHost(h); msg != "" {
 			add("WEB_ALLOWED_HOSTS %q %s", h, msg)
@@ -328,6 +398,33 @@ func Load(args []string, env Env, out io.Writer) (*Config, error) {
 		return nil, &ValidationError{Issues: issues}
 	}
 	return c, nil
+}
+
+// checkHAURL says what is wrong with HA_URL, or "": it parses, its scheme
+// is ws or wss, it names a host and, if any, a port in range, and it
+// carries no user or password — the token is HA_TOKEN's, and a URL is
+// logged. No message echoes the URL, which may hold such a part.
+func checkHAURL(s string) string {
+	u, err := url.Parse(s)
+	switch {
+	case err != nil:
+		return "does not parse as a URL"
+	case u.User != nil:
+		return "carries a user or password; the token is HA_TOKEN's, and the URL is logged"
+	case u.Scheme != "ws" && u.Scheme != "wss":
+		return fmt.Sprintf("must be a ws:// or wss:// URL, got scheme %q", u.Scheme)
+	case u.Hostname() == "":
+		return "names no host"
+	case strings.Contains(u.Hostname(), ":") && !strings.HasPrefix(u.Host, "["):
+		// net/url takes ws://::/x, which its http form refuses.
+		return "names an IPv6 address without brackets ([::1])"
+	}
+	if p := u.Port(); p != "" {
+		if n, err := strconv.Atoi(p); err != nil || n < 1 || n > 65535 {
+			return fmt.Sprintf("port must be 1..65535, got %q", p)
+		}
+	}
+	return ""
 }
 
 func id16(s, key string, add func(string, ...any)) uint16 {
@@ -349,6 +446,20 @@ func hostPort(s string) error {
 		return fmt.Errorf("port must be 1..65535, got %q", port)
 	}
 	return nil
+}
+
+// loopback reports whether the host of the address hostPort is a
+// loopback address or "localhost"; an empty host is every interface.
+func loopback(hostPort string) bool {
+	h, _, err := net.SplitHostPort(hostPort)
+	if err != nil {
+		return false
+	}
+	if h == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(h)
+	return ip != nil && ip.IsLoopback()
 }
 
 // allowedHost says what is wrong with a WEB_ALLOWED_HOSTS entry, or "":

@@ -42,12 +42,14 @@ backup: cold
 
 ingress: true
 ingress_port: 8486
+# Only Home Assistant administrators open the panel; the daemon also checks
+# the user's groups the Supervisor forwards (docs/operations.md, The web UI).
+panel_admin: true
 panel_icon: mdi:bridge
 panel_title: Fabric Bridge
 
 options:
   port: 5540
-  passcode: 20202021
   discriminator: 3840
   vendor_id: 65521
   product_id: 32769
@@ -64,7 +66,9 @@ options:
 
 schema:
   port: port
-  passcode: int(1,99999998)
+  # Optional, no default: unset, the bridge draws a random passcode on its
+  # first start and keeps it in /data/passcode.json.
+  passcode: int(1,99999998)?
   discriminator: int(0,4095)
   vendor_id: int(1,65535)
   product_id: int(1,65535)

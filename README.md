@@ -104,7 +104,8 @@ not an error, and matches once it is created.
 1. **Settings → Apps → Install app**, **⋮ → Repositories** (formerly
    *Settings → Add-ons → Add-on Store*), add
    `https://github.com/SukramJ/go-ha2fabric`.
-2. Install **go-ha2fabric**, change its `passcode`, start it.
+2. Install **go-ha2fabric** and start it (its passcode is random unless you
+   set one).
 3. Open its **Web UI** and pair the QR code from Apple Home, Google Home or
    Alexa.
 
@@ -123,6 +124,10 @@ docker run --network host -v ha2fabric:/data \
   ghcr.io/sukramj/go-ha2fabric
 ```
 
+`ws://` sends the token unencrypted to that host; use `wss://` where Home
+Assistant has TLS (the daemon warns about `ws://` to another host,
+[`docs/operations.md`](docs/operations.md), The token).
+
 or the release binary:
 
 ```sh
@@ -130,8 +135,9 @@ HA_URL=ws://homeassistant.local:8123/api/websocket HA_TOKEN=<token> ./ha2fabric
 ./ha2fabric --dump-plan     # what would be served, and why
 ```
 
-The pairing code is in the log (`ha2fabric.pairing`) and on the web UI
-(`WEB_LISTEN`, default `127.0.0.1:8099`).
+The pairing code is in the log (`ha2fabric.pairing`) until the first
+controller pairs, and on the web UI's pairing page (`WEB_LISTEN`, default
+`127.0.0.1:8099`, with `WEB_ADMIN`).
 
 ## Configuration
 
@@ -141,11 +147,11 @@ environment only and never logged or stored.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `HA_URL` | add-on: `ws://supervisor/core/websocket` | Home Assistant's WebSocket API. |
+| `HA_URL` | add-on: `ws://supervisor/core/websocket` | Home Assistant's WebSocket API; `wss://` where Home Assistant has TLS — with `ws://` to another host the token crosses the network unencrypted (a warning, `token_in_clear`). No user or password in the URL; a redirect is not followed. |
 | `HA_TOKEN` | add-on: `SUPERVISOR_TOKEN` | An administrator's long-lived access token. |
 | `LISTEN` | `:5540` | UDP address of the Matter node. |
 | `MDNS_INTERFACES` | empty (every interface) | Host interfaces the mDNS responder announces on (comma- or newline-separated), for a dual-homed host behind an mDNS reflector ([`docs/operations.md`](docs/operations.md), mDNS). |
-| `PASSCODE` | `20202021` | Setup passcode; trivial ones are refused. Change it. |
+| `PASSCODE` | unset (random) | Setup passcode; trivial ones are refused. Unset, the configured node gets a random one on its first start, kept in `passcode.json` beside the store; the public test value 20202021 is honoured with a warning (`passcode_test_value`). Set it in the environment: the flag shows in the process list. |
 | `DISCRIMINATOR` | `3840` | 12-bit discriminator. |
 | `VENDOR_ID`, `PRODUCT_ID` | `0xFFF1`, `0x8001` | The CSA test vendor and product. |
 | `LABEL` | `Matter Bridge` | The bridge's node label (at most 32 bytes). |
@@ -156,9 +162,9 @@ environment only and never logged or stored.
 | `INCLUDE_LABELS`, `EXCLUDE_LABELS` | empty | Home Assistant labels, by name or id (comma- or newline-separated). |
 | `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error`. |
 | `WEB_LISTEN` | `127.0.0.1:8099` | The web UI; empty disables it. |
-| `WEB_ALLOW` | empty (all) | Client addresses the web UI serves. |
+| `WEB_ALLOW` | empty (all) | Client addresses (IP addresses) the web UI serves. An address filter, not authentication. |
 | `WEB_ALLOWED_HOSTS` | empty | Stand-alone: DNS names the web UI answers under besides `localhost` and IP addresses (comma-separated host names, no port). The add-on needs none. |
-| `WEB_ADMIN` | `false` | Stand-alone: make the web UI's user the administrator (every page, the writes, the pairing code), with the UI's per-process token; without it the UI is the status page only. The add-on ignores it: the Ingress proxy is the administrator. |
+| `WEB_ADMIN` | `false` | Stand-alone: make the web UI's user the administrator (every page, the writes, the pairing code), with the UI's per-process token; without it the UI is the status page only. Plain HTTP: whoever reaches the port is the administrator, so on a `WEB_LISTEN` that is not loopback (the image's `0.0.0.0:8099`) it is refused without `WEB_ALLOW`. The add-on ignores it: there a Home Assistant administrator, through Ingress, is the administrator (Supervisor 2026.10.4 or later, [`addon/DOCS.md`](addon/DOCS.md)). |
 
 [`docs/operations.md`](docs/operations.md) covers the files, ports, mDNS,
 the token's role, logs, health, pairing, Erase and a factory reset.
@@ -171,7 +177,7 @@ make test      # go test -count=1 ./...
 make race      # go test -race (CGO_ENABLED=1 for this run only)
 make lint      # gofumpt + golangci-lint + go mod tidy -diff
 make ci        # build vet test lint
-make cover-check fuzz-smoke   # the coverage floors, the decoder's fuzz target
+make cover-check fuzz-smoke   # the coverage floors; every fuzz target of the Makefile's FUZZ_TARGETS
 make docker addon-image       # both images (amd64)
 make release                  # the release dry run into dist/
 ```

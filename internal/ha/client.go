@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -133,11 +135,27 @@ func New(opts Options) *Client {
 	if log == nil {
 		log = slog.Default()
 	}
-	// The REST client is built once. The WebSocket dial takes the default
-	// HTTP client's settings (websocket.Dial with nil options); the REST
-	// side does the same, bounded by CallTimeout.
-	return &Client{opts: opts, log: log, http: &http.Client{Timeout: opts.CallTimeout}}
+	// The REST client is built once, bounded by CallTimeout, and follows
+	// no redirect (refuseRESTRedirect). The WebSocket dial takes
+	// noRedirect.
+	return &Client{opts: opts, log: log, http: &http.Client{Timeout: opts.CallTimeout, CheckRedirect: refuseRESTRedirect}}
 }
+
+// errRESTRedirect refuses a redirect of a REST request (the camera
+// proxy's still), which carries the token as its Bearer header.
+var errRESTRedirect = errors.New("ha: Home Assistant answered with a redirect, which is not followed; set HA_URL to the final address")
+
+// refuseRESTRedirect is the REST client's redirect policy: none followed,
+// so the Bearer header goes to the configured endpoint only.
+func refuseRESTRedirect(*http.Request, []*http.Request) error { return errRESTRedirect }
+
+// errRedirect refuses a redirect of the WebSocket handshake.
+var errRedirect = errors.New("ha: the WebSocket endpoint answered with a redirect, which is not followed; set HA_URL to the final address")
+
+// noRedirect is the WebSocket dial's HTTP client: the default transport,
+// and no redirect followed — the token goes in the first message of the
+// connection, so it would go to wherever a redirect chain ends.
+var noRedirect = &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return errRedirect }}
 
 // Connected reports whether a connection is authenticated now.
 func (c *Client) Connected() bool { return c.conn.Load() }
@@ -194,10 +212,10 @@ type session struct {
 // serve runs one connection; authed reports whether it authenticated.
 func (c *Client) serve(ctx context.Context, h Handler) (authed bool, err error) {
 	dctx, cancel := context.WithTimeout(ctx, c.opts.CallTimeout)
-	ws, _, err := websocket.Dial(dctx, c.opts.URL, nil) //nolint:bodyclose // the response body is the connection's
+	ws, _, err := websocket.Dial(dctx, c.opts.URL, &websocket.DialOptions{HTTPClient: noRedirect}) //nolint:bodyclose // the response body is the connection's
 	cancel()
 	if err != nil {
-		return false, fmt.Errorf("ha: dial: %w", err)
+		return false, fmt.Errorf("ha: dial: %w", scrubURL(err))
 	}
 	ws.SetReadLimit(c.opts.ReadLimit)
 	defer func() { _ = ws.CloseNow() }()
@@ -222,7 +240,7 @@ func (c *Client) serve(ctx context.Context, h Handler) (authed bool, err error) 
 	c.cur = s
 	c.mu.Unlock()
 	c.conn.Store(true)
-	c.log.Info("ha.connected", slog.String("ha_version", version), slog.String("url", c.opts.URL))
+	c.log.Info("ha.connected", slog.String("ha_version", version), slog.String("url", LogURL(c.opts.URL)))
 	h.Connected(version)
 	defer func() {
 		c.conn.Store(false)
@@ -550,3 +568,40 @@ func (c *Client) CallService(ctx context.Context, sc ServiceCall) error {
 	}
 	return c.Call(ctx, cmd, nil)
 }
+
+// LogURL is raw as the log shows it: the scheme, the host and the path,
+// without a user, a query or a fragment, which may carry a proxy's
+// credential. A URL that does not parse is not shown.
+func LogURL(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "(unparsable)"
+	}
+	v := url.URL{Scheme: u.Scheme, Host: u.Host, Path: u.Path}
+	return v.String()
+}
+
+// scrubURL replaces the URL a net/http error names with its [LogURL], in
+// the error and in the messages wrapped around it.
+func scrubURL(err error) error {
+	ue, ok := errors.AsType[*url.Error](err)
+	if !ok {
+		return err
+	}
+	raw := ue.URL
+	if raw == "" {
+		return err
+	}
+	ue.URL = LogURL(raw)
+	return scrubbed{msg: strings.ReplaceAll(err.Error(), raw, ue.URL), err: err}
+}
+
+// scrubbed is an error with its message rewritten; it unwraps to the
+// original.
+type scrubbed struct {
+	msg string
+	err error
+}
+
+func (e scrubbed) Error() string { return e.msg }
+func (e scrubbed) Unwrap() error { return e.err }

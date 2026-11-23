@@ -103,8 +103,8 @@ func (s *served) start(base context.Context) error {
 		_ = n.Stop(context.WithoutCancel(base))
 		return fmt.Errorf("node start: %w", err)
 	}
-	logFabrics(base, n, s.log)
-	logPairing(n, s.log)
+	fabrics := logFabrics(base, n, s.log)
+	logPairing(n, fabrics, s.log)
 	logMDNSInterfaces(n, s.ncfg.Network.MDNS.Interfaces, s.log)
 	// The web UI's event stream observes the node itself (Node.Observe,
 	// go-fabric-ui v0.1.2); s.events carries the bridge's own.
@@ -264,12 +264,12 @@ func (s *served) erase(ctx context.Context) error {
 // store is visible in the log itself and not only through the commissioning
 // window it opens (2026-10-30: a lost store was diagnosed from the pairing
 // hint alone). With no fabric the line says what that means and how a
-// store comes back.
-func logFabrics(ctx context.Context, n *node.Node, logger *slog.Logger) {
+// store comes back. It returns the count, -1 when it cannot be read.
+func logFabrics(ctx context.Context, n *node.Node, logger *slog.Logger) int {
 	infos, err := n.FabricInfos(ctx)
 	if err != nil {
 		logger.Warn("ha2fabric.fabrics", slog.String("error", err.Error()))
-		return
+		return -1
 	}
 	attrs := []any{slog.Int("count", len(infos))}
 	for _, f := range infos {
@@ -280,6 +280,7 @@ func logFabrics(ctx context.Context, n *node.Node, logger *slog.Logger) {
 		attrs = append(attrs, slog.String("hint", "no controller has paired, so the commissioning window opens; a store lost with its fabrics comes back from the add-on's backup (docs/operations.md, Files)"))
 	}
 	logger.Info("ha2fabric.fabrics", attrs...)
+	return len(infos)
 }
 
 // logMDNSInterfaces writes, at start, what go-fabric's diagnosis finds
@@ -302,8 +303,21 @@ func logMDNSInterfaces(n *node.Node, names []string, logger *slog.Logger) {
 	}
 }
 
-// logPairing writes the pairing codes to the log (cookbook §7).
-func logPairing(n *node.Node, logger *slog.Logger) {
+// logPairing writes the pairing codes to the log (cookbook §7) only
+// while the node has no fabric, when its own window is open and the codes
+// are what a first controller needs; a node with a fabric, or whose
+// fabrics could not be read (fabrics < 0), logs only where the codes are:
+// the administrator's pairing page (decision 16 of the 2026-11-23 review).
+// The log is also the ring behind go-fabric-ui's Operations port, which
+// states that nothing it returns carries a passcode (fabricui/
+// operations.go:25-26 at v0.13.0): the codes reach it only before the
+// first pairing.
+func logPairing(n *node.Node, fabrics int, logger *slog.Logger) {
+	if fabrics != 0 {
+		logger.Info("ha2fabric.pairing", slog.Int("fabrics", fabrics),
+			slog.String("hint", "the node is paired, so the pairing codes are not logged; an administrator finds them, and opens a window for another controller, on the web UI's pairing page"))
+		return
+	}
 	payload, err := n.SetupPayload()
 	if err != nil {
 		logger.Warn("ha2fabric.pairing_codes", slog.String("error", err.Error()))

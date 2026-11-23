@@ -24,6 +24,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -83,12 +84,45 @@ func run(ctx context.Context, args []string, env config.Env, stdout, stderr io.W
 	if cfg.DumpPlan {
 		return dumpPlan(ctx, client, input, stdout, logger)
 	}
-	logger.Info("ha2fabric.start", slog.String("version", version.String()), slog.String("ha_url", cfg.HAURL), slog.Bool("addon", cfg.Addon), slog.Bool("camera", cfg.Camera))
+	logger.Info("ha2fabric.start", slog.String("version", version.String()), slog.String("ha_url", ha.LogURL(cfg.HAURL)), slog.Bool("addon", cfg.Addon), slog.Bool("camera", cfg.Camera))
+	startup := startWarnings(cfg, logger, started)
+	// In the add-on the web UI has an administrator only on a Supervisor
+	// that names the Ingress user's groups (supervisorGate).
+	var gate *supervisorGate
+	if cfg.Addon {
+		gate = newSupervisorGate(cfg.SupervisorToken, logger)
+	}
 
 	reg, err := nodes.Open(filepath.Dir(cfg.StorePath), logger)
 	if err != nil {
 		logger.Error("ha2fabric.nodes", slog.String("error", err.Error()))
 		return 1
+	}
+	if cfg.Passcode == 0 {
+		// No PASSCODE: the random one beside the store, as a registry
+		// node's (decision 14 of the 2026-11-23 review).
+		p, created, err := reg.ConfiguredPasscode()
+		switch {
+		case errors.Is(err, nodes.ErrPasscodeNotKept):
+			// A paired node serves without its passcode: run on this
+			// start's and say so, rather than not start at all.
+			logger.Error("ha2fabric.passcode", slog.String("error", err.Error()),
+				slog.String("hint", "the configured node runs with a random passcode for this start only; fix the data directory, or set PASSCODE"))
+			startup = append(startup, fabricui.Warning{
+				Code:    warningPasscodeNotKept,
+				Message: "the configured node's passcode could not be kept (" + err.Error() + "): it is random for this start only, so an unpaired node's pairing codes change at the next start; fix the data directory, or set PASSCODE",
+				Since:   started,
+			})
+			created = false
+		case err != nil:
+			logger.Error("ha2fabric.passcode", slog.String("error", err.Error()))
+			return 1
+		}
+		cfg.Passcode = p
+		if created {
+			logger.Info("ha2fabric.passcode_created", slog.String("file", reg.Path(nodes.PasscodeFile)),
+				slog.String("hint", "PASSCODE is unset, so the configured node got a random passcode, kept in this file; the pairing codes follow in ha2fabric.pairing and are on the web UI's pairing page"))
+		}
 	}
 
 	// The cookbook's order (docs/guides/embed-in-a-daemon.md §6): every
@@ -107,10 +141,13 @@ func run(ctx context.Context, args []string, env config.Env, stdout, stderr io.W
 
 	var wg sync.WaitGroup
 	wg.Go(func() { _ = client.Run(rctx, fan) })
+	if gate != nil {
+		wg.Go(func() { gate.run(rctx) })
+	}
 	webErr := make(chan error, 1)
 	if cfg.WebListen != "" {
 		ws, err := web.New(web.Options{Listen: cfg.WebListen, Allow: cfg.WebAllow, Logger: logger, UI: fabricui.Options{
-			Node: def.sw, Exposure: def.prov, Admin: admin(cfg), Reassemble: def.Resync, Events: def.events, Warnings: warnings(def, fl), Counters: counters(def, fl), Erase: def.erase, Logger: logger,
+			Node: def.sw, Exposure: def.prov, Admin: admin(cfg, gate), Reassemble: def.Resync, Events: def.events, Warnings: warnings(def, fl, hostWarnings(startup, gate)), Counters: counters(def, fl), Erase: def.erase, Logger: logger,
 			Operations: web.NewOperations(ring, version.Version, started),
 			Registry:   fl, NodeConfig: nodeConfig(cfg),
 			AllowedHosts: cfg.WebAllowedHosts, AllowHost: allowHost(cfg),
@@ -145,13 +182,27 @@ func run(ctx context.Context, args []string, env config.Env, stdout, stderr io.W
 	return code
 }
 
-// warnings is the web UI's Options.Warnings: the configured node's
-// findings and the registry nodes', which every node's status page
-// reports (a registry node's handler inherits the default's, go-fabric-ui
-// fabricui/handler.go:401 at v0.7.1).
-func warnings(def *served, fl *fleet) func(context.Context) []fabricui.Warning {
+// warnings is the web UI's Options.Warnings: the host's (startWarnings),
+// the configured node's findings and the registry nodes', which every
+// node's status page reports (a registry node's handler inherits the
+// default's, go-fabric-ui fabricui/handler.go:401 at v0.7.1).
+func warnings(def *served, fl *fleet, host func() []fabricui.Warning) func(context.Context) []fabricui.Warning {
 	return func(ctx context.Context) []fabricui.Warning {
-		return append(def.Warnings(ctx), fl.Warnings(ctx)...)
+		out := host()
+		out = append(out, def.Warnings(ctx)...)
+		return append(out, fl.Warnings(ctx)...)
+	}
+}
+
+// hostWarnings are the start-up warnings and, in the add-on, the
+// Supervisor gate's.
+func hostWarnings(startup []fabricui.Warning, gate *supervisorGate) func() []fabricui.Warning {
+	return func() []fabricui.Warning {
+		out := slices.Clone(startup)
+		if gate != nil {
+			out = append(out, gate.Warnings()...)
+		}
+		return out
 	}
 }
 
@@ -187,14 +238,20 @@ func nodeConfig(cfg *config.Config) *fabricui.NodeConfigView {
 	}
 }
 
-// admin is the web UI's administrator check: in the add-on the Ingress
-// proxy, which has authenticated the Home Assistant user; stand-alone
-// the status page only unless WEB_ADMIN, which selects the UI's token mode
+// admin is the web UI's administrator check. In the add-on: a request of
+// the Ingress proxy whose Home Assistant user is an administrator
+// (web.IngressAdmin: the user's groups, which the Supervisor sets), once
+// gate has read a Supervisor of minSupervisor or later. Stand-alone the
+// status page only unless WEB_ADMIN, which selects the UI's token mode
 // (nil).
-func admin(cfg *config.Config) func(*http.Request) bool {
+func admin(cfg *config.Config, gate *supervisorGate) func(*http.Request) bool {
 	switch {
 	case cfg.Addon:
-		return web.From(config.IngressProxy)
+		if gate == nil {
+			return web.ReadOnly
+		}
+		ingress := web.IngressAdmin(config.IngressProxy)
+		return func(r *http.Request) bool { return gate.open() && ingress(r) }
 	case cfg.WebAdmin:
 		return nil
 	default:

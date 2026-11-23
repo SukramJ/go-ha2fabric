@@ -18,7 +18,7 @@ func TestDefaultsStandAlone(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.Addon || c.Listen != DefaultListen || c.Passcode != DefaultPasscode || c.Discriminator != DefaultDiscriminator ||
+	if c.Addon || c.Listen != DefaultListen || c.Passcode != 0 || c.Discriminator != DefaultDiscriminator ||
 		c.VendorID != DefaultVendorID || c.ProductID != DefaultProductID || c.Label != DefaultLabel || c.StorePath != DefaultStoreFile ||
 		!c.ExposeAssist || c.LogLevel != slog.LevelInfo || c.WebListen != DefaultWebListen || c.HAToken != "secret" {
 		t.Fatalf("defaults %+v", c)
@@ -180,7 +180,7 @@ func TestTokenNotInErrors(t *testing.T) {
 // TestNodeConfig: the node configuration the daemon hands node.New
 // validates, carries the identity, and accepts TCP with the camera only.
 func TestNodeConfig(t *testing.T) {
-	c, err := Load([]string{"--store-path", t.TempDir() + "/n.db"}, MapEnv(map[string]string{"HA_URL": "ws://a/api/websocket", "HA_TOKEN": "t"}), nil)
+	c, err := Load([]string{"--store-path", t.TempDir() + "/n.db"}, MapEnv(map[string]string{"HA_URL": "ws://a/api/websocket", "HA_TOKEN": "t", "PASSCODE": "34567890"}), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -208,7 +208,7 @@ func TestNodeConfig(t *testing.T) {
 // newlines (the add-on's list), refuse an empty or doubled name, and reach
 // the node's configuration (issue #41).
 func TestMDNSInterfaces(t *testing.T) {
-	base := map[string]string{"HA_URL": "ws://a/api/websocket", "HA_TOKEN": "t"}
+	base := map[string]string{"HA_URL": "ws://a/api/websocket", "HA_TOKEN": "t", "PASSCODE": "34567890"}
 	store := func() string { return t.TempDir() + "/s.db" }
 	c, err := Load([]string{"--store-path", store()}, MapEnv(base), io.Discard)
 	if err != nil || c.MDNSInterfaces != nil || c.Node(nil).Network.MDNS.Interfaces != nil {
@@ -233,5 +233,143 @@ func TestMDNSInterfaces(t *testing.T) {
 		if _, err := Load([]string{"--store-path", store()}, MapEnv(base), io.Discard); !errors.As(err, &v) || !strings.Contains(err.Error(), "MDNS_INTERFACES") {
 			t.Errorf("%q: %v", bad, err)
 		}
+	}
+}
+
+// TestHelpHidesPasscode: the usage text does not show an environment
+// PASSCODE as the flag's default (HR-P0-leak-29).
+func TestHelpHidesPasscode(t *testing.T) {
+	var out strings.Builder
+	if _, err := Load([]string{"-h"}, MapEnv(map[string]string{"PASSCODE": "34567890"}), &out); !IsHelp(err) {
+		t.Fatalf("-h: %v", err)
+	}
+	if strings.Contains(out.String(), "34567890") || !strings.Contains(out.String(), "-passcode") {
+		t.Fatalf("usage text:\n%s", out.String())
+	}
+	c, err := Load(nil, MapEnv(map[string]string{"HA_URL": "ws://a", "HA_TOKEN": "t", "PASSCODE": "34567890"}), io.Discard)
+	if err != nil || c.Passcode != 34567890 {
+		t.Fatalf("environment passcode: %+v %v", c, err)
+	}
+}
+
+// TestHAURL: HA_URL parses as a URL with a host (HR-P0-err-03's
+// configuration half), and one with userinfo is refused without echoing
+// it (HR-P0-leak-25).
+func TestHAURL(t *testing.T) {
+	for _, u := range []string{"ws://ha.local:8123/api/websocket", "wss://[::1]:8123/api/websocket", "ws://10.0.0.2/api/websocket?x=1"} {
+		if _, err := Load(nil, MapEnv(map[string]string{"HA_URL": u, "HA_TOKEN": "t"}), io.Discard); err != nil {
+			t.Errorf("%s: %v", u, err)
+		}
+	}
+	for _, u := range []string{"ws://::/websocket", "ws:///api/websocket", "ws://", "ws://ha.local:http/x", "ws://ha.local:99999/x", "wss://%zz/x"} {
+		if _, err := Load(nil, MapEnv(map[string]string{"HA_URL": u, "HA_TOKEN": "t"}), io.Discard); err == nil || !strings.Contains(err.Error(), "HA_URL") {
+			t.Errorf("%s passed: %v", u, err)
+		}
+	}
+	_, err := Load(nil, MapEnv(map[string]string{"HA_URL": "wss://me:hunter2@ha.local/api/websocket", "HA_TOKEN": "t"}), io.Discard)
+	if err == nil || !strings.Contains(err.Error(), "user") || strings.Contains(err.Error(), "hunter2") {
+		t.Fatalf("userinfo: %v", err)
+	}
+}
+
+// TestTokenInClear: ws:// to a host that is neither loopback nor the
+// Supervisor sends the token unencrypted (HR-P0-ha-23).
+func TestTokenInClear(t *testing.T) {
+	for u, want := range map[string]bool{
+		"ws://homeassistant.local:8123/api/websocket": true,
+		"ws://192.168.1.2:8123/api/websocket":         true,
+		"ws://[fd00::2]:8123/api/websocket":           true,
+		"wss://homeassistant.local/api/websocket":     false,
+		"ws://127.0.0.1:8123/api/websocket":           false,
+		"ws://[::1]:8123/api/websocket":               false,
+		"ws://localhost:8123/api/websocket":           false,
+		SupervisorURL:                                 false,
+	} {
+		c := &Config{HAURL: u}
+		if got := c.TokenInClear(); got != want {
+			t.Errorf("%s: %v, want %v", u, got, want)
+		}
+	}
+}
+
+// TestWebAdminOffLoopback: WEB_ADMIN on a listener that is not loopback
+// needs WEB_ALLOW; the refusal names both remedies (HR-P0-cfg-22).
+func TestWebAdminOffLoopback(t *testing.T) {
+	base := map[string]string{"HA_URL": "ws://127.0.0.1/api/websocket", "HA_TOKEN": "t", "WEB_ADMIN": "true"}
+	with := func(kv ...string) Env {
+		m := map[string]string{}
+		for k, v := range base {
+			m[k] = v
+		}
+		for i := 0; i < len(kv); i += 2 {
+			m[kv[i]] = kv[i+1]
+		}
+		return MapEnv(m)
+	}
+	for _, listen := range []string{"0.0.0.0:8099", ":8099", "192.168.1.2:8099", "[::]:8099", "bridge.lan:8099"} {
+		_, err := Load(nil, with("WEB_LISTEN", listen), io.Discard)
+		if err == nil || !strings.Contains(err.Error(), "WEB_ALLOW") || !strings.Contains(err.Error(), "loopback") {
+			t.Errorf("WEB_ADMIN on %s without WEB_ALLOW: %v", listen, err)
+		}
+		if _, err := Load(nil, with("WEB_LISTEN", listen, "WEB_ALLOW", "192.168.1.10"), io.Discard); err != nil {
+			t.Errorf("WEB_ADMIN on %s with WEB_ALLOW: %v", listen, err)
+		}
+		if _, err := Load(nil, with("WEB_LISTEN", listen, "WEB_ADMIN", "false"), io.Discard); err != nil {
+			t.Errorf("status page only on %s: %v", listen, err)
+		}
+	}
+	for _, listen := range []string{"127.0.0.1:8099", "[::1]:8099", "localhost:8099", ""} {
+		if _, err := Load(nil, with("WEB_LISTEN", listen), io.Discard); err != nil {
+			t.Errorf("WEB_ADMIN on %q: %v", listen, err)
+		}
+	}
+}
+
+// TestPasscodeUnset: without PASSCODE the passcode is 0, the daemon's
+// random one; the public test value set explicitly is honoured and
+// reported (HR-P0-cfg-21).
+func TestPasscodeUnset(t *testing.T) {
+	env := map[string]string{"HA_URL": "ws://a/api/websocket", "HA_TOKEN": "t"}
+	c, err := Load(nil, MapEnv(env), io.Discard)
+	if err != nil || c.Passcode != 0 || c.PasscodeIsTestValue() {
+		t.Fatalf("unset: %+v %v", c, err)
+	}
+	env["PASSCODE"] = "20202021"
+	c, err = Load(nil, MapEnv(env), io.Discard)
+	if err != nil || c.Passcode != TestPasscode || !c.PasscodeIsTestValue() {
+		t.Fatalf("the test value: %+v %v", c, err)
+	}
+}
+
+// TestAddonWebAllow: in the add-on the client filter is the Ingress proxy:
+// WEB_ALLOW defaults to it and another value is refused (HR-P0-cfg-30).
+func TestAddonWebAllow(t *testing.T) {
+	store := []string{"--store-path", t.TempDir() + "/s.db"}
+	c, err := Load(store, MapEnv(map[string]string{SupervisorTokenEnv: "sup"}), io.Discard)
+	if err != nil || !slices.Equal(c.WebAllow, []string{IngressProxy}) {
+		t.Fatalf("default: %+v %v", c, err)
+	}
+	for _, allow := range []string{"192.168.1.2", "172.30.32.2,192.168.1.2"} {
+		if _, err := Load(store, MapEnv(map[string]string{SupervisorTokenEnv: "sup", "WEB_ALLOW": allow}), io.Discard); err == nil || !strings.Contains(err.Error(), "WEB_ALLOW") {
+			t.Errorf("%s: %v", allow, err)
+		}
+	}
+}
+
+// TestHelpHidesHAURL: the usage text does not show an environment HA_URL,
+// which may carry a credential before Load refuses it (HR-P0-ha-56).
+func TestHelpHidesHAURL(t *testing.T) {
+	var out strings.Builder
+	if _, err := Load([]string{"-h"}, MapEnv(map[string]string{"HA_URL": "wss://me:hunter2@ha.local/api/websocket?k=v"}), &out); !IsHelp(err) {
+		t.Fatalf("-h: %v", err)
+	}
+	if strings.Contains(out.String(), "hunter2") || strings.Contains(out.String(), "ha.local") || !strings.Contains(out.String(), "-ha-url") {
+		t.Fatalf("usage text:\n%s", out.String())
+	}
+	if c, err := Load(nil, MapEnv(map[string]string{"HA_URL": "ws://ha.local/api/websocket", "HA_TOKEN": "t"}), io.Discard); err != nil || c.HAURL != "ws://ha.local/api/websocket" {
+		t.Fatalf("environment HA_URL: %+v %v", c, err)
+	}
+	if c, err := Load([]string{"--ha-url", "ws://flag.local/api/websocket"}, MapEnv(map[string]string{"HA_URL": "ws://ha.local/api/websocket", "HA_TOKEN": "t"}), io.Discard); err != nil || c.HAURL != "ws://flag.local/api/websocket" {
+		t.Fatalf("the flag wins: %+v %v", c, err)
 	}
 }

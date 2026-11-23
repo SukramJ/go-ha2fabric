@@ -307,6 +307,80 @@ func TestCandidateBeforeSession(t *testing.T) {
 	}
 }
 
+// TestCandidatesBeforeSessionAreBounded (HR-P0-bound-28): before Home
+// Assistant names its session, a call that would queue more than
+// MaxPendingCandidates is refused whole with RESOURCE_EXHAUSTED; the
+// queue up to the bound reaches Home Assistant, and after its session
+// event candidates pass unqueued.
+func TestCandidatesBeforeSessionAreBounded(t *testing.T) {
+	up := &upstream{}
+	h, _ := newHost(t, up)
+	h.Attach(&signaller{})
+	ctx := context.Background()
+	if _, err := h.ProvideOffer(ctx, offer(1)); err != nil {
+		t.Fatal(err)
+	}
+	cands := func(n int) []wpdef.ICECandidateStruct {
+		out := make([]wpdef.ICECandidateStruct, n)
+		for i := range out {
+			out[i].Candidate, out[i].SdpMid, out[i].SdpmLineIndex = fmt.Sprintf("candidate:%d", i), spec.ValueOf("0"), spec.ValueOf[uint16](0)
+		}
+		return out
+	}
+	refused := func(err error) bool {
+		se, ok := errors.AsType[contract.StatusError](err)
+		return errors.Is(err, camera.ErrTooManyCandidates) && ok && se.Status == contract.StatusResourceExhausted
+	}
+	const bound = camera.MaxPendingCandidates
+	if err := h.ProvideIceCandidates(ctx, 1, cands(bound-4)); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.ProvideIceCandidates(ctx, 1, cands(5)); !refused(err) {
+		t.Fatalf("a call beyond the bound: %v", err)
+	}
+	if err := h.ProvideIceCandidates(ctx, 1, cands(4)); err != nil {
+		t.Fatalf("a call up to the bound: %v", err)
+	}
+	if err := h.ProvideIceCandidates(ctx, 1, cands(1)); !refused(err) {
+		t.Fatalf("one beyond the bound: %v", err)
+	}
+	if len(up.cands()) != 0 {
+		t.Fatal("a candidate before Home Assistant named its session")
+	}
+	up.stream(0).push(session("01HA"))
+	eventually(t, "the queued candidates", func() bool { return len(up.cands()) == bound })
+	if err := h.ProvideIceCandidates(ctx, 1, cands(bound+1)); err != nil {
+		t.Fatalf("candidates after the session event: %v", err)
+	}
+	if n := len(up.cands()); n != 2*bound+1 {
+		t.Fatalf("%d candidates relayed", n)
+	}
+}
+
+// TestEventRefused (HR-P0-test-06): an event that does not decode is
+// logged as camera.event_refused and skipped; the relay goes on with the
+// next.
+func TestEventRefused(t *testing.T) {
+	up := &upstream{script: func(s *stream) {
+		s.push(map[string]any{"type": 5})
+		s.push(session("01HA"))
+		s.push(map[string]any{"type": "answer", "answer": "v=0 answer"})
+	}}
+	h, logs := newHost(t, up)
+	sig := &signaller{}
+	h.Attach(sig)
+	if _, err := h.ProvideOffer(context.Background(), offer(3)); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the answer after the refused event", func() bool { return len(sig.seen()) == 1 })
+	if sig.seen()[0] != "answer 3 v=0 answer" {
+		t.Fatalf("signals %q", sig.seen())
+	}
+	if l := logs.String(); !strings.Contains(l, "camera.event_refused") || !strings.Contains(l, "session=3") {
+		t.Fatalf("logs %q", l)
+	}
+}
+
 func TestHAErrorEndsTheSession(t *testing.T) {
 	up := &upstream{script: func(s *stream) {
 		s.push(session("01HA"))
