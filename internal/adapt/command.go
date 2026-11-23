@@ -327,7 +327,7 @@ func light(id string, payload []byte) (ha.ServiceCall, error) {
 	if k := obj.ColorTemp; k != nil && *k > 0 {
 		// The entity states extra.color_temp_kelvin true, so the row's
 		// color_temp is kelvin.
-		data["color_temp_kelvin"] = int(math.Round(*k))
+		data["color_temp_kelvin"] = clampInt(*k, kelvinMin, kelvinMax)
 	}
 	c := obj.Color
 	if h, okh := c["h"]; okh {
@@ -386,7 +386,31 @@ func integer(s string, lo, hi int) (int, bool) {
 	return clampInt(f, lo, hi), true
 }
 
+// kelvinMin and kelvinMax bound color_temp_kelvin to what go-hamapping
+// renders: 1e6 / ColorTemperatureMireds (go-hamapping rows_gen.go:2265 at
+// v0.6.0, "reciprocal" with scale 1e6) with the mireds 1 to 65279 (the
+// row's bounds at :2248-2249, Matter's 0xFEFF; 0 is refused by
+// "reciprocal", value.go:277-280), so 15 (1e6/65279, rounded) to
+// 1000000. Home Assistant takes any int from 0 (light/const.py:173,
+// cv.positive_int at helpers/config_validation.py:185, 2026.10.3); both
+// bounds fit an int32.
+const (
+	kelvinMin = 15
+	kelvinMax = 1_000_000
+)
+
+// clampInt rounds f and clamps it to lo..hi in float before it converts:
+// a float beyond the int range converts to an architecture's choice (the
+// minimum int on amd64, beyond 2^31 on 386 and arm/v7), not to a bound.
+// NaN, which number refuses before, gives lo.
 func clampInt(f float64, lo, hi int) int {
-	n := int(math.Round(f))
-	return max(lo, min(hi, n))
+	r := math.Round(f)
+	switch {
+	case r >= float64(hi):
+		return hi
+	case r > float64(lo):
+		return int(r)
+	default:
+		return lo
+	}
 }

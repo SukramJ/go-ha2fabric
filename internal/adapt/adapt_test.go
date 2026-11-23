@@ -348,6 +348,41 @@ func TestService(t *testing.T) {
 	}
 }
 
+// TestServiceClampsOutOfRange (HR-P0-data-01): a number beyond the int
+// range clamps to the bound it passed, on every architecture — converted
+// first, 1e300 was the minimum int on amd64 and 3e9 one beyond int32 on
+// 386 and arm/v7 (GOARCH=386 go test ./internal/adapt holds the second).
+func TestServiceClampsOutOfRange(t *testing.T) {
+	light := func(data map[string]any) ha.ServiceCall {
+		return ha.ServiceCall{Domain: "light", Service: "turn_on", EntityID: "light.a", Data: data}
+	}
+	for _, c := range []struct {
+		cmd  model.Command
+		want ha.ServiceCall
+	}{
+		{cmd("light.a", "", `{"brightness":1e300}`), light(map[string]any{"brightness": 255})},
+		{cmd("light.a", "", `{"brightness":3e9}`), light(map[string]any{"brightness": 255})},
+		{cmd("light.a", "", `{"brightness":-3e9}`), light(map[string]any{"brightness": 0})},
+		{cmd("light.a", "", `{"brightness":-1e300}`), light(map[string]any{"brightness": 0})},
+		{cmd("light.a", "", `{"color":{"r":1e300,"g":3e9,"b":-3e9}}`), light(map[string]any{"rgb_color": []int{255, 255, 0}})},
+		{cmd("light.a", "", `{"color_temp":1e300}`), light(map[string]any{"color_temp_kelvin": 1000000})},
+		{cmd("light.a", "", `{"color_temp":3e9}`), light(map[string]any{"color_temp_kelvin": 1000000})},
+		{cmd("light.a", "", `{"color_temp":1e6}`), light(map[string]any{"color_temp_kelvin": 1000000})},
+		{cmd("light.a", "", `{"color_temp":15.3}`), light(map[string]any{"color_temp_kelvin": 15})},
+		{cmd("light.a", "", `{"color_temp":0.4}`), light(map[string]any{"color_temp_kelvin": 15})},
+		{cmd("cover.a", hamapping.MethodSetPosition, "1e300"), ha.ServiceCall{Domain: "cover", Service: "set_cover_position", EntityID: "cover.a", Data: map[string]any{"position": 100}}},
+		{cmd("cover.a", hamapping.MethodSetPosition, "3e9"), ha.ServiceCall{Domain: "cover", Service: "set_cover_position", EntityID: "cover.a", Data: map[string]any{"position": 100}}},
+		{cmd("cover.a", hamapping.MethodTilt, "-3e9"), ha.ServiceCall{Domain: "cover", Service: "set_cover_tilt_position", EntityID: "cover.a", Data: map[string]any{"tilt_position": 0}}},
+		{cmd("fan.a", hamapping.MethodPercentage, "1e300"), ha.ServiceCall{Domain: "fan", Service: "set_percentage", EntityID: "fan.a", Data: map[string]any{"percentage": 100}}},
+		{cmd("fan.a", hamapping.MethodPercentage, "3e9"), ha.ServiceCall{Domain: "fan", Service: "set_percentage", EntityID: "fan.a", Data: map[string]any{"percentage": 100}}},
+	} {
+		got, err := adapt.Service(c.cmd, nil)
+		if err != nil || !reflect.DeepEqual(got, c.want) {
+			t.Errorf("%s %q %s: %+v %v, want %+v", c.cmd.Entity.Key(), c.cmd.Method, c.cmd.Payload, got, err, c.want)
+		}
+	}
+}
+
 // TestAppliedStateIsNotACommand: a state Home Assistant reports reaches the
 // device without coming back as a command (no echo loop); the controller's
 // side of the round trip is the end-to-end test's (internal/bridge).
