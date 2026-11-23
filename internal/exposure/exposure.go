@@ -344,8 +344,8 @@ const WarningNodeEraseFailed = "node_erase_failed"
 // Warnings are the configuration's half-valid parts for the web UI's
 // status (fabricui.Options.Warnings): the label values of the last sync
 // that name no Home Assistant label, each since its first sighting in an
-// unbroken run of syncs, and an overrides file that was moved aside at
-// start. The log carries the same findings.
+// unbroken run of syncs, and an overrides file that was recovered at
+// start (selection.Recovery says how). The log carries the same findings.
 func (p *Provider) Warnings(context.Context) []fabricui.Warning {
 	var out []fabricui.Warning
 	for _, w := range p.m.View().Warnings {
@@ -355,7 +355,7 @@ func (p *Provider) Warnings(context.Context) []fabricui.Warning {
 		if r, ok := p.opts.Selection.Recovered(); ok {
 			out = append(out, fabricui.Warning{
 				Code:    WarningSelectionCorrupt,
-				Message: fmt.Sprintf("the overrides file did not parse (%s) and was moved to %s; the web UI's overrides started empty", r.Err, r.MovedTo),
+				Message: r.Message(),
 				Since:   r.At,
 			})
 		}

@@ -250,9 +250,11 @@ The lines to know:
 | `bridge.upstream_unusable` | warn | Home Assistant is away; every endpoint is unreachable. |
 | `bridge.build_failed` | warn | go-fabric refused a device go-hamapping planned; its entities have no endpoint (the plan says why). |
 | `bridge.call_service_failed` | warn | A controller's command failed in Home Assistant; the entity's state goes back onto its endpoint. |
+| `bridge.command_unserved` | warn | A controller's command waited in the queue while a sync took its entity off the bridge; it was dropped and counted as a command error. |
+| `bridge.batch` | error | go-fabric refused part of a sync's batch (the operation and the key); what it refused is tried again at the next sync, and the status shows it as `sync_error` until a sync succeeds. |
 | `bridge.command_unmapped` | warn | A command the daemon's service table has no service for. |
 | `bridge.command_discarded` | info | A controller's command the entity has no action for (`entity`, `cluster`, `command`): an Off or OffWithEffect on a scene's, script's, automation's or button's plug. It was answered with success and nothing was called — the controller's "done" changed nothing. Counted as `discards` in the status JSON (`counters`) and on the status page, over every node (Health). |
-| `bridge.label_unresolved` | warn | A label of `INCLUDE_LABELS`/`EXCLUDE_LABELS` names no Home Assistant label; it is used as a label id. Logged when the set changes; also on the web UI's status page. |
+| `bridge.label_unresolved` | warn | A label of `INCLUDE_LABELS`/`EXCLUDE_LABELS` names no Home Assistant label; it is used as a label id, or follows a renamed label by its id; an exclude label that names no label excludes nothing. Logged when the set changes; also on the web UI's status page. |
 | `bridge.selection_applied` | info | The web UI stored overrides. |
 | `bridge.forget` | info | An entity removed from Home Assistant's registry: its endpoint number is forgotten (`entity`, `key`); created again, it gets a fresh one. |
 | `selection.corrupt` | warn | `selection.json` did not parse and was moved aside (`moved_to`); `restored` names the last-good copy read instead, empty when none could be (Files); also on the web UI's status page. |
@@ -279,7 +281,11 @@ value is a warning: in the log
 (`bridge.label_unresolved`, when the set of unresolved values changes) and
 on the web UI's status page and above its selection list
 (`label_unresolved`, with the time it was first seen), until the label
-exists or the value is corrected. The plan's `labels` column and the web UI
+exists or the value is corrected. When Home Assistant renames a label, a
+value that named it follows its label id while the daemon runs, and the
+warning names the id and the new name; a restart resolves the names afresh,
+so update the value (or configure the label id) after a rename. An exclude
+label that names no label excludes nothing, and its warning says so. The plan's `labels` column and the web UI
 show an entity's labels, its own and its device's; the reason says which
 label decided ("included by label 'Matter'"). The daemon subscribes to
 `label_registry_updated`: creating, renaming or removing a label, or adding

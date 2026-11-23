@@ -178,6 +178,23 @@ to reach it from the network, run the image with
   add-on's Supervisor check follows no redirect and takes no proxy from
   the environment; the docs say that the Home Assistant connection does
   take one (`HTTP_PROXY`).
+- A controller that moves a thermostat's heat/cool range writes two
+  setpoints; the second call now carries the first one's new bound instead
+  of the stale state's, and a bound that crosses the other moves it along,
+  so Home Assistant no longer refuses the first call (HR-P1-adpt-30).
+- A burst of Home Assistant events that overflows the bridge's queue no
+  longer loses the promised re-sync, the unreachable marking of an outage or
+  the forgetting of a removed entity (HR-P1-conc-32).
+- An endpoint go-fabric refuses in a sync's batch is no longer counted as
+  served: the status shows `sync_error`, the web UI's reassemble returns it,
+  and the next sync adds it again (HR-P1-err-31).
+- A controller command still queued when its entity leaves the bridge is
+  dropped (`bridge.command_unserved`), not sent to Home Assistant
+  (HR-P1-conc-33).
+- An include or exclude label configured by its name keeps working after
+  the label is renamed in Home Assistant, while the daemon runs; the warning
+  of an exclude label that names no label says it excludes nothing now
+  (HR-P1-cfg-34).
 
 ## [0.6.3] - 2026-11-12
 
