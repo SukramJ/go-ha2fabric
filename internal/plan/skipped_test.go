@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (C) 2026 SukramJ.
 
-package ha_test
+package plan_test
 
 import (
 	"context"
@@ -16,13 +16,30 @@ import (
 	"github.com/SukramJ/go-ha2fabric/internal/plan"
 )
 
+// quiet is an ha.Handler that ignores the connection's events.
+type quiet struct{}
+
+func (quiet) Connected(string)   {}
+func (quiet) Disconnected(error) {}
+func (quiet) Event(ha.Event)     {}
+
 // skippedEnv is a client on the fake Home Assistant and a reader of one
 // entity's verdict under rule: exposed, and the reason.
 func skippedEnv(t *testing.T, rule expose.Rule) (srv *hatest.Server, verdict func(id string) (bool, string, error)) {
 	t.Helper()
 	srv = hatest.New(t)
-	c, r, _ := start(t, ha.Options{URL: srv.URL(), Token: hatest.Token, Logger: slog.New(slog.DiscardHandler)})
-	r.wait(t, "connected")
+	c := ha.New(ha.Options{URL: srv.URL(), Token: hatest.Token, Logger: slog.New(slog.DiscardHandler)})
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { defer close(done); _ = c.Run(ctx, quiet{}) }()
+	t.Cleanup(func() { cancel(); <-done })
+	deadline := time.Now().Add(5 * time.Second)
+	for !c.Connected() {
+		if time.Now().After(deadline) {
+			t.Fatal("not connected")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
 	in := plan.Input{Rule: rule}
 	return srv, func(id string) (bool, string, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
