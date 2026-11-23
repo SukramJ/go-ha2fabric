@@ -225,7 +225,9 @@ func Load(args []string, env Env, out io.Writer) (*Config, error) {
 		}
 		return fs.String(name, v, usage+" ("+envKey+")")
 	}
-	haURL := str("ha-url", "HA_URL", "", "Home Assistant WebSocket URL, e.g. ws://homeassistant.local:8123/api/websocket")
+	// HA_URL's flag shows no default either: the environment's value may
+	// carry a credential that Load refuses only after -h printed it.
+	haURL := fs.String("ha-url", "", "Home Assistant WebSocket URL, e.g. wss://homeassistant.local:8123/api/websocket (HA_URL)")
 	listen := str("listen", "LISTEN", DefaultListen, "UDP listen address of the Matter node")
 	mdnsIfaces := str("mdns-interfaces", "MDNS_INTERFACES", "", "host interfaces the mDNS responder announces on (comma-separated); empty is every interface")
 	// The passcode's flag shows no default: the environment's value would
@@ -270,6 +272,9 @@ func Load(args []string, env Env, out io.Writer) (*Config, error) {
 		c.HAToken = supervisor
 	}
 	c.HAURL = *haURL
+	if c.HAURL == "" {
+		c.HAURL = get("HA_URL")
+	}
 	if c.HAURL == "" && c.Addon {
 		c.HAURL = SupervisorURL
 	}

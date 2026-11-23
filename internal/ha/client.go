@@ -135,10 +135,19 @@ func New(opts Options) *Client {
 	if log == nil {
 		log = slog.Default()
 	}
-	// The REST client is built once, bounded by CallTimeout. The
-	// WebSocket dial takes noRedirect.
-	return &Client{opts: opts, log: log, http: &http.Client{Timeout: opts.CallTimeout}}
+	// The REST client is built once, bounded by CallTimeout, and follows
+	// no redirect (refuseRESTRedirect). The WebSocket dial takes
+	// noRedirect.
+	return &Client{opts: opts, log: log, http: &http.Client{Timeout: opts.CallTimeout, CheckRedirect: refuseRESTRedirect}}
 }
+
+// errRESTRedirect refuses a redirect of a REST request (the camera
+// proxy's still), which carries the token as its Bearer header.
+var errRESTRedirect = errors.New("ha: Home Assistant answered with a redirect, which is not followed; set HA_URL to the final address")
+
+// refuseRESTRedirect is the REST client's redirect policy: none followed,
+// so the Bearer header goes to the configured endpoint only.
+func refuseRESTRedirect(*http.Request, []*http.Request) error { return errRESTRedirect }
 
 // errRedirect refuses a redirect of the WebSocket handshake.
 var errRedirect = errors.New("ha: the WebSocket endpoint answered with a redirect, which is not followed; set HA_URL to the final address")
@@ -580,6 +589,9 @@ func scrubURL(err error) error {
 		return err
 	}
 	raw := ue.URL
+	if raw == "" {
+		return err
+	}
 	ue.URL = LogURL(raw)
 	return scrubbed{msg: strings.ReplaceAll(err.Error(), raw, ue.URL), err: err}
 }

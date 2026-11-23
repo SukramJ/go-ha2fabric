@@ -5,11 +5,13 @@ package ha_test
 
 import (
 	"bytes"
+	"context"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -77,5 +79,27 @@ func TestClientRefusesRedirect(t *testing.T) {
 	r.mu.Unlock()
 	if target.Authenticated() != 0 || err == nil || !strings.Contains(err.Error(), "redirect") {
 		t.Fatalf("authenticated %d times through a redirect: %v", target.Authenticated(), err)
+	}
+}
+
+// TestImageRefusesRedirect: the camera proxy's request with the Bearer
+// token follows no redirect either (HR-P0-ha-56).
+func TestImageRefusesRedirect(t *testing.T) {
+	var reached atomic.Int32
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		reached.Add(1)
+		_, _ = w.Write([]byte("jpeg"))
+	}))
+	t.Cleanup(target.Close)
+	redir := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, target.URL+r.URL.Path, http.StatusFound)
+	}))
+	t.Cleanup(redir.Close)
+	c := ha.New(ha.Options{URL: "ws" + strings.TrimPrefix(redir.URL, "http") + "/api/websocket", Token: "tok"})
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, _, err := c.Image(ctx, "camera.front", 0, 0)
+	if err == nil || !strings.Contains(err.Error(), "redirect") || reached.Load() != 0 {
+		t.Fatalf("Image through a redirect: %v, target reached %d times", err, reached.Load())
 	}
 }

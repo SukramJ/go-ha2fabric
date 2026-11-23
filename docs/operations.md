@@ -168,10 +168,10 @@ Supervisor's internal name (`ws://supervisor/core/websocket`). Stand-alone,
 use `wss://` where Home Assistant has TLS, or run the daemon on Home
 Assistant's host (`ws://127.0.0.1:8123/api/websocket`); with `ws://` to
 any other host the daemon starts but logs `ha2fabric.token_in_clear` and
-shows the warning `token_in_clear` on every status page. The WebSocket
-handshake follows no redirect: an `HA_URL` that answers with one fails to
-connect (`ha.disconnected`, naming the redirect), so set it to the final
-address. `HA_URL` must name a host and carry no user or password; the log
+shows the warning `token_in_clear` on every status page. Neither the
+WebSocket handshake nor the camera proxy's request follows a redirect: an
+`HA_URL` that answers with one fails to connect (`ha.disconnected`, naming
+the redirect), so set it to the final address. `HA_URL` must name a host and carry no user or password; the log
 shows it without a query.
 
 ## What the daemon reads and writes

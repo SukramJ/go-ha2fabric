@@ -355,3 +355,21 @@ func TestAddonWebAllow(t *testing.T) {
 		}
 	}
 }
+
+// TestHelpHidesHAURL: the usage text does not show an environment HA_URL,
+// which may carry a credential before Load refuses it (HR-P0-ha-56).
+func TestHelpHidesHAURL(t *testing.T) {
+	var out strings.Builder
+	if _, err := Load([]string{"-h"}, MapEnv(map[string]string{"HA_URL": "wss://me:hunter2@ha.local/api/websocket?k=v"}), &out); !IsHelp(err) {
+		t.Fatalf("-h: %v", err)
+	}
+	if strings.Contains(out.String(), "hunter2") || strings.Contains(out.String(), "ha.local") || !strings.Contains(out.String(), "-ha-url") {
+		t.Fatalf("usage text:\n%s", out.String())
+	}
+	if c, err := Load(nil, MapEnv(map[string]string{"HA_URL": "ws://ha.local/api/websocket", "HA_TOKEN": "t"}), io.Discard); err != nil || c.HAURL != "ws://ha.local/api/websocket" {
+		t.Fatalf("environment HA_URL: %+v %v", c, err)
+	}
+	if c, err := Load([]string{"--ha-url", "ws://flag.local/api/websocket"}, MapEnv(map[string]string{"HA_URL": "ws://ha.local/api/websocket", "HA_TOKEN": "t"}), io.Discard); err != nil || c.HAURL != "ws://flag.local/api/websocket" {
+		t.Fatalf("the flag wins: %+v %v", c, err)
+	}
+}
