@@ -7,7 +7,7 @@
 
 A Home Assistant installation seen by Apple Home, Google Home and Amazon
 Alexa as a bridge — or as one bridge per ecosystem: the entities Home Assistant exposes become endpoints
-of a bridged node. The daemon embeds [go-fabric](https://github.com/SukramJ/go-fabric) in
+of a bridged node. The daemon embeds [go-fabric](https://github.com/thingfabric/go-fabric) in
 process: the Home Assistant WebSocket API (entity and device registry,
 `state_changed`, `call_service`) on one side, go-fabric's device kit and
 `node` facade speaking Matter to the controllers on the other, one
@@ -16,11 +16,11 @@ Home Assistant component becomes which device type and cluster is the
 table of [`go-hamapping`](https://github.com/SukramJ/go-hamapping).
 
 Twin of [`go-hamapping`](https://github.com/SukramJ/go-hamapping); both are built on
-[go-fabric](https://github.com/SukramJ/go-fabric) and share its project
+[go-fabric](https://github.com/thingfabric/go-fabric) and share its project
 setup (pure Go, `CGO_ENABLED=0`, Apache-2.0 with a contributor licence
 agreement, the same guards in CI).
 
-> **Status: 0.6.3.** The daemon and its Home Assistant add-on run, with
+> **Status: 0.7.0.** The daemon and its Home Assistant add-on run, with
 > cameras as an opt-in (brief R6); a real
 > pairing with Apple Home is the owner's manual step before the release is
 > announced. The design is in [`CONCEPT.md`](CONCEPT.md).
@@ -33,7 +33,7 @@ device, is reserved to Alliance members and certified products under the
 *Connectivity Standards Alliance Trademark and Logo Usage Guidelines and
 Terms* (<https://csa-iot.org/resources/governing-documents/>; the terms are
 restated in go-fabric's
-[`licenses/NOTICE-matter.js.txt`](https://github.com/SukramJ/go-fabric/blob/main/licenses/NOTICE-matter.js.txt):
+[`licenses/NOTICE-matter.js.txt`](https://github.com/thingfabric/go-fabric/blob/main/licenses/NOTICE-matter.js.txt):
 "Only the Alliance and its members may use Alliance trademarks and logos,
 including, without limitation, the Matter trademarks and logos"). This
 project is neither, so the mark is not part of its name; the word appears
@@ -65,12 +65,12 @@ See go-fabric's README, section "Not certified".
 - **Reachability.** An `unavailable` or `unknown` entity is unreachable;
   while Home Assistant is away, every endpoint is.
 - **The family's web UI** ([go-fabric-ui](https://github.com/SukramJ/go-fabric-ui)
-  `v0.1.2`, through Ingress in the add-on): health, the pairing code and the
+  `v0.13.0`, through Ingress in the add-on): health, the pairing code and the
   commissioning window, the fabrics, the endpoints, diagnostics, and the
   entity selection — every candidate entity with its labels, the layer of
   the rule that decided and go-hamapping's verdict, with per-entity
   overrides. `--dump-plan` prints the same table. The terms the pages use
-  are defined in go-fabric's [glossary](https://sukramj.github.io/go-fabric/reference/glossary/).
+  are defined in go-fabric's [glossary](https://docs.thingfabric.dev/reference/glossary/).
 - **Pure Go**, `CGO_ENABLED=0`: a static binary, a distroless image, a Home
   Assistant add-on for amd64, aarch64 and armv7.
 
@@ -157,7 +157,8 @@ environment only and never logged or stored.
 | `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error`. |
 | `WEB_LISTEN` | `127.0.0.1:8099` | The web UI; empty disables it. |
 | `WEB_ALLOW` | empty (all) | Client addresses the web UI serves. |
-| `WEB_ADMIN` | `false` | Stand-alone: let the web UI write (selection, window, fabrics) and show the pairing code, with the UI's per-process token. The add-on ignores it: the Ingress proxy is the administrator. |
+| `WEB_ALLOWED_HOSTS` | empty | Stand-alone: DNS names the web UI answers under besides `localhost` and IP addresses (comma-separated host names, no port). The add-on needs none. |
+| `WEB_ADMIN` | `false` | Stand-alone: make the web UI's user the administrator (every page, the writes, the pairing code), with the UI's per-process token; without it the UI is the status page only. The add-on ignores it: the Ingress proxy is the administrator. |
 
 [`docs/operations.md`](docs/operations.md) covers the files, ports, mDNS,
 the token's role, logs, health, pairing, Erase and a factory reset.
@@ -184,7 +185,7 @@ controller (`fabrictest`); no live Home Assistant in CI.
 
 ## Acknowledgements
 
-Built on [go-fabric](https://github.com/SukramJ/go-fabric), a semantic
+Built on [go-fabric](https://github.com/thingfabric/go-fabric), a semantic
 port of [matter.js](https://github.com/matter-js/matter.js) (Apache-2.0),
 and on the [Home Assistant](https://www.home-assistant.io/) APIs. The
 embedding follows go-fabric's cookbook "Embed in a daemon", written

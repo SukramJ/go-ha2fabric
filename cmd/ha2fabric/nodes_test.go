@@ -19,7 +19,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SukramJ/go-fabric/node"
+	"thingfabric.dev/go-fabric/node"
 
 	"github.com/SukramJ/go-ha2fabric/internal/config"
 	"github.com/SukramJ/go-ha2fabric/internal/ha/hatest"

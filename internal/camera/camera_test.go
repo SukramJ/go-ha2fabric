@@ -17,12 +17,12 @@ import (
 	"testing"
 	"time"
 
-	gfcamera "github.com/SukramJ/go-fabric/cluster/camera"
-	"github.com/SukramJ/go-fabric/cluster/spec"
-	csdef "github.com/SukramJ/go-fabric/cluster/spec/cameraavstreammanagement"
-	wpdef "github.com/SukramJ/go-fabric/cluster/spec/webrtctransportprovider"
-	"github.com/SukramJ/go-fabric/contract"
 	"github.com/SukramJ/go-hamqtt/model"
+	gfcamera "thingfabric.dev/go-fabric/cluster/camera"
+	"thingfabric.dev/go-fabric/cluster/spec"
+	csdef "thingfabric.dev/go-fabric/cluster/spec/cameraavstreammanagement"
+	wpdef "thingfabric.dev/go-fabric/cluster/spec/webrtctransportprovider"
+	"thingfabric.dev/go-fabric/contract"
 
 	"github.com/SukramJ/go-ha2fabric/internal/camera"
 	"github.com/SukramJ/go-ha2fabric/internal/ha"

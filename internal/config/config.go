@@ -21,7 +21,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/SukramJ/go-fabric/node"
+	"thingfabric.dev/go-fabric/node"
 
 	"github.com/SukramJ/go-ha2fabric/internal/expose"
 )
@@ -104,10 +104,17 @@ type Config struct {
 	// WebAllow restricts the web UI to these client addresses (the
 	// Ingress proxy's 172.30.32.2 in the add-on); empty allows every one.
 	WebAllow []string
+	// WebAllowedHosts are the DNS names a stand-alone web UI answers under
+	// besides loopback names and IP addresses (WEB_ALLOWED_HOSTS, comma-
+	// separated; go-fabric-ui Options.AllowedHosts, which refuses an entry
+	// with a scheme, port, path or wildcard). The add-on needs none: the
+	// Ingress proxy is admitted by its address.
+	WebAllowedHosts []string
 	// WebAdmin lets a stand-alone web UI write (change the selection,
 	// open the window, remove a fabric) and show the pairing code, with
 	// the UI's per-process token against cross-site requests. Default
-	// false: the stand-alone UI is read-only. The add-on ignores it: the
+	// false: the stand-alone UI serves the status page only (go-fabric-ui
+	// v0.10's administrator reading routes). The add-on ignores it: the
 	// Ingress proxy is the administrator there.
 	WebAdmin bool
 
@@ -195,6 +202,7 @@ func Load(args []string, env Env, out io.Writer) (*Config, error) {
 	level := str("log-level", "LOG_LEVEL", "info", "debug, info, warn or error")
 	web := str("web-listen", "WEB_LISTEN", DefaultWebListen, "web UI address; empty disables it")
 	allow := str("web-allow", "WEB_ALLOW", "", "client addresses allowed on the web UI (comma-separated); empty allows all")
+	allowedHosts := str("web-allowed-hosts", "WEB_ALLOWED_HOSTS", "", "DNS names the web UI answers under besides loopback names and IP addresses (comma-separated)")
 	webAdmin := str("web-admin", "WEB_ADMIN", "false", "stand-alone: let the web UI write and show the pairing code")
 	cam := str("camera", "CAMERA", "false", "map camera entities and relay their WebRTC signalling (opt-in)")
 	limit := str("node-limit", "NODE_LIMIT", strconv.Itoa(DefaultNodeLimit), "how many nodes the web UI may create beside the configured one")
@@ -233,6 +241,7 @@ func Load(args []string, env Env, out io.Writer) (*Config, error) {
 	c.SelectionPath = filepath.Join(filepath.Dir(c.StorePath), SelectionFile)
 	c.WebListen = strings.TrimSpace(*web)
 	c.WebAllow = expose.Split(*allow)
+	c.WebAllowedHosts = expose.Split(*allowedHosts)
 
 	if c.Version {
 		return c, nil
@@ -310,6 +319,11 @@ func Load(args []string, env Env, out io.Writer) (*Config, error) {
 			add("WEB_ALLOW %q is not an IP address", a)
 		}
 	}
+	for _, h := range c.WebAllowedHosts {
+		if msg := allowedHost(h); msg != "" {
+			add("WEB_ALLOWED_HOSTS %q %s", h, msg)
+		}
+	}
 	if len(issues) > 0 {
 		return nil, &ValidationError{Issues: issues}
 	}
@@ -335,6 +349,27 @@ func hostPort(s string) error {
 		return fmt.Errorf("port must be 1..65535, got %q", port)
 	}
 	return nil
+}
+
+// allowedHost says what is wrong with a WEB_ALLOWED_HOSTS entry, or "":
+// go-fabric-ui's rules for Options.AllowedHosts (fabricui/host.go:101-121
+// at v0.13.0), checked here so a wrong value fails at start like every
+// other option instead of after the node opened its store. An IP address
+// needs no entry: the Host check admits every one.
+func allowedHost(h string) string {
+	switch {
+	case net.ParseIP(strings.Trim(h, "[]")) != nil:
+		return "is an IP address, which needs no entry"
+	case strings.Contains(h, "://"):
+		return "has a scheme; name the host only"
+	case strings.ContainsAny(h, ":[]"):
+		return "has a port; name the host only"
+	case strings.Contains(h, "/"):
+		return "has a path; name the host only"
+	case strings.Contains(h, "*"):
+		return "has a wildcard; name each host"
+	}
+	return ""
 }
 
 // splitInterfaces reads MDNS_INTERFACES: comma- or newline-separated (the

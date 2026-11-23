@@ -17,7 +17,7 @@ import (
 // differs from it, and addon/config.yaml's version equals it).
 var (
 	// Version is the release (e.g. "0.1.0").
-	Version = "0.6.3"
+	Version = "0.7.0"
 	// Commit is the short Git SHA the binary was built from.
 	Commit = "none"
 	// BuildDate is the UTC RFC 3339 build time.
@@ -26,7 +26,7 @@ var (
 
 // GoFabric is the version of the go-fabric module the binary is built
 // with.
-func GoFabric() string { return dep("github.com/SukramJ/go-fabric") }
+func GoFabric() string { return dep("thingfabric.dev/go-fabric") }
 
 // GoHamapping is the version of the go-hamapping module the binary is
 // built with.

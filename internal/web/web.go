@@ -11,7 +11,12 @@
 // decision 2026-10-25): /api/v1/node/status and /api/v1/node/exposure
 // replace them. The UI's URLs are relative, so it
 // works under Ingress's path prefix (go-fabric-ui docs/embedding.md,
-// "Behind an Ingress").
+// "Behind an Ingress"). Since go-fabric-ui v0.10 the handler checks every
+// request's Host: loopback names and IP addresses pass, a DNS name only
+// when it is in UI.AllowedHosts (WEB_ALLOWED_HOSTS) or UI.AllowHost admits
+// the request — in the add-on the Ingress proxy's source address, since
+// the proxy forwards the browser's Host unchanged
+// (notes/reads/read-2026-11-23-ingress-host-facts.md).
 package web
 
 import (
@@ -44,10 +49,12 @@ type Server struct {
 	opts  Options
 	log   *slog.Logger
 	allow []net.IP
+	h     http.Handler
 }
 
-// New returns the server; [Server.Run] binds it.
-func New(opts Options) *Server {
+// New returns the server; [Server.Run] binds it. It fails on options
+// go-fabric-ui refuses, such as an AllowedHosts entry with a port.
+func New(opts Options) (*Server, error) {
 	log := opts.Logger
 	if log == nil {
 		log = slog.Default()
@@ -61,13 +68,16 @@ func New(opts Options) *Server {
 			s.allow = append(s.allow, ip)
 		}
 	}
-	return s
+	h, err := fabricui.NewHandler(opts.UI)
+	if err != nil {
+		return nil, fmt.Errorf("web: %w", err)
+	}
+	s.h = s.filter(h)
+	return s, nil
 }
 
 // Handler is go-fabric-ui's routes behind the client filter.
-func (s *Server) Handler() http.Handler {
-	return s.filter(fabricui.Handler(s.opts.UI))
-}
+func (s *Server) Handler() http.Handler { return s.h }
 
 // filter refuses a client outside Allow: the add-on runs on the host's
 // network, and Ingress requires that only its proxy (172.30.32.2) reaches
@@ -133,5 +143,7 @@ func From(ip string) func(*http.Request) bool {
 }
 
 // ReadOnly is an Admin that admits no request: the stand-alone UI without
-// WEB_ADMIN.
+// WEB_ADMIN, which since go-fabric-ui v0.10 serves the status page only —
+// exposure, fabrics, endpoints, diagnostics, pairing and the operation log
+// are administrator routes (owner, 2026-11-22).
 func ReadOnly(*http.Request) bool { return false }

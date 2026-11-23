@@ -5,6 +5,18 @@ tracks the project release; the project's
 [changelog.md](https://github.com/SukramJ/go-ha2fabric/blob/main/changelog.md)
 has the details.
 
+## 0.7.0
+
+- **Take a backup before updating.** The add-on's store is upgraded at the
+  first start and an older version cannot be expected to open it; to go
+  back, restore the backup.
+- Updated libraries (go-fabric 0.25.0 under its new name thingfabric.dev,
+  go-fabric-ui 0.13.0, go-hamapping 0.5.0). Fans and climate fan modes map
+  their percentages more closely; controllers see the bridge advertised as a
+  bridge (Aggregator) whichever entity comes first.
+- The web UI checks the address it is opened under; through Ingress nothing
+  changes for you.
+
 ## 0.6.3
 
 - Updated libraries (go-fabric 0.22.2, go-fabric-ui 0.9.2,

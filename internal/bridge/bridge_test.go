@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	onoffdef "github.com/SukramJ/go-fabric/cluster/spec/onoff"
-	"github.com/SukramJ/go-fabric/controller/client"
-	"github.com/SukramJ/go-fabric/fabrictest"
+	onoffdef "thingfabric.dev/go-fabric/cluster/spec/onoff"
+	"thingfabric.dev/go-fabric/controller/client"
+	"thingfabric.dev/go-fabric/fabrictest"
 
 	"github.com/SukramJ/go-ha2fabric/internal/expose"
 	"github.com/SukramJ/go-ha2fabric/internal/ha"

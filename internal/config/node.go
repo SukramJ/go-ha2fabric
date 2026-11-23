@@ -7,7 +7,8 @@ import (
 	"log/slog"
 	"slices"
 
-	"github.com/SukramJ/go-fabric/node"
+	"thingfabric.dev/go-fabric/device"
+	"thingfabric.dev/go-fabric/node"
 
 	"github.com/SukramJ/go-ha2fabric/internal/version"
 )
@@ -49,7 +50,11 @@ func (c *Config) Node(logger *slog.Logger) node.Config {
 			PBKDFIterations: spake2Iterations,
 			Salt:            spake2Salt,
 		},
-		ProductDescription: node.ProductDescription{VendorID: c.VendorID, ProductID: c.ProductID},
+		// The commissionable advertisement names the node an Aggregator
+		// (owner, 2026-11-22): go-fabric infers DT from the first bridged
+		// device otherwise (node.ProductDescription.DeviceType, v0.23.0), so
+		// a commissioner's icon would follow whichever entity came first.
+		ProductDescription: node.ProductDescription{DeviceType: uint16(device.AggregatorType().ID), VendorID: c.VendorID, ProductID: c.ProductID},
 		BasicInformation: node.BasicInformation{
 			VendorName:            VendorName,
 			ProductName:           ProductName,

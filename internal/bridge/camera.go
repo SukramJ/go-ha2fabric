@@ -7,9 +7,9 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/SukramJ/go-fabric/device"
 	hamapping "github.com/SukramJ/go-hamapping"
 	"github.com/SukramJ/go-hamqtt/model"
+	"thingfabric.dev/go-fabric/device"
 
 	"github.com/SukramJ/go-ha2fabric/internal/camera"
 )

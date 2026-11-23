@@ -20,10 +20,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/SukramJ/go-fabric/device"
-	"github.com/SukramJ/go-fabric/eligibility"
 	hamapping "github.com/SukramJ/go-hamapping"
 	"github.com/SukramJ/go-hamqtt/model"
+	"thingfabric.dev/go-fabric/device"
+	"thingfabric.dev/go-fabric/eligibility"
 
 	"github.com/SukramJ/go-ha2fabric/internal/adapt"
 	"github.com/SukramJ/go-ha2fabric/internal/expose"

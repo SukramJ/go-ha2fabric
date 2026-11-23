@@ -58,6 +58,31 @@ func TestWebAdmin(t *testing.T) {
 	}
 }
 
+// TestWebAllowedHosts: WEB_ALLOWED_HOSTS splits on commas and white space
+// into the names go-fabric-ui's Host check admits; unset is none.
+func TestWebAllowedHosts(t *testing.T) {
+	base := map[string]string{"HA_URL": "ws://a/api/websocket", "HA_TOKEN": "t"}
+	c, err := Load([]string{"--store-path", t.TempDir() + "/s.db"}, MapEnv(base), io.Discard)
+	if err != nil || len(c.WebAllowedHosts) != 0 {
+		t.Fatalf("default: %+v %v", c.WebAllowedHosts, err)
+	}
+	base["WEB_ALLOWED_HOSTS"] = "bridge.lan, ha2fabric.home.arpa"
+	c, err = Load([]string{"--store-path", t.TempDir() + "/s.db"}, MapEnv(base), io.Discard)
+	if err != nil || !slices.Equal(c.WebAllowedHosts, []string{"bridge.lan", "ha2fabric.home.arpa"}) {
+		t.Fatalf("env: %+v %v", c.WebAllowedHosts, err)
+	}
+	for bad, want := range map[string]string{
+		"bridge.lan:8099": "has a port", "http://bridge.lan": "has a scheme", "bridge.lan/ui": "has a path",
+		"*.lan": "wildcard", "fe80::1": "IP address", "192.168.1.5": "IP address",
+	} {
+		base["WEB_ALLOWED_HOSTS"] = bad
+		_, err := Load([]string{"--store-path", t.TempDir() + "/s.db"}, MapEnv(base), io.Discard)
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%q: %v, want %q", bad, err, want)
+		}
+	}
+}
+
 func TestCamera(t *testing.T) {
 	base := map[string]string{"HA_URL": "ws://a/api/websocket", "HA_TOKEN": "t"}
 	c, err := Load([]string{"--store-path", t.TempDir() + "/s.db"}, MapEnv(base), io.Discard)
@@ -165,6 +190,9 @@ func TestNodeConfig(t *testing.T) {
 	}
 	if nc.BasicInformation.NodeLabel != DefaultLabel || nc.Network.Listen != DefaultListen || nc.Store.Path != c.StorePath || nc.BasicInformation.SoftwareVersion == 0 {
 		t.Fatalf("node config %+v", nc)
+	}
+	if nc.ProductDescription.DeviceType != 0x000E {
+		t.Fatalf("advertised device type %#x, want the Aggregator 0x000e", nc.ProductDescription.DeviceType)
 	}
 	if nc.Network.TCP.Incoming || nc.Network.TCP.Outgoing {
 		t.Fatalf("TCP without the camera: %+v", nc.Network.TCP)

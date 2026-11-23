@@ -44,7 +44,7 @@ import (
 	"time"
 
 	fabricui "github.com/SukramJ/go-fabric-ui/fabricui"
-	"github.com/SukramJ/go-fabric/node"
+	"thingfabric.dev/go-fabric/node"
 )
 
 // File is the registry's file name, beside the store.

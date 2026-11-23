@@ -37,11 +37,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/SukramJ/go-fabric/device"
-	"github.com/SukramJ/go-fabric/eligibility"
-	"github.com/SukramJ/go-fabric/node"
 	hamapping "github.com/SukramJ/go-hamapping"
 	"github.com/SukramJ/go-hamqtt/model"
+	"thingfabric.dev/go-fabric/device"
+	"thingfabric.dev/go-fabric/eligibility"
+	"thingfabric.dev/go-fabric/node"
 
 	"github.com/SukramJ/go-ha2fabric/internal/adapt"
 	"github.com/SukramJ/go-ha2fabric/internal/camera"
@@ -240,8 +240,18 @@ func (b *Bridge) Disconnected(error) {
 	b.setStatus(func(s *Status) { s.HAConnected = false })
 	b.enqueue(func(ctx context.Context) {
 		for _, g := range b.groups {
-			for _, d := range g.devices {
-				d.SetReachable(ctx, false)
+			for i, d := range g.devices {
+				// A group's devices are top-level, never parts, so go-fabric's
+				// ErrNotBridged cannot come; any error stays a Debug line, as a
+				// reachability patch's does (apply), with the endpoint's
+				// stable key (g.keys runs beside g.devices).
+				if err := d.SetReachable(ctx, false); err != nil {
+					key := ""
+					if i < len(g.keys) {
+						key = g.keys[i].String()
+					}
+					b.log.Debug("bridge.unreachable", slog.String("key", key), slog.String("error", err.Error()))
+				}
 			}
 		}
 		b.log.Warn("bridge.upstream_unusable", slog.String("hint", "every endpoint is unreachable until Home Assistant is back"))
