@@ -186,7 +186,11 @@ shows the warning `token_in_clear` on every status page. Neither the
 WebSocket handshake nor the camera proxy's request follows a redirect: an
 `HA_URL` that answers with one fails to connect (`ha.disconnected`, naming
 the redirect), so set it to the final address. `HA_URL` must name a host and carry no user or password; the log
-shows it without a query.
+shows it without a query. The WebSocket handshake and the camera proxy's
+request take a proxy from the environment (`HTTP_PROXY`, `HTTPS_PROXY`,
+`NO_PROXY`, Go's rules): set one only for a proxy trusted with the token,
+or list Home Assistant's host in `NO_PROXY`. The add-on's call to the
+Supervisor (`GET /info`) takes no proxy and follows no redirect.
 
 ## What the daemon reads and writes
 
