@@ -266,7 +266,7 @@ func (s *served) Warnings(ctx context.Context) []fabricui.Warning {
 // for close, and no new run starts. s.mu is held only to take the run out
 // and to put the new one in, so a status read does not wait for the reset
 // (op serialises erase and close).
-func (s *served) erase(context.Context) error {
+func (s *served) erase(context.Context) error { //nolint:contextcheck // detached from the request on purpose, below
 	s.op.Lock()
 	defer s.op.Unlock()
 	if s.closed {
@@ -277,7 +277,7 @@ func (s *served) erase(context.Context) error {
 	ectx, cancel := context.WithTimeout(context.WithoutCancel(s.base), eraseTimeout)
 	defer cancel()
 	grace := eraseGrace()
-	defer context.AfterFunc(s.base, func() {
+	defer context.AfterFunc(s.base, func() { //nolint:contextcheck // the daemon's stop starts the grace
 		t := time.NewTimer(grace)
 		defer t.Stop()
 		select {
