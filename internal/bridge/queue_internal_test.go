@@ -22,7 +22,7 @@ import (
 )
 
 // fakeUp is an upstream whose connection the test sets and whose every
-// read fails, counted: a sync that reaches Home Assistant is one read.
+// read fails; a sync that reaches Home Assistant counts one read.
 type fakeUp struct {
 	connected atomic.Bool
 	reads     atomic.Int32
@@ -32,15 +32,19 @@ type fakeUp struct {
 
 var errFakeRead = errors.New("fake: no snapshot")
 
-func (f *fakeUp) ListEntities(context.Context) ([]ha.EntityEntry, error) {
+func (f *fakeUp) ListEntities(context.Context) ([]ha.EntityEntry, error) { return nil, errFakeRead }
+func (f *fakeUp) ListDevices(context.Context) ([]ha.DeviceEntry, error)  { return nil, errFakeRead }
+func (f *fakeUp) ListAreas(context.Context) ([]ha.Area, error)           { return nil, errFakeRead }
+func (f *fakeUp) ListLabels(context.Context) ([]ha.Label, error)         { return nil, errFakeRead }
+
+// GetStates is a snapshot's first read (HR-P1-data-67), so it is the one
+// counted.
+func (f *fakeUp) GetStates(context.Context) ([]ha.State, error) {
 	f.reads.Add(1)
 	return nil, errFakeRead
 }
-func (f *fakeUp) ListDevices(context.Context) ([]ha.DeviceEntry, error) { return nil, errFakeRead }
-func (f *fakeUp) ListAreas(context.Context) ([]ha.Area, error)          { return nil, errFakeRead }
-func (f *fakeUp) ListLabels(context.Context) ([]ha.Label, error)        { return nil, errFakeRead }
-func (f *fakeUp) GetStates(context.Context) ([]ha.State, error)         { return nil, errFakeRead }
-func (f *fakeUp) GetConfig(context.Context) (ha.Config, error)          { return ha.Config{}, errFakeRead }
+
+func (f *fakeUp) GetConfig(context.Context) (ha.Config, error) { return ha.Config{}, errFakeRead }
 
 func (f *fakeUp) ListExposed(context.Context) (ha.Exposed, error) { return ha.Exposed{}, errFakeRead }
 
