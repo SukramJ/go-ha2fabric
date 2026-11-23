@@ -186,8 +186,18 @@ shows it without a query.
 | `camera/webrtc/offer`, `camera/webrtc/candidate`, `unsubscribe_events` | a controller's camera session, with `CAMERA` | `camera/webrtc.py:252-303, 333-348`, `websocket_api/commands.py:246-263` |
 | `GET /api/camera_proxy/<entity_id>` (HTTP) | a controller's snapshot, with `CAMERA` | `camera/__init__.py:782-838` |
 
-A connection that drops is retried with a back-off from one second to one
-minute; after each reconnect the daemon reads everything again.
+A connection that drops is retried with a back-off that doubles from one
+second to one minute; it starts again at one second only after a
+connection that stayed up longer than a minute, so a connection that
+authenticates and drops at once is not retried every second. A token Home
+Assistant refuses (`auth_invalid`) is retried after five minutes, doubling
+to hourly, and shown as the status warning `ha_token_refused` until an
+authentication succeeds (`ha.token_refused` in the log); the daemon keeps
+running and its nodes serve their last state. After each reconnect the
+daemon reads everything again, the states first. A registry or state entry
+that does not decode (a field of an unexpected type) is skipped, not the
+whole list: that entity is left out and `ha.entry_skipped` is logged once
+per list.
 
 ## Logs
 
@@ -212,6 +222,8 @@ The lines to know:
 | `ha2fabric.node_lost` | error | The node did not come back after an erase (`node=<key>` for a registry node). The daemon keeps running; the status page shows `node_erase_failed`. See Erase and factory reset. |
 | `ha2fabric.mdns_interface` | warn | At start, with `MDNS_INTERFACES` set: go-fabric's diagnosis of the list (`code`: `interface_not_found`, `interface_filtered`, `interface_no_addresses`; `node=<key>` for a registry node). See mDNS. |
 | `ha.connected` / `ha.disconnected` | info / warn | The Home Assistant connection. |
+| `ha.token_refused` | warn | Home Assistant refused the access token (`auth_invalid`); retried after `retry_in` (five minutes, doubling to an hour). Also the status warning `ha_token_refused`. |
+| `ha.entry_skipped` | warn, then debug | An entry of a list (`command`) did not decode and was skipped (`skipped` of `of`, the first `error`); at warn the first time per list. |
 | `bridge.synced` | info | A sync: candidates, devices, endpoints added, replaced, removed. |
 | `bridge.upstream_unusable` | warn | Home Assistant is away; every endpoint is unreachable. |
 | `bridge.build_failed` | warn | go-fabric refused a device go-hamapping planned; its entities have no endpoint (the plan says why). |
@@ -415,7 +427,8 @@ go-hamapping puts in front of an entity name otherwise. The status page
 lists the configuration's warnings: unresolved label values
 (`label_unresolved`), an overrides file moved aside at start
 (`selection_corrupt`), the token sent unencrypted (`token_in_clear`,
-The token), the public test passcode (`passcode_test_value`, Pairing), a
+The token), the token refused by Home Assistant (`ha_token_refused`,
+What the daemon reads and writes), the public test passcode (`passcode_test_value`, Pairing), a
 passcode that could not be kept (`passcode_not_kept`, Files) and,
 in the add-on, a Supervisor too old or not read yet for an administrator
 (`supervisor_too_old`, `supervisor_unknown`); under them the daemon's counters (`discards`,

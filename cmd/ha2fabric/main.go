@@ -147,7 +147,7 @@ func run(ctx context.Context, args []string, env config.Env, stdout, stderr io.W
 	webErr := make(chan error, 1)
 	if cfg.WebListen != "" {
 		ws, err := web.New(web.Options{Listen: cfg.WebListen, Allow: cfg.WebAllow, Logger: logger, UI: fabricui.Options{
-			Node: def.sw, Exposure: def.prov, Admin: admin(cfg, gate), Reassemble: def.Resync, Events: def.events, Warnings: warnings(def, fl, hostWarnings(startup, gate)), Counters: counters(def, fl), Erase: def.erase, Logger: logger,
+			Node: def.sw, Exposure: def.prov, Admin: admin(cfg, gate), Reassemble: def.Resync, Events: def.events, Warnings: warnings(def, fl, hostWarnings(startup, gate, client.TokenRefused)), Counters: counters(def, fl), Erase: def.erase, Logger: logger,
 			Operations: web.NewOperations(ring, version.Version, started),
 			Registry:   fl, NodeConfig: nodeConfig(cfg),
 			AllowedHosts: cfg.WebAllowedHosts, AllowHost: allowHost(cfg),
@@ -194,11 +194,19 @@ func warnings(def *served, fl *fleet, host func() []fabricui.Warning) func(conte
 	}
 }
 
-// hostWarnings are the start-up warnings and, in the add-on, the
-// Supervisor gate's.
-func hostWarnings(startup []fabricui.Warning, gate *supervisorGate) func() []fabricui.Warning {
+// hostWarnings are the start-up warnings, the refused token's while Home
+// Assistant refuses it (refused, the client's TokenRefused) and, in the
+// add-on, the Supervisor gate's.
+func hostWarnings(startup []fabricui.Warning, gate *supervisorGate, refused func() (time.Time, bool)) func() []fabricui.Warning {
 	return func() []fabricui.Warning {
 		out := slices.Clone(startup)
+		if since, ok := refused(); ok {
+			out = append(out, fabricui.Warning{
+				Code:    warningTokenRefused,
+				Message: "Home Assistant refuses the access token (auth_invalid), so the bridge has no connection and the nodes serve their last state; the daemon tries again after minutes, then hourly. Stand-alone, set a valid long-lived token in HA_TOKEN and restart; in the add-on, restart it",
+				Since:   since,
+			})
+		}
 		if gate != nil {
 			out = append(out, gate.Warnings()...)
 		}

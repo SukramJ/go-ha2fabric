@@ -119,6 +119,9 @@ func (c *Client) Subscribe(ctx context.Context, msgType string, payload map[stri
 	}
 	cmd["type"] = msgType
 	sub := &Subscription{s: s, timeout: c.opts.CallTimeout, ch: make(chan json.RawMessage, SubscriptionBuffer)}
+	// A ctx that ends after the command was written leaves the late
+	// result to callWith, which unsubscribes a subscription Home
+	// Assistant took (session.unsubscribeLate).
 	if _, err := s.callWith(ctx, cmd, false, sub); err != nil {
 		s.dropStream(sub.id, err)
 		return nil, fmt.Errorf("ha: %s: %w", msgType, err)

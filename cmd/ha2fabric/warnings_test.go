@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/SukramJ/go-ha2fabric/internal/config"
 	"github.com/SukramJ/go-ha2fabric/internal/ha/hatest"
@@ -118,6 +119,30 @@ func TestPasscodeNotKept(t *testing.T) {
 	}
 	if !strings.Contains(d.logs.String(), "msg=ha2fabric.passcode ") {
 		t.Fatalf("no log line\n%s", d.logs.String())
+	}
+	d.stop()
+}
+
+// TestTokenRefusedWarning (HR-P1-ha-08, decision 28): a token Home
+// Assistant refuses is a status-page warning while the daemon keeps
+// serving and retries slowly.
+func TestTokenRefusedWarning(t *testing.T) {
+	srv := hatest.New(t)
+	web := freePort(t, "tcp")
+	env := config.MapEnv(map[string]string{
+		"HA_URL": srv.URL(), "HA_TOKEN": "wrong",
+		"STORE_PATH": filepath.Join(t.TempDir(), "ha2fabric.db"), "LISTEN": freePort(t, "udp"), "WEB_LISTEN": web,
+	})
+	d := startDaemon(t, env, web)
+	deadline := time.Now().Add(10 * time.Second)
+	for st := d.status("/api/v1/node/status"); !st.warned(warningTokenRefused, ""); st = d.status("/api/v1/node/status") {
+		if time.Now().After(deadline) {
+			t.Fatalf("no %s", warningTokenRefused)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if strings.Contains(d.logs.String(), "wrong") {
+		t.Fatal("the token reached the log")
 	}
 	d.stop()
 }

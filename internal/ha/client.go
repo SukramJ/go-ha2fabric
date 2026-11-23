@@ -49,6 +49,10 @@ const (
 	DefaultCallTimeout  = 30 * time.Second
 	DefaultMinBackoff   = time.Second
 	DefaultMaxBackoff   = time.Minute
+	// DefaultAuthBackoff and DefaultAuthMaxBackoff bound the delay after
+	// a refused token: minutes, then hourly.
+	DefaultAuthBackoff    = 5 * time.Minute
+	DefaultAuthMaxBackoff = time.Hour
 	// DefaultReadLimit bounds one frame. get_states and the registry lists
 	// of a large installation run to megabytes.
 	DefaultReadLimit = 64 << 20
@@ -72,6 +76,10 @@ type Options struct {
 	// MinBackoff and MaxBackoff bound the reconnect delay, which doubles
 	// per failed attempt. 0 is the default.
 	MinBackoff, MaxBackoff time.Duration
+	// AuthBackoff and AuthMaxBackoff bound the delay after Home
+	// Assistant refused the token (auth_invalid), which doubles per
+	// refusal. 0 is DefaultAuthBackoff and DefaultAuthMaxBackoff.
+	AuthBackoff, AuthMaxBackoff time.Duration
 	// ReadLimit bounds one frame; 0 is DefaultReadLimit.
 	ReadLimit int64
 	// ImageLimit bounds a camera still ([Client.Image]); 0 is
@@ -106,6 +114,16 @@ type Client struct {
 	mu   sync.Mutex
 	cur  *session
 	conn atomic.Bool
+
+	// refused is the time of the first auth_invalid in a row, zero
+	// while the token is accepted.
+	refusedMu sync.Mutex
+	refused   time.Time
+
+	// skipped holds the list commands whose skipped entry was logged
+	// (listOf).
+	skippedMu sync.Mutex
+	skipped   map[string]bool
 }
 
 // New returns a client; [Client.Run] connects it.
@@ -124,6 +142,15 @@ func New(opts Options) *Client {
 	}
 	if opts.MaxBackoff < opts.MinBackoff {
 		opts.MaxBackoff = opts.MinBackoff
+	}
+	if opts.AuthBackoff <= 0 {
+		opts.AuthBackoff = DefaultAuthBackoff
+	}
+	if opts.AuthMaxBackoff <= 0 {
+		opts.AuthMaxBackoff = DefaultAuthMaxBackoff
+	}
+	if opts.AuthMaxBackoff < opts.AuthBackoff {
+		opts.AuthMaxBackoff = opts.AuthBackoff
 	}
 	if opts.ReadLimit <= 0 {
 		opts.ReadLimit = DefaultReadLimit
@@ -157,34 +184,71 @@ var errRedirect = errors.New("ha: the WebSocket endpoint answered with a redirec
 // connection, so it would go to wherever a redirect chain ends.
 var noRedirect = &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return errRedirect }}
 
+// TokenRefused reports whether Home Assistant's last answer to the
+// token was auth_invalid, and since when it refuses it.
+func (c *Client) TokenRefused() (since time.Time, refused bool) {
+	c.refusedMu.Lock()
+	defer c.refusedMu.Unlock()
+	return c.refused, !c.refused.IsZero()
+}
+
+// setRefused records an auth_invalid (true) or an authentication (false).
+func (c *Client) setRefused(refused bool) {
+	c.refusedMu.Lock()
+	defer c.refusedMu.Unlock()
+	switch {
+	case !refused:
+		c.refused = time.Time{}
+	case c.refused.IsZero():
+		c.refused = time.Now()
+	}
+}
+
 // Connected reports whether a connection is authenticated now.
 func (c *Client) Connected() bool { return c.conn.Load() }
 
 // Run connects, authenticates, subscribes and serves the connection until
 // ctx ends; a dropped connection or a failed attempt is retried after a
 // back-off that doubles up to MaxBackoff and starts again at MinBackoff
-// after a connection that authenticated. It returns nil when ctx ends.
+// only after a connection that stayed up longer than MaxBackoff, so one
+// that authenticates and drops at once is not retried at MinBackoff for
+// ever. A refused token (auth_invalid) waits AuthBackoff, doubling to
+// AuthMaxBackoff, and is reported by [Client.TokenRefused] until an
+// authentication. Run never gives up: the token of the add-on can become
+// valid again. It returns nil when ctx ends.
 func (c *Client) Run(ctx context.Context, h Handler) error {
 	backoff := c.opts.MinBackoff
+	authBackoff := c.opts.AuthBackoff
 	for {
-		authed, err := c.serve(ctx, h)
+		up, authed, err := c.serve(ctx, h)
 		if ctx.Err() != nil {
 			return nil //nolint:nilerr // the end of ctx is the end of Run, not a failure
 		}
 		h.Disconnected(err)
 		if authed {
+			c.setRefused(false)
+			authBackoff = c.opts.AuthBackoff
+		}
+		if up > c.opts.MaxBackoff {
 			backoff = c.opts.MinBackoff
 		}
-		c.log.Warn("ha.disconnected", slog.String("error", errString(err)), slog.Duration("retry_in", backoff))
-		t := time.NewTimer(backoff)
+		delay := backoff
+		if errors.Is(err, ErrAuthInvalid) {
+			c.setRefused(true)
+			delay = authBackoff
+			authBackoff = min(2*authBackoff, c.opts.AuthMaxBackoff)
+			c.log.Warn("ha.token_refused", slog.Duration("retry_in", delay),
+				slog.String("hint", "Home Assistant refused the access token (auth_invalid); stand-alone, set a valid long-lived token in HA_TOKEN and restart"))
+		} else {
+			c.log.Warn("ha.disconnected", slog.String("error", errString(err)), slog.Duration("retry_in", delay))
+			backoff = min(2*backoff, c.opts.MaxBackoff)
+		}
+		t := time.NewTimer(delay)
 		select {
 		case <-ctx.Done():
 			t.Stop()
 			return nil
 		case <-t.C:
-		}
-		if !authed {
-			backoff = min(2*backoff, c.opts.MaxBackoff)
 		}
 	}
 }
@@ -207,15 +271,18 @@ type session struct {
 	streams map[int64]*Subscription
 	done    chan struct{}
 	err     error
+	// timeout bounds a command's write (CallTimeout).
+	timeout time.Duration
 }
 
-// serve runs one connection; authed reports whether it authenticated.
-func (c *Client) serve(ctx context.Context, h Handler) (authed bool, err error) {
+// serve runs one connection; authed reports whether it authenticated, up
+// how long it was authenticated.
+func (c *Client) serve(ctx context.Context, h Handler) (up time.Duration, authed bool, err error) {
 	dctx, cancel := context.WithTimeout(ctx, c.opts.CallTimeout)
 	ws, _, err := websocket.Dial(dctx, c.opts.URL, &websocket.DialOptions{HTTPClient: noRedirect}) //nolint:bodyclose // the response body is the connection's
 	cancel()
 	if err != nil {
-		return false, fmt.Errorf("ha: dial: %w", scrubURL(err))
+		return 0, false, fmt.Errorf("ha: dial: %w", scrubURL(err))
 	}
 	ws.SetReadLimit(c.opts.ReadLimit)
 	defer func() { _ = ws.CloseNow() }()
@@ -223,17 +290,29 @@ func (c *Client) serve(ctx context.Context, h Handler) (authed bool, err error) 
 	version, err := c.auth(ctx, ws)
 	if err != nil {
 		_ = ws.Close(websocket.StatusPolicyViolation, "auth")
-		return false, err
+		return 0, false, err
 	}
-	s := &session{ws: ws, pending: map[int64]chan Message{}, subs: map[int64]bool{}, streams: map[int64]*Subscription{}, done: make(chan struct{})}
+	began := time.Now()
+	defer func() { up = time.Since(began) }()
+	s := &session{ws: ws, pending: map[int64]chan Message{}, subs: map[int64]bool{}, streams: map[int64]*Subscription{}, done: make(chan struct{}), timeout: c.opts.CallTimeout}
 	rctx, stop := context.WithCancel(ctx)
-	defer stop()
-	go c.read(rctx, s, h)
+	readDone := make(chan struct{})
+	go func() {
+		defer close(readDone)
+		c.read(rctx, s, h)
+	}()
+	// The reader is joined before serve returns, so no Event follows the
+	// Disconnected that Run sends next (the Handler's order).
+	defer func() {
+		stop()
+		_ = ws.CloseNow()
+		<-readDone
+	}()
 
 	for _, et := range c.opts.Events {
 		if err := c.subscribe(ctx, s, et); err != nil {
 			s.fail(err)
-			return true, err
+			return 0, true, err
 		}
 	}
 	c.mu.Lock()
@@ -257,16 +336,16 @@ func (c *Client) serve(ctx context.Context, h Handler) (authed bool, err error) 
 		select {
 		case <-ctx.Done():
 			_ = ws.Close(websocket.StatusNormalClosure, "")
-			return true, ctx.Err()
+			return 0, true, ctx.Err()
 		case <-s.done:
-			return true, s.err
+			return 0, true, s.err
 		case <-ping.C:
 			pctx, cancel := context.WithTimeout(ctx, c.opts.CallTimeout)
 			_, err := s.call(pctx, map[string]any{"type": TypePing}, false)
 			cancel()
 			if err != nil {
 				s.fail(fmt.Errorf("ha: ping: %w", err))
-				return true, s.err
+				return 0, true, s.err
 			}
 		}
 	}
@@ -400,7 +479,22 @@ func (s *session) call(ctx context.Context, cmd map[string]any, sub bool) (Messa
 
 // callWith is call that registers stream, when not nil, as the receiver
 // of the events of the command's id — before the command is sent.
+//
+// ctx bounds the wait for the result, not the write: coder/websocket
+// closes the connection when a write's context ends mid-frame, and the
+// connection is every node's. The write runs on ctx's values bounded by
+// the session's timeout; a ctx that has ended sends nothing.
+//
+// A stream whose ctx ends after the command was written may still be
+// taken by Home Assistant, which registers the subscription's teardown
+// before it sends the result (camera/webrtc.py:275-280 at 2026.10.3) and
+// runs it only on unsubscribe_events or when the connection closes
+// (websocket_api/connection.py:258-268): the late result is awaited and
+// a successful one unsubscribed (unsubscribeLate).
 func (s *session) callWith(ctx context.Context, cmd map[string]any, sub bool, stream *Subscription) (Message, error) {
+	if err := ctx.Err(); err != nil {
+		return Message{}, err
+	}
 	ch := make(chan Message, 1)
 	s.writeMu.Lock()
 	s.nextID++
@@ -425,7 +519,9 @@ func (s *session) callWith(ctx context.Context, cmd map[string]any, sub bool, st
 	s.mu.Unlock()
 	b, err := json.Marshal(cmd)
 	if err == nil {
-		err = s.ws.Write(ctx, websocket.MessageText, b)
+		wctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), s.timeout)
+		err = s.ws.Write(wctx, websocket.MessageText, b)
+		cancel()
 	}
 	s.writeMu.Unlock()
 	if err != nil {
@@ -450,11 +546,31 @@ func (s *session) callWith(ctx context.Context, cmd map[string]any, sub bool, st
 		}
 		return m, nil
 	case <-ctx.Done():
+		if stream != nil {
+			go s.unsubscribeLate(context.WithoutCancel(ctx), id, ch)
+			return Message{}, ctx.Err()
+		}
 		s.mu.Lock()
 		delete(s.pending, id)
 		s.mu.Unlock()
 		return Message{}, ctx.Err()
 	}
+}
+
+// unsubscribeLate waits for the result of a subscription whose caller
+// gave up and, when Home Assistant took the command, sends
+// unsubscribe_events for it, so its teardown runs (for camera/webrtc/offer
+// the provider's session close). A refusal holds nothing; a dropped
+// connection closes ch and ran every teardown already. Best effort, on
+// ctx without the caller's end.
+func (s *session) unsubscribeLate(ctx context.Context, id int64, ch chan Message) {
+	m, ok := <-ch
+	if !ok || m.Success != nil && !*m.Success {
+		return
+	}
+	ctx, cancel := context.WithTimeout(ctx, s.timeout)
+	defer cancel()
+	_, _ = s.call(ctx, map[string]any{"type": "unsubscribe_events", "subscription": id}, false)
 }
 
 // subscribe is subscribe_events for one event type
@@ -500,42 +616,32 @@ func (c *Client) Call(ctx context.Context, cmd map[string]any, out any) error {
 // ListEntities is config/entity_registry/list
 // (homeassistant/components/config/entity_registry.py:39-64 at 2026.10.3).
 func (c *Client) ListEntities(ctx context.Context) ([]EntityEntry, error) {
-	var out []EntityEntry
-	err := c.Call(ctx, map[string]any{"type": "config/entity_registry/list"}, &out)
-	return out, err
+	return listOf[EntityEntry](ctx, c, "config/entity_registry/list")
 }
 
 // ListDevices is config/device_registry/list
 // (homeassistant/components/config/device_registry.py:75-101 at 2026.10.3).
 func (c *Client) ListDevices(ctx context.Context) ([]DeviceEntry, error) {
-	var out []DeviceEntry
-	err := c.Call(ctx, map[string]any{"type": "config/device_registry/list"}, &out)
-	return out, err
+	return listOf[DeviceEntry](ctx, c, "config/device_registry/list")
 }
 
 // ListAreas is config/area_registry/list
 // (homeassistant/components/config/area_registry.py:23-37 at 2026.10.3).
 func (c *Client) ListAreas(ctx context.Context) ([]Area, error) {
-	var out []Area
-	err := c.Call(ctx, map[string]any{"type": "config/area_registry/list"}, &out)
-	return out, err
+	return listOf[Area](ctx, c, "config/area_registry/list")
 }
 
 // ListLabels is config/label_registry/list, which needs no
 // administrator (homeassistant/components/config/label_registry.py:53-67
 // at 2026.10.3).
 func (c *Client) ListLabels(ctx context.Context) ([]Label, error) {
-	var out []Label
-	err := c.Call(ctx, map[string]any{"type": "config/label_registry/list"}, &out)
-	return out, err
+	return listOf[Label](ctx, c, "config/label_registry/list")
 }
 
 // GetStates is get_states: every state the user may read
 // (websocket_api/commands.py:369-385 at 2026.10.3).
 func (c *Client) GetStates(ctx context.Context) ([]State, error) {
-	var out []State
-	err := c.Call(ctx, map[string]any{"type": "get_states"}, &out)
-	return out, err
+	return listOf[State](ctx, c, "get_states")
 }
 
 // GetConfig is get_config (websocket_api/commands.py:658-666 at
@@ -567,6 +673,51 @@ func (c *Client) CallService(ctx context.Context, sc ServiceCall) error {
 		cmd["service_data"] = sc.Data
 	}
 	return c.Call(ctx, cmd, nil)
+}
+
+// listOf is a list command whose entries decode one by one: an entry
+// that does not decode (a registry's free-text field that an integration
+// set to a number, say — the registries validate few field types, see
+// DeviceEntry's Tuple) is skipped, and logged once per command, rather
+// than failing the list and with it every sync.
+func listOf[T any](ctx context.Context, c *Client, msgType string) ([]T, error) {
+	var raw []json.RawMessage
+	if err := c.Call(ctx, map[string]any{"type": msgType}, &raw); err != nil {
+		return nil, err
+	}
+	if raw == nil {
+		return nil, nil
+	}
+	out := make([]T, 0, len(raw))
+	skipped := 0
+	var first error
+	for _, r := range raw {
+		var v T
+		if err := json.Unmarshal(r, &v); err != nil {
+			skipped++
+			if first == nil {
+				first = err
+			}
+			continue
+		}
+		out = append(out, v)
+	}
+	if skipped > 0 {
+		c.skippedMu.Lock()
+		logged := c.skipped[msgType]
+		if c.skipped == nil {
+			c.skipped = map[string]bool{}
+		}
+		c.skipped[msgType] = true
+		c.skippedMu.Unlock()
+		level := slog.LevelWarn
+		if logged {
+			level = slog.LevelDebug
+		}
+		c.log.Log(ctx, level, "ha.entry_skipped", slog.String("command", msgType), slog.Int("skipped", skipped),
+			slog.Int("of", len(raw)), slog.String("error", first.Error()))
+	}
+	return out, nil
 }
 
 // LogURL is raw as the log shows it: the scheme, the host and the path,

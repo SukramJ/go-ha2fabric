@@ -109,6 +109,22 @@ set `WEB_ALLOW` or a loopback `WEB_LISTEN` before updating (Changed).
 
 - A failed reachability change while Home Assistant is away is logged
   (`bridge.unreachable`, Debug) instead of dropped.
+- A Home Assistant connection that authenticates and drops at once is
+  retried with a back-off that keeps doubling to a minute, instead of every
+  second; the back-off starts again only after a connection that stayed up
+  longer than a minute.
+- A token Home Assistant refuses (`auth_invalid`) is retried after five
+  minutes, doubling to hourly, instead of every minute, with the log line
+  `ha.token_refused` and the status warning `ha_token_refused`; the daemon
+  keeps running.
+- A camera offer whose controller gave up before Home Assistant answered no
+  longer leaves Home Assistant's WebRTC session open until the connection
+  drops: the subscription is ended once the answer arrives.
+- One registry or state entry with a field of an unexpected type (a name
+  that is a number) no longer fails every sync: that entry is skipped and
+  logged once per list (`ha.entry_skipped`).
+- A command whose caller gave up while it was being written no longer
+  closes the Home Assistant connection every node shares.
 
 ## [0.6.3] - 2026-11-12
 
