@@ -86,7 +86,24 @@ var (
 	ErrNotJPEG = errors.New("camera: the still is not a JPEG")
 	// ErrClosed is an offer to a host that was closed.
 	ErrClosed = errors.New("camera: the host is closed")
+	// ErrTooManyCandidates refuses a ProvideICECandidates call that would
+	// queue more than MaxPendingCandidates before Home Assistant named
+	// its session; it travels with RESOURCE_EXHAUSTED.
+	ErrTooManyCandidates = errors.New("camera: too many ICE candidates before Home Assistant's session")
 )
+
+// MaxPendingCandidates bounds the controller's ICE candidates a session
+// queues until Home Assistant names its session (HR-P0-bound-28). Neither
+// the command (ProvideICECandidates' list is "min 1" only, go-fabric
+// cluster/spec/webrtctransportprovider/definition_gen.go:696 at v0.25.0)
+// nor the kit (cluster/camera/provider.go:603-617) bounds them. An ICE
+// agent gathers one host candidate per local address and one server
+// reflexive or relayed candidate per STUN or TURN server and address —
+// with bundling a few dozen at most — so 64 holds any real gathering
+// while it bounds what a controller can park in a session it never sees
+// answered. After Home Assistant's session event candidates pass through
+// unqueued.
+const MaxPendingCandidates = 64
 
 // Stream is one camera/webrtc/offer subscription (*ha.Subscription).
 type Stream interface {
@@ -172,7 +189,8 @@ type session struct {
 	id     uint16
 	stream Stream
 	// haID is Home Assistant's session id, from its session event;
-	// pending holds the controller's candidates until it arrived.
+	// pending holds the controller's candidates until it arrived, at most
+	// MaxPendingCandidates.
 	haID    string
 	pending []ha.ICECandidate
 }
@@ -363,7 +381,8 @@ func streams(l *[]uint16) *[]uint16 {
 
 // ProvideIceCandidates implements wpdef.ProviderPort: each candidate goes
 // to camera/webrtc/candidate with Home Assistant's session id; before
-// Home Assistant named it, the candidates wait.
+// Home Assistant named it, the candidates wait, at most
+// MaxPendingCandidates (a call beyond is refused whole).
 func (h *Host) ProvideIceCandidates(ctx context.Context, sessionID uint16, candidates []wpdef.ICECandidateStruct) error {
 	h.mu.Lock()
 	ss := h.sessions[sessionID]
@@ -377,6 +396,12 @@ func (h *Host) ProvideIceCandidates(ctx context.Context, sessionID uint16, candi
 	}
 	haID := ss.haID
 	if haID == "" {
+		if len(ss.pending)+len(out) > MaxPendingCandidates {
+			queued := len(ss.pending)
+			h.mu.Unlock()
+			return fmt.Errorf("%w: %d queued, %d more, session %d: %w", ErrTooManyCandidates, queued, len(out), sessionID,
+				contract.StatusError{Status: contract.StatusResourceExhausted, Message: ErrTooManyCandidates.Error()})
+		}
 		ss.pending = append(ss.pending, out...)
 		h.mu.Unlock()
 		return nil
