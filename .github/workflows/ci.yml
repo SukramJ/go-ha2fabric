@@ -3,8 +3,9 @@
 # + go.mod tidiness), security (govulncheck + go-licenses + the gitleaks
 # history scan — the daemon reads a Home Assistant token), test (the OS
 # triplet, race detector on, so CGo for that single step), coverage (the
-# per-package floors), fuzz-smoke (the HA message decoder), build (the
-# binary, the release dry run) and docker (both images, amd64, no push).
+# per-package floors), fuzz-smoke (every target of the Makefile's
+# FUZZ_TARGETS), build (the binary, the release dry run) and docker (both
+# images, amd64, no push).
 name: ci
 
 on:

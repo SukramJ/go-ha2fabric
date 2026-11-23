@@ -27,6 +27,7 @@ import (
 	"net"
 	"net/http"
 	"slices"
+	"strings"
 	"time"
 
 	fabricui "github.com/SukramJ/go-fabric-ui/fabricui"
@@ -52,8 +53,9 @@ type Server struct {
 	h     http.Handler
 }
 
-// New returns the server; [Server.Run] binds it. It fails on options
-// go-fabric-ui refuses, such as an AllowedHosts entry with a port.
+// New returns the server; [Server.Run] binds it. It fails on an Allow
+// entry that is not an IP address and on options go-fabric-ui refuses,
+// such as an AllowedHosts entry with a port.
 func New(opts Options) (*Server, error) {
 	log := opts.Logger
 	if log == nil {
@@ -64,9 +66,12 @@ func New(opts Options) (*Server, error) {
 	}
 	s := &Server{opts: opts, log: log}
 	for _, a := range opts.Allow {
-		if ip := net.ParseIP(a); ip != nil {
-			s.allow = append(s.allow, ip)
+		ip := net.ParseIP(a)
+		if ip == nil {
+			// Dropping it could leave no entry, which serves everyone.
+			return nil, fmt.Errorf("web: Allow entry %q is not an IP address", a)
 		}
+		s.allow = append(s.allow, ip)
 	}
 	h, err := fabricui.NewHandler(opts.UI)
 	if err != nil {
@@ -129,16 +134,48 @@ func (s *Server) Run(ctx context.Context) error {
 	}
 }
 
-// From is an Admin that admits a request whose client address is ip: the
-// add-on's Ingress proxy, which has authenticated the Home Assistant user
-// before it forwards (go-fabric-ui docs/embedding.md, "Admin gate by the
-// host").
+// From is a predicate that admits a request whose client address is ip:
+// the add-on's Host check admits the Ingress proxy by it. The proxy's
+// address says who sent the request, not who the user is; the add-on's
+// administrator check is [IngressAdmin].
 func From(ip string) func(*http.Request) bool {
 	want := net.ParseIP(ip)
 	return func(r *http.Request) bool {
 		host, _, err := net.SplitHostPort(r.RemoteAddr)
 		got := net.ParseIP(host)
 		return err == nil && got != nil && want != nil && got.Equal(want)
+	}
+}
+
+// Ingress user headers: the Supervisor sets the Home Assistant user's
+// groups on every request it forwards through Ingress, comma-separated
+// (supervisor/api/ingress.py:412-419, const.py:115, :625, :653-659 at
+// fe91b8db; from Supervisor 2026.10.4).
+const (
+	UserGroupsHeader = "X-Remote-User-Groups"
+	AdminGroup       = "system-admin"
+)
+
+// IngressAdmin is the add-on's Admin: a request from the Ingress proxy at
+// proxy whose user is a Home Assistant administrator — UserGroupsHeader
+// lists AdminGroup (an owner's groups include it). Without the header the
+// request is no administrator's. The daemon applies it on a Supervisor of
+// 2026.10.4 or later, which it reads at start (cmd/ha2fabric
+// supervisorGate).
+func IngressAdmin(proxy string) func(*http.Request) bool {
+	from := From(proxy)
+	return func(r *http.Request) bool {
+		if !from(r) {
+			return false
+		}
+		for _, v := range r.Header.Values(UserGroupsHeader) {
+			for g := range strings.SplitSeq(v, ",") {
+				if strings.TrimSpace(g) == AdminGroup {
+					return true
+				}
+			}
+		}
+		return false
 	}
 }
 

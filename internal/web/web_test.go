@@ -65,8 +65,16 @@ func TestHandler(t *testing.T) {
 	}
 }
 
+// TestAllow: the client filter serves the listed addresses only, and an
+// entry that is not an IP address fails New instead of being dropped —
+// with none left the filter would serve everyone (HR-P0-err-26).
 func TestAllow(t *testing.T) {
-	s := mustNew(t, Options{Allow: []string{"172.30.32.2", "nonsense"}})
+	for _, allow := range [][]string{{"172.30.32.2", "nonsense"}, {"nonsense"}, {""}} {
+		if _, err := New(Options{Allow: allow}); err == nil || !strings.Contains(err.Error(), "not an IP address") {
+			t.Fatalf("Allow %q: %v", allow, err)
+		}
+	}
+	s := mustNew(t, Options{Allow: []string{"172.30.32.2"}})
 	if code, _ := get(t, s.Handler(), "/api/v1/node/status", "172.30.32.2:4321"); code != http.StatusOK {
 		t.Fatalf("Ingress proxy refused: %d", code)
 	}
@@ -166,5 +174,36 @@ func TestRun(t *testing.T) {
 	}
 	if err := mustNew(t, Options{Listen: "256.0.0.1:1"}).Run(context.Background()); err == nil {
 		t.Fatal("a bad address served")
+	}
+}
+
+// TestIngressAdmin: the add-on's administrator is a request of the
+// Ingress proxy whose user's groups hold system-admin; any other request
+// is not.
+func TestIngressAdmin(t *testing.T) {
+	a := IngressAdmin("172.30.32.2")
+	for _, c := range []struct {
+		remote string
+		groups []string
+		want   bool
+	}{
+		{"172.30.32.2:4000", []string{"system-admin"}, true},
+		{"172.30.32.2:4000", []string{"system-users,system-admin"}, true},
+		{"172.30.32.2:4000", []string{"system-users", " system-admin "}, true},
+		{"172.30.32.2:4000", nil, false},
+		{"172.30.32.2:4000", []string{"system-users"}, false},
+		{"172.30.32.2:4000", []string{"system-admins"}, false},
+		{"172.30.32.2:4000", []string{""}, false},
+		{"192.168.1.20:4000", []string{"system-admin"}, false},
+		{"garbage", []string{"system-admin"}, false},
+	} {
+		req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+		req.RemoteAddr = c.remote
+		for _, g := range c.groups {
+			req.Header.Add(UserGroupsHeader, g)
+		}
+		if got := a(req); got != c.want {
+			t.Errorf("%s %q: %v, want %v", c.remote, c.groups, got, c.want)
+		}
 	}
 }

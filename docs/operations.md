@@ -15,7 +15,8 @@ The daemon keeps two files for its configured node: the node's SQLite
 store, `STORE_PATH`, and beside it `selection.json`, the web UI's
 per-entity overrides. Each node created in the web UI (Nodes, below) adds
 its pair in the same directory, `ha2fabric-<key>.db` and
-`selection-<key>.json`, and `nodes.json` lists those nodes.
+`selection-<key>.json`, and `nodes.json` lists those nodes. Without `PASSCODE`, `passcode.json`
+beside them holds the configured node's random passcode.
 
 | Where | Path |
 | --- | --- |
@@ -66,6 +67,18 @@ back. On Windows, which has no POSIX file modes, the ACL of the data
 directory protects it, as it does the store: that is the service's
 concern.
 
+`passcode.json` is `{"passcode", "created_at"}`, written the same way
+(atomically, 0600) on the first start without `PASSCODE`. One that does not
+parse or holds an invalid passcode is renamed to
+`passcode.json.corrupt-<unix seconds>`, logged (`nodes.passcode_corrupt`),
+and a new one is drawn; a paired node keeps its fabrics, since the passcode
+opens only the node's own window, which opens without a fabric. One that
+cannot be read, moved aside or written does not stop the daemon: the node
+runs on a random passcode for that start only, logged at error
+(`ha2fabric.passcode`) and shown as the status warning `passcode_not_kept`,
+so an unpaired node's codes change at the next start until the directory
+is fixed or `PASSCODE` set.
+
 The daemon stores nothing else: not the token, not Home Assistant's
 registry, not the states. Everything it knows about Home Assistant it reads
 again on every connection.
@@ -91,7 +104,9 @@ Assistant's Ingress requires that only its proxy reaches it
 ([add-on presentation, "Ingress"](https://developers.home-assistant.io/docs/apps/presentation#ingress):
 "Only connections from `172.30.32.2` must be allowed"), so the add-on sets
 `WEB_ALLOW=172.30.32.2` and the daemon refuses every other client with 403.
-Stand-alone, `WEB_ALLOW` takes any list of client addresses.
+In add-on mode (`SUPERVISOR_TOKEN` set) the daemon holds that itself:
+`WEB_ALLOW` defaults to `172.30.32.2`, and any other value is refused at
+start. Stand-alone, `WEB_ALLOW` takes any list of client addresses.
 
 ## mDNS
 
@@ -145,6 +160,20 @@ and never logged or written to disk. The daemon only reads Home Assistant
 and calls the services of the entities it serves; it never writes the
 exposure settings or the registries.
 
+The token is only as private as the hop it crosses. `HA_URL` with
+`wss://` sends it over TLS, with the certificate verified; with `ws://` it
+crosses the network unencrypted, and anyone who can read or answer for that
+host on the network gets an administrator's token. The add-on's hop is the
+Supervisor's internal name (`ws://supervisor/core/websocket`). Stand-alone,
+use `wss://` where Home Assistant has TLS, or run the daemon on Home
+Assistant's host (`ws://127.0.0.1:8123/api/websocket`); with `ws://` to
+any other host the daemon starts but logs `ha2fabric.token_in_clear` and
+shows the warning `token_in_clear` on every status page. Neither the
+WebSocket handshake nor the camera proxy's request follows a redirect: an
+`HA_URL` that answers with one fails to connect (`ha.disconnected`, naming
+the redirect), so set it to the final address. `HA_URL` must name a host and carry no user or password; the log
+shows it without a query.
+
 ## What the daemon reads and writes
 
 | Command | When | Home Assistant core at 2026.10.3 |
@@ -173,7 +202,12 @@ The lines to know:
 | Message | Level | Meaning |
 | --- | --- | --- |
 | `ha2fabric.fabrics` | info | The fabrics the store holds, at start: `count`, and per fabric its index, vendor id and label. `count=0` means no controller has paired — or the store was lost; see Files. |
-| `ha2fabric.pairing` | info | The manual code and the QR payload, at start and after an erase. |
+| `ha2fabric.pairing` | info | At start and after an erase: the manual code and the QR payload while the node has no fabric; a paired node logs only `fabrics=<n>` and that the codes are on the administrator's pairing page. |
+| `ha2fabric.passcode_created` | info | Without `PASSCODE`, the configured node's random passcode was drawn and written to `passcode.json` (`file`); once, on the first start. |
+| `ha2fabric.passcode_test_value` | warn | `PASSCODE` is the public test value 20202021 (Pairing). |
+| `ha2fabric.token_in_clear` | warn | `HA_URL` is `ws://` to a host that is neither loopback nor the Supervisor (`host`; The token). |
+| `ha2fabric.supervisor` | info, warn | Add-on: the Supervisor's `version` and whether the web UI has an `admin` (2026.10.4 or later; a pre-release of 2026.10.4 counts as older); at warn when it is older, read again every 10 minutes (`recheck_in`) until it is not. |
+| `ha2fabric.supervisor_unreadable` | warn, then debug | Add-on: `GET /info` failed (`error`); retried every 30 s (every 10 minutes once a version below 2026.10.4 was read), the web UI is the status page only meanwhile. |
 | `ha2fabric.node_erased` | info | A node was erased in the web UI (`node=<key>` for a registry node): `fabrics_removed`, `elapsed`; the node comes back next, with `ha2fabric.fabrics count=0` and `ha2fabric.pairing`. At warn with `error` when the reset failed part-way. |
 | `ha2fabric.node_lost` | error | The node did not come back after an erase (`node=<key>` for a registry node). The daemon keeps running; the status page shows `node_erase_failed`. See Erase and factory reset. |
 | `ha2fabric.mdns_interface` | warn | At start, with `MDNS_INTERFACES` set: go-fabric's diagnosis of the list (`code`: `interface_not_found`, `interface_filtered`, `interface_no_addresses`; `node=<key>` for a registry node). See mDNS. |
@@ -311,13 +345,38 @@ go-fabric-ui's interface (`v0.13.0`) at `WEB_LISTEN`, in the add-on through
 Ingress. The administrator — who may write (change the selection, open a
 commissioning window, remove a fabric, erase a node) and read every page
 but the status: the selection, fabrics, endpoints, diagnostics, pairing
-with its code and the Operation page — is in the add-on the Ingress proxy
-(`172.30.32.2`), which has authenticated the Home Assistant user;
-stand-alone nobody, unless `WEB_ADMIN=true`, which selects the UI's token
+with its code and the Operation page — is in the add-on a Home Assistant
+administrator: a request of the Ingress proxy (`172.30.32.2`) whose
+`X-Remote-User-Groups`, which the Supervisor sets from the Home Assistant
+user, lists `system-admin` (an owner's groups include it); without the
+header the request is not an administrator's. The check needs Supervisor
+2026.10.4 or later: the add-on reads the Supervisor's version at start
+(`GET http://supervisor/info` with `SUPERVISOR_TOKEN`,
+`ha2fabric.supervisor` in the log) and, below 2026.10.4 or until it has
+read it, has no administrator — the status page only, with the warning
+`supervisor_too_old` or `supervisor_unknown`; while it is below, it reads
+the version again every 10 minutes and gets its administrator once the
+Supervisor is updated. The manifest sets
+`panel_admin: true`, so the panel is an administrator's as well.
+Stand-alone nobody, unless `WEB_ADMIN=true`, which selects the UI's token
 mode (every request carries a per-process token the page reads from
 `/api/v1/node/status`, so anyone who can reach the port is the
-administrator — keep it on a trusted network). Stand-alone without
-`WEB_ADMIN` the UI is the status page only.
+administrator). Stand-alone without `WEB_ADMIN` the UI is the status page
+only.
+
+`WEB_ADMIN=true` on a `WEB_LISTEN` that is not a loopback address (the
+image's `0.0.0.0:8099`, for example) is refused at start (exit 2) unless
+`WEB_ALLOW` names the clients: either bind the UI to loopback
+(`127.0.0.1:8099`) and reach it through a proxy of one's own, or list the
+administrators' addresses in `WEB_ALLOW`. The page is plain HTTP — the
+pairing code and the token mode's token cross the network unencrypted —
+and an address filter is not authentication: any host that has, or can
+take, a listed address is the administrator. `WEB_ALLOW` entries must be
+IP addresses; one that is not fails the start. `WEB_ALLOW` sees the address
+the connection comes from: in a container on a bridge network with a
+published port (rather than `--network host`), that can be the bridge
+network's gateway for every client, and a `WEB_ALLOW` naming it then admits
+everyone who reaches the published port.
 
 Every request's `Host` is checked: loopback names (`localhost`) and IP
 addresses pass; a DNS name passes only when `WEB_ALLOWED_HOSTS` lists it
@@ -354,8 +413,12 @@ re-sync's debounce keeps its endpoint. A rename is the endpoint's name in the co
 as typed (its node label, at most 32 bytes), without the device name
 go-hamapping puts in front of an entity name otherwise. The status page
 lists the configuration's warnings: unresolved label values
-(`label_unresolved`) and an overrides file moved aside at start
-(`selection_corrupt`); under them the daemon's counters (`discards`,
+(`label_unresolved`), an overrides file moved aside at start
+(`selection_corrupt`), the token sent unencrypted (`token_in_clear`,
+The token), the public test passcode (`passcode_test_value`, Pairing), a
+passcode that could not be kept (`passcode_not_kept`, Files) and,
+in the add-on, a Supervisor too old or not read yet for an administrator
+(`supervisor_too_old`, `supervisor_unknown`); under them the daemon's counters (`discards`,
 Health).
 
 The Operation page shows the daemon's version and uptime, its recent log
@@ -380,8 +443,10 @@ once. The Home Assistant connection is in the log (`ha.connected`,
 
 ## Pairing
 
-The pairing code is in the log at start (`ha2fabric.pairing`), on the web
-UI's pairing page with its QR code (for an administrator). The node opens its commissioning window when no controller
+The pairing code is on the web UI's pairing page with its QR code (for an
+administrator), and in the log at start (`ha2fabric.pairing`) while the node
+has no fabric; a paired node does not log its codes, which then open
+nothing but the window that opens again once its last fabric goes. The node opens its commissioning window when no controller
 has paired; the first controller closes it. To pair a second ecosystem,
 open a pairing window from the first controller (its multi-admin sharing
 of the bridge), or from the web UI's pairing page, which opens one with
@@ -391,9 +456,18 @@ window closes or expires, so closing it from the page once leaves the
 own window open; a second close closes that too (go-fabric-ui
 `Options.ConfiguredWindow`, which the daemon leaves off).
 
-The defaults are public test values: passcode 20202021, discriminator 3840,
-the CSA test vendor 0xFFF1 and product 0x8001. Change the passcode before
-pairing for real. The bridge carries go-fabric's test attestation chain; a
+The configured node's passcode is `PASSCODE` (the add-on's `passcode`
+option) or, unset, a random valid one drawn on the first start and kept in
+`passcode.json` beside the store (`ha2fabric.passcode_created` in the log),
+as the registry nodes get theirs. The public test value 20202021 — the
+default before 0.7.0, which add-on options saved before 0.7.0 keep — is
+honoured, with the log line `ha2fabric.passcode_test_value` and the status
+warning `passcode_test_value`: anyone in reach of the commissioning window
+can pair with it. An add-on installation that never saved its options has
+no `passcode` after the update and gets a random one, so an unpaired
+bridge's codes change; a paired bridge stays paired either way. The other defaults are public test
+values too: discriminator 3840, the CSA test vendor 0xFFF1 and product
+0x8001. The bridge carries go-fabric's test attestation chain; a
 controller may warn that it is an uncertified device and needs a
 confirmation to go on.
 
@@ -418,8 +492,8 @@ for all its fabrics, so a different scope is a different node.
   nothing until its entities are picked there. `EXPOSE_ASSIST`,
   `INCLUDE`, `EXCLUDE` and the label lists are the configured node's.
 - **Pairing**: each node has its own pairing page and codes, and opens
-  its commissioning window while no controller has paired it; its codes
-  are in the log at its start (`ha2fabric.pairing node=<key>`).
+  its commissioning window while no controller has paired it; until then
+  its codes are in the log at its start (`ha2fabric.pairing node=<key>`).
 - **Rename** changes the name in the selector and the status page, and
   the running node's `NodeLabel` (cut to 32 bytes), at once: the node
   persists it and reports it to its controllers' subscriptions (go-fabric

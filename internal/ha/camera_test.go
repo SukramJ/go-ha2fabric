@@ -196,12 +196,15 @@ func TestHTTPBase(t *testing.T) {
 		"ws://supervisor/core/websocket":        "http://supervisor/core/api",
 		"ws://homeassistant:8123/api/websocket": "http://homeassistant:8123/api",
 		"wss://ha.example/api/websocket/":       "https://ha.example/api",
+		"ws://[::1]:8123/api/websocket":         "http://[::1]:8123/api",
 	} {
 		if got, err := ha.HTTPBase(in); err != nil || got != want {
 			t.Errorf("HTTPBase(%q) = %q, %v; want %q", in, got, err, want)
 		}
 	}
-	for _, in := range []string{"http://ha/api/websocket", "ws://ha/api", "::"} {
+	// HR-P0-err-03: an unbracketed IPv6 literal and a URL without a host
+	// gave a base that url.Parse refuses or that names no host.
+	for _, in := range []string{"http://ha/api/websocket", "ws://ha/api", "::", "ws://::/websocket", "ws:///websocket", "ws://:8123/websocket"} {
 		if _, err := ha.HTTPBase(in); err == nil {
 			t.Errorf("HTTPBase(%q) accepted", in)
 		}
