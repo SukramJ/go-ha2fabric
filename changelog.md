@@ -24,9 +24,9 @@ The move to go-fabric `v0.25.0` under its new module path
   (repository `github.com/thingfabric/go-fabric`). The store's schema is
   upgraded from version 7 to 12 at the first start, one-way: an older
   daemon is not expected to open it, so going back means restoring a
-  backup taken before the update (`docs/operations.md`, Files). Neither
-  the root nor a bridged endpoint serves a SerialNumber any more (go-fabric
-  no longer derives one from the unique id; owner decision: none stated),
+  backup taken before the update (`docs/operations.md`, Files). go-fabric
+  no longer derives a SerialNumber from the unique id: the root serves none
+  (owner decision: none stated), a bridged endpoint its device's (below),
   and the commissionable advertisement now names the node an
   Aggregator explicitly (`DT`), rather than the first bridged device's type
   go-fabric would infer. GeneralCommissioning's `LocationCapability` is
@@ -39,7 +39,10 @@ The move to go-fabric `v0.25.0` under its new module path
   administrator's request is refused when its `Origin` names a host the
   check does not admit (in the add-on: any other than the page's own). The page's
   event streams end when the daemon stops.
-- go-hamapping `v0.4.12` → `v0.5.0`: a fan's percentage maps to its mode in
+- go-hamapping `v0.4.12` → `v0.6.0`: a bridged endpoint's SerialNumber is
+  its Home Assistant device's `serial_number` (cut to 32 bytes; none when
+  the device has none) — for a bridge already paired, the attribute
+  appears where none was served; a fan's percentage maps to its mode in
   three bands and off to 0 %, a climate entity's fan mode to FanControl's
   percentage, an `auto` preset to a null percentage; labels and the vendor
   are cut by UTF-8 bytes, the vendor name to 32.

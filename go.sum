@@ -5,8 +5,8 @@ github.com/SukramJ/go-fabric-ui v0.13.0 h1:3qABUb6GxeDIDvIl20XRljmOnekyADBPONHSM
 github.com/SukramJ/go-fabric-ui v0.13.0/go.mod h1:8MPLW9wctprRV17YWl55M5rXGT6BXP/o7MubRJoDLYA=
 github.com/SukramJ/go-ha-catalog v0.3.2-0.20261024093528-d9582e022b8f h1:Y0N1A6rojgi1e4GeNuA3twBQbwkTcfalTYfMOK9qPDU=
 github.com/SukramJ/go-ha-catalog v0.3.2-0.20261024093528-d9582e022b8f/go.mod h1:qonkN9S2mQc8Hs4fH8XfVqlORR/yrbmgx6n0ImFlsbc=
-github.com/SukramJ/go-hamapping v0.5.0 h1:bWmh7aY/pZZI23pjYlxiirbPg4eUizlf+JzhUF3sSVc=
-github.com/SukramJ/go-hamapping v0.5.0/go.mod h1:nEewgK14Tqiex6kq38Y7mDzMsvUtcWZziQgeZnBrvYg=
+github.com/SukramJ/go-hamapping v0.6.0 h1:VJePz5vUq+aXberJpPUMgvd1sJMpIoMIqht6HkJZEjo=
+github.com/SukramJ/go-hamapping v0.6.0/go.mod h1:nEewgK14Tqiex6kq38Y7mDzMsvUtcWZziQgeZnBrvYg=
 github.com/SukramJ/go-hamqtt v0.40.0 h1:d4M8OZlhbByIOJkVYYxEjFWMJ+6PwBtan21IhaQ2qDg=
 github.com/SukramJ/go-hamqtt v0.40.0/go.mod h1:7rtxzUbuNpOpi0IXJWHwjxJSBXVLPOkcBCrglJAgI4k=
 github.com/apapsch/go-jsonmerge/v2 v2.0.0 h1:axGnT1gRIfimI7gJifB699GoE/oq+F2MU7Dml6nw9rQ=
