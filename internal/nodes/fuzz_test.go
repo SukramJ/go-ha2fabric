@@ -71,7 +71,7 @@ func FuzzSlug(f *testing.F) {
 	}
 	f.Fuzz(func(t *testing.T, label string) {
 		s := nodes.Slug(label)
-		if !keyPattern.MatchString(s) || len(s) > 56 {
+		if !keyPattern.MatchString(s) || len(s) > 56 { // maxSlug
 			t.Fatalf("Slug(%q) = %q", label, s)
 		}
 	})

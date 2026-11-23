@@ -58,6 +58,9 @@ const DefaultPort = 5540
 // (^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$).
 const maxKey = 64
 
+// maxSlug is [Slug]'s bound: maxKey less room for a "-<n>" suffix.
+const maxSlug = maxKey - 8
+
 // reservedKeys are the node family's page names and the default node's
 // key, which a registry key may not be (go-fabric-ui fabricui/handler.go
 // reservedNodeKeys and options.go DefaultNodeKey at v0.6.0).
@@ -238,25 +241,30 @@ var fold = strings.NewReplacer(
 
 // Slug is label as a key of the contract's pattern: transliterated
 // ([fold]), lower-case letters and digits kept, every other run of
-// characters one '-', no '-' at either end, at most 56 characters (room
-// for a suffix); "node" when nothing is left.
+// characters one '-', no '-' at either end, at most maxSlug (56)
+// characters (room for a suffix); "node" when nothing is left.
 func Slug(label string) string {
 	var b strings.Builder
 	dash := false
 	for _, c := range fold.Replace(strings.ToLower(label)) {
-		switch {
-		case c >= 'a' && c <= 'z' || c >= '0' && c <= '9':
-			if dash && b.Len() > 0 {
-				b.WriteByte('-')
-			}
-			dash = false
-			b.WriteRune(c)
-		default:
+		if !(c >= 'a' && c <= 'z' || c >= '0' && c <= '9') {
 			dash = true
+			continue
 		}
-		if b.Len() >= maxKey-8 {
+		// The bound is tested before writing: a pending '-' and the
+		// character are written together or not at all.
+		need := 1
+		if dash && b.Len() > 0 {
+			need = 2
+		}
+		if b.Len()+need > maxSlug {
 			break
 		}
+		if need == 2 {
+			b.WriteByte('-')
+		}
+		dash = false
+		b.WriteRune(c)
 	}
 	if b.Len() == 0 {
 		return "node"
