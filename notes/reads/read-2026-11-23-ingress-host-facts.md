@@ -6,7 +6,6 @@ against main); aiohttp 3.14.5 (pinned by both: core `requirements.txt:10`, super
 go-fabric-ui v0.13.0 (module cache). go-ha2fabric `go.mod:7` still pins v0.9.2.
 
 ## Hop 1 — core `homeassistant/components/hassio/ingress.py` @ 2026.10.3
-
 - Upstream is `http://{supervisor host}/ingress/{token}/{path}` (:73, :78-81), sent with `headers=source_header`
   (:177-180; WebSocket :138, :149-151).
 - `_init_header` copies **every** browser header except `INIT_HEADERS_FILTER` (:268-272). The filter (:28-37) holds only
@@ -17,7 +16,6 @@ go-fabric-ui v0.13.0 (module cache). go-ha2fabric `go.mod:7` still pins v0.9.2.
   (:287-289), `X-Forwarded-Proto` = existing, else `request.scheme` (:292-295).
 
 ## Hop 2 — supervisor `supervisor/api/ingress.py` @ fe91b8db
-
 - Route `/ingress/{token}/{path:.*}` (`api/__init__.py:862`), session cookie required (:181-184); upstream URL
   `http://{app.ip_address}:{app.ingress_port}/{path}` (:125-127), sent with `headers=source_header` (:298-301).
 - `_init_header` (:400-427) copies every header except `_REQUEST_HEADERS_FILTER` (:47-64: Content-Length/-Encoding,
@@ -32,7 +30,6 @@ go-fabric-ui v0.13.0 (module cache). go-ha2fabric `go.mod:7` still pins v0.9.2.
   gateway 172.30.32.1 (`docker/app.py:188-191`): Supervisor dials `172.30.32.1:8486`.
 
 ## What arrives at the add-on (browser at `https://homeassistant.local:8123`)
-
 - `Host: homeassistant.local:8123` — the browser's, **not** `172.30.32.1:8486`. High (both hops + aiohttp run).
 - `Origin: https://homeassistant.local:8123` when the browser sends one (writes; not a same-origin GET). High.
 - `X-Forwarded-Host: homeassistant.local:8123`, `X-Forwarded-Proto: https` (or a front proxy's values),
@@ -41,7 +38,6 @@ go-fabric-ui v0.13.0 (module cache). go-ha2fabric `go.mod:7` still pins v0.9.2.
   backed by the shipped `WEB_ALLOW=172.30.32.2` (`docs/operations.md:86-87`).
 
 ## Verdict for go-fabric-ui v0.13.0
-
 - Host check (`fabricui/host.go:64-76`): `homeassistant.local` is no loopback name, IP or `AllowedHosts` entry (:49-60);
   without `AllowHost` every request, bundle included, is 403 `host_not_allowed` (:89-95). With
   `AllowHost: web.From("172.30.32.2")` (`internal/web/web.go:126`, compares `r.RemoteAddr`) it is admitted
@@ -56,7 +52,6 @@ go-fabric-ui v0.13.0 (module cache). go-ha2fabric `go.mod:7` still pins v0.9.2.
   same refusal. fabric-ui never reads `X-Forwarded-Host`. Medium-high (code reading; no proxy tested).
 
 ## The live test must check
-
 1. `r.RemoteAddr` is 172.30.32.2 with `host_network: true` on the installed HAOS/Supervisor (log it once).
 2. `Host` and `Origin` of one admin write through the Ingress panel are the same host:port, and it answers 2xx; also
    on the default port (`https://name` on 443: Origin has no port — Host must have none either).

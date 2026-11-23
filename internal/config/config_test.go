@@ -166,6 +166,9 @@ func TestNodeConfig(t *testing.T) {
 	if nc.BasicInformation.NodeLabel != DefaultLabel || nc.Network.Listen != DefaultListen || nc.Store.Path != c.StorePath || nc.BasicInformation.SoftwareVersion == 0 {
 		t.Fatalf("node config %+v", nc)
 	}
+	if nc.ProductDescription.DeviceType != 0x000E {
+		t.Fatalf("advertised device type %#x, want the Aggregator 0x000e", nc.ProductDescription.DeviceType)
+	}
 	if nc.Network.TCP.Incoming || nc.Network.TCP.Outgoing {
 		t.Fatalf("TCP without the camera: %+v", nc.Network.TCP)
 	}

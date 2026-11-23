@@ -241,7 +241,12 @@ func (b *Bridge) Disconnected(error) {
 	b.enqueue(func(ctx context.Context) {
 		for _, g := range b.groups {
 			for _, d := range g.devices {
-				d.SetReachable(ctx, false)
+				// A group's devices are top-level, never parts, so go-fabric's
+				// ErrNotBridged cannot come; any error stays a Debug line, as a
+				// reachability patch's does (apply).
+				if err := d.SetReachable(ctx, false); err != nil {
+					b.log.Debug("bridge.unreachable", slog.String("error", err.Error()))
+				}
 			}
 		}
 		b.log.Warn("bridge.upstream_unusable", slog.String("hint", "every endpoint is unreachable until Home Assistant is back"))
