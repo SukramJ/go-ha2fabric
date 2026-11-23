@@ -93,12 +93,13 @@ func TestRun(t *testing.T) {
 	// slowest runner's, not the fast path's, and ends early on success.
 	deadline := time.Now().Add(90 * time.Second)
 	for {
-		// The selection lists the candidates once Home Assistant is read.
-		res, err := http.Get("http://" + webAddr + "/api/v1/node/exposure") //nolint:noctx // the test's own daemon
+		// The status page answers once the web UI is up — the one page the
+		// stand-alone default (no WEB_ADMIN) serves since go-fabric-ui
+		// v0.10 — and the bridge has read Home Assistant once it synced.
+		res, err := http.Get("http://" + webAddr + "/api/v1/node/status") //nolint:noctx // the test's own daemon
 		if err == nil {
-			b, _ := io.ReadAll(res.Body)
 			_ = res.Body.Close()
-			if res.StatusCode == http.StatusOK && strings.Contains(string(b), "light.kitchen") {
+			if res.StatusCode == http.StatusOK && strings.Contains(logs.String(), "bridge.synced") {
 				break
 			}
 		}
@@ -107,6 +108,16 @@ func TestRun(t *testing.T) {
 			t.Fatalf("the daemon never became healthy: %v\n%s", err, logs.String())
 		}
 		time.Sleep(50 * time.Millisecond)
+	}
+	// Without WEB_ADMIN the selection is an administrator page (owner,
+	// 2026-11-22: stand-alone without WEB_ADMIN is the status only).
+	res, err := http.Get("http://" + webAddr + "/api/v1/node/exposure") //nolint:noctx // the test's own daemon
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = res.Body.Close()
+	if res.StatusCode != http.StatusForbidden {
+		t.Errorf("the selection answered %d without WEB_ADMIN", res.StatusCode)
 	}
 	cancel()
 	if code := <-done; code != 0 {

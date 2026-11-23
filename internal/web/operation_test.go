@@ -21,6 +21,8 @@ import (
 func do(t *testing.T, h http.Handler, method, path, body string, want int, out any) {
 	t.Helper()
 	req := httptest.NewRequest(method, path, strings.NewReader(body))
+	req.Host = "127.0.0.1:8080"
+	req.Header.Set(fabricui.RequestHeader, "1")
 	if body != "" {
 		req.Header.Set("Content-Type", "application/json")
 	}
@@ -46,7 +48,7 @@ func TestOperationPage(t *testing.T) {
 	lvl.Set(slog.LevelInfo)
 	var stderr strings.Builder
 	log, ring := NewLogger(&stderr, lvl)
-	s := New(Options{Logger: log, UI: fabricui.Options{
+	s := mustNew(t, Options{Logger: log, UI: fabricui.Options{
 		Admin:      func(*http.Request) bool { return true },
 		Operations: NewOperations(ring, "1.2.3", time.Now().Add(-time.Minute)),
 	}})
@@ -111,6 +113,7 @@ func TestOperationPage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	req.Header.Set(fabricui.RequestHeader, "1") // host mode: the page's header
 	res, err := srv.Client().Do(req)
 	if err != nil {
 		t.Fatal(err)

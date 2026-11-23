@@ -153,6 +153,7 @@ func (u *ui) do(t *testing.T, method, path string, body, out any) int {
 		t.Fatal(err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(fabricui.RequestHeader, "1") // host mode: the page's header
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -215,6 +216,7 @@ func (u *ui) stream(t *testing.T) *stream {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, u.srv.URL+"/api/v1/node/stream", http.NoBody)
+	req.Header.Set(fabricui.RequestHeader, "1")
 	res, err := http.DefaultClient.Do(req) //nolint:bodyclose // closed in the cleanup below
 	if err != nil {
 		t.Fatal(err)
@@ -376,11 +378,16 @@ func TestUIWarnings(t *testing.T) {
 		t.Fatal(err)
 	}
 	e := newEnv(t, expose.Rule{IncludeLabels: []string{"MATTER", "Later"}}, func(o *setup) { o.sel = sel })
+	// The warnings' messages are the administrator's answer (go-fabric-ui
+	// v0.10); a reader without rights sees the codes only.
 	srv := httptest.NewServer(fabricui.Handler(fabricui.Options{
 		Node: e.dev.Node(), Exposure: e.prov, Warnings: e.prov.Warnings, Logger: logger(),
+		Admin: func(*http.Request) bool { return true },
 	}))
 	t.Cleanup(srv.Close)
-	res, err := http.Get(srv.URL + "/api/v1/node/status") //nolint:noctx // a test request
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, srv.URL+"/api/v1/node/status", http.NoBody)
+	req.Header.Set(fabricui.RequestHeader, "1")
+	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}

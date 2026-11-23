@@ -109,12 +109,20 @@ func run(ctx context.Context, args []string, env config.Env, stdout, stderr io.W
 	wg.Go(func() { _ = client.Run(rctx, fan) })
 	webErr := make(chan error, 1)
 	if cfg.WebListen != "" {
-		ws := web.New(web.Options{Listen: cfg.WebListen, Allow: cfg.WebAllow, Logger: logger, UI: fabricui.Options{
+		ws, err := web.New(web.Options{Listen: cfg.WebListen, Allow: cfg.WebAllow, Logger: logger, UI: fabricui.Options{
 			Node: def.sw, Exposure: def.prov, Admin: admin(cfg), Reassemble: def.Resync, Events: def.events, Warnings: warnings(def, fl), Counters: counters(def, fl), Erase: def.erase, Logger: logger,
 			Operations: web.NewOperations(ring, version.Version, started),
 			Registry:   fl, NodeConfig: nodeConfig(cfg),
+			AllowedHosts: cfg.WebAllowedHosts, AllowHost: allowHost(cfg),
+			// The streams end when the daemon stops, before the server's
+			// shutdown waits for its connections.
+			Done: rctx.Done(),
 		}})
-		wg.Go(func() { webErr <- ws.Run(rctx) })
+		if err != nil {
+			webErr <- err
+		} else {
+			wg.Go(func() { webErr <- ws.Run(rctx) })
+		}
 	}
 	code := 0
 	select {
@@ -181,7 +189,8 @@ func nodeConfig(cfg *config.Config) *fabricui.NodeConfigView {
 
 // admin is the web UI's administrator check: in the add-on the Ingress
 // proxy, which has authenticated the Home Assistant user; stand-alone
-// read-only unless WEB_ADMIN, which selects the UI's token mode (nil).
+// the status page only unless WEB_ADMIN, which selects the UI's token mode
+// (nil).
 func admin(cfg *config.Config) func(*http.Request) bool {
 	switch {
 	case cfg.Addon:
@@ -191,6 +200,20 @@ func admin(cfg *config.Config) func(*http.Request) bool {
 	default:
 		return web.ReadOnly
 	}
+}
+
+// allowHost is the web UI's Host check beyond loopback names, IP
+// addresses and WEB_ALLOWED_HOSTS: in the add-on every request the Ingress
+// proxy forwards, whose Host is the browser's — Home Assistant's own name,
+// which the add-on cannot know (core homeassistant/components/hassio/
+// ingress.py:268-272 at 2026.10.3, Supervisor supervisor/api/ingress.py
+// :400-427; notes/reads/read-2026-11-23-ingress-host-facts.md);
+// stand-alone none.
+func allowHost(cfg *config.Config) func(*http.Request) bool {
+	if cfg.Addon {
+		return web.From(config.IngressProxy)
+	}
+	return nil
 }
 
 // waiter is the handler of a one-shot connection: --dump-plan.

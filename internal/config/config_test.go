@@ -58,6 +58,21 @@ func TestWebAdmin(t *testing.T) {
 	}
 }
 
+// TestWebAllowedHosts: WEB_ALLOWED_HOSTS splits on commas and white space
+// into the names go-fabric-ui's Host check admits; unset is none.
+func TestWebAllowedHosts(t *testing.T) {
+	base := map[string]string{"HA_URL": "ws://a/api/websocket", "HA_TOKEN": "t"}
+	c, err := Load([]string{"--store-path", t.TempDir() + "/s.db"}, MapEnv(base), io.Discard)
+	if err != nil || len(c.WebAllowedHosts) != 0 {
+		t.Fatalf("default: %+v %v", c.WebAllowedHosts, err)
+	}
+	base["WEB_ALLOWED_HOSTS"] = "bridge.lan, ha2fabric.home.arpa"
+	c, err = Load([]string{"--store-path", t.TempDir() + "/s.db"}, MapEnv(base), io.Discard)
+	if err != nil || !slices.Equal(c.WebAllowedHosts, []string{"bridge.lan", "ha2fabric.home.arpa"}) {
+		t.Fatalf("env: %+v %v", c.WebAllowedHosts, err)
+	}
+}
+
 func TestCamera(t *testing.T) {
 	base := map[string]string{"HA_URL": "ws://a/api/websocket", "HA_TOKEN": "t"}
 	c, err := Load([]string{"--store-path", t.TempDir() + "/s.db"}, MapEnv(base), io.Discard)
