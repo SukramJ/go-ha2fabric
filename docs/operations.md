@@ -4,10 +4,10 @@ What an operator of go-ha2fabric needs: the files it keeps, the ports and
 addresses, mDNS, the token, the logs, the health endpoint, pairing and the
 nodes created in the web UI. The
 node's side of each is go-fabric's
-[operations guide](https://github.com/SukramJ/go-fabric/blob/v0.11.0/docs/guides/operations.md);
+[operations guide](https://github.com/thingfabric/go-fabric/blob/v0.25.0/docs/guides/operations.md);
 this page is the daemon's version. Terms such as fabric, commissioning
 window, bridged node and served surface are defined in go-fabric's
-[glossary](https://sukramj.github.io/go-fabric/reference/glossary/).
+[glossary](https://docs.thingfabric.dev/reference/glossary/).
 
 ## Files
 
@@ -32,6 +32,12 @@ survives restarts and upgrades, protect it like a key (it holds private
 keys unencrypted), back it up only with the daemon stopped (the add-on
 sets `backup: cold`, so the Supervisor stops it for a backup), and never
 run two copies of one store.
+
+**The upgrade to 0.7.0 is one-way.** go-fabric v0.25.0 upgrades the store's
+schema from version 7 to 12 at the first start, and an older daemon is not
+expected to open the upgraded file. Take a backup before the update; to go
+back to 0.6.x, restore the add-on together with its data from that backup
+rather than installing the older version over the upgraded store.
 
 A store that has lost its fabrics shows at start as `ha2fabric.fabrics
 count=0` with the commissioning window open (`commissioning.own_window.open`),
@@ -73,7 +79,7 @@ again on every connection.
 | TCP `LISTEN` | off; on with `CAMERA` | Matter over TCP on the same port, for a camera's signals (Cameras, below; go-fabric `docs/guides/operations.md:54, 58` at v0.15.5). |
 | UDP 5353, `224.0.0.251`, `ff02::fb` | — | mDNS, below. |
 | IPv6 on the LAN | required | Matter's operational network is IPv6. |
-| TCP `WEB_LISTEN` | `127.0.0.1:8099`; add-on `0.0.0.0:8486`, image `0.0.0.0:8099` | The web UI. Empty disables it. |
+| TCP `WEB_LISTEN` | `127.0.0.1:8099`; add-on `0.0.0.0:8486`, image `0.0.0.0:8099` | The web UI. Empty disables it. Reached by a DNS name, the name must be in `WEB_ALLOWED_HOSTS` (The web UI, below). |
 | Outbound WebSocket | `HA_URL`; add-on `ws://supervisor/core/websocket` | Home Assistant's WebSocket API. |
 | Outbound HTTP | derived from `HA_URL` | The camera proxy's stills, only with `CAMERA` (Cameras, below). |
 
@@ -301,14 +307,31 @@ Limits:
 
 ## The web UI
 
-go-fabric-ui's interface (`v0.8.0`) at `WEB_LISTEN`, in the add-on through
-Ingress. Who may write — change the selection, open a commissioning window,
-remove a fabric, erase a node — and read the pairing code: in the add-on the Ingress
-proxy (`172.30.32.2`), which has authenticated the Home Assistant user;
+go-fabric-ui's interface (`v0.13.0`) at `WEB_LISTEN`, in the add-on through
+Ingress. The administrator — who may write (change the selection, open a
+commissioning window, remove a fabric, erase a node) and read every page
+but the status: the selection, fabrics, endpoints, diagnostics, pairing
+with its code and the Operation page — is in the add-on the Ingress proxy
+(`172.30.32.2`), which has authenticated the Home Assistant user;
 stand-alone nobody, unless `WEB_ADMIN=true`, which selects the UI's token
-mode (every write carries a per-process token the page reads from
-`/api/v1/node/status`, so anyone who can reach the port can write — keep
-it on a trusted network). The selection page lists every candidate entity
+mode (every request carries a per-process token the page reads from
+`/api/v1/node/status`, so anyone who can reach the port is the
+administrator — keep it on a trusted network). Stand-alone without
+`WEB_ADMIN` the UI is the status page only.
+
+Every request's `Host` is checked: loopback names (`localhost`) and IP
+addresses pass; a DNS name passes only when `WEB_ALLOWED_HOSTS` lists it
+(comma-separated host names, no scheme or port, for example
+`WEB_ALLOWED_HOSTS=bridge.lan`); any other is answered 403
+`host_not_allowed`. The add-on needs no list: Home Assistant's Ingress
+forwards the browser's `Host` (Home Assistant's own name), and the daemon
+admits every request of the Ingress proxy whatever its name. A proxy of
+one's own in front of a stand-alone daemon either forwards the browser's
+`Host`, whose name then goes into `WEB_ALLOWED_HOSTS`, or replaces it with
+the daemon's address. An administrator's write must come from the page's
+own origin (`Origin` equal to the `Host`).
+
+The selection page lists every candidate entity
 with entity id, name, domain, device, area, labels, Assist exposure and
 integration, grouped by device, filterable by domain, area, a single label, verdict
 and the deciding layer (`rule:assist`, `rule:include`, `rule:label`,
@@ -357,7 +380,11 @@ UI's pairing page with its QR code (for an administrator). The node opens its co
 has paired; the first controller closes it. To pair a second ecosystem,
 open a pairing window from the first controller (its multi-admin sharing
 of the bridge), or from the web UI's pairing page, which opens one with
-fresh credentials and shows their codes.
+fresh credentials and shows their codes. On a node without a fabric, the
+node's own window on the configured codes opens again when the page's
+window closes or expires, so closing it from the page once leaves the
+own window open; a second close closes that too (go-fabric-ui
+`Options.ConfiguredWindow`, which the daemon leaves off).
 
 The defaults are public test values: passcode 20202021, discriminator 3840,
 the CSA test vendor 0xFFF1 and product 0x8001. Change the passcode before

@@ -112,6 +112,11 @@ everywhere. A Home Assistant backup stops the add-on briefly to copy it
 consistently. The add-on stores no token and no copy of your
 configuration; it reads Home Assistant again on every start.
 
+**Updating to 0.7.0 is one-way:** the add-on upgrades its store at the first
+start, and an older version is not expected to open it. Take a backup
+before the update; to go back, restore the add-on with its data from that
+backup.
+
 ## Access
 
 The add-on talks to Home Assistant through the Supervisor's proxy as an

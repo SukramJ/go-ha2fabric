@@ -6,6 +6,48 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-23
+
+The move to go-fabric `v0.25.0` under its new module path
+`thingfabric.dev/go-fabric`, with go-fabric-ui `v0.13.0` and go-hamapping
+`v0.5.0`. **Back up before updating:** the store's upgrade is one-way.
+
+### Added
+
+- `WEB_ALLOWED_HOSTS` (`--web-allowed-hosts`): the DNS names a stand-alone
+  web UI answers under besides `localhost` and IP addresses; any other name
+  is answered 403 `host_not_allowed` (go-fabric-ui's Host check).
+
+### Changed
+
+- go-fabric `v0.22.2` → `v0.25.0`, now `thingfabric.dev/go-fabric`
+  (repository `github.com/thingfabric/go-fabric`). The store's schema is
+  upgraded from version 7 to 12 at the first start, one-way: an older
+  daemon is not expected to open it, so going back means restoring a
+  backup taken before the update (`docs/operations.md`, Files). Neither
+  the root nor a bridged endpoint serves a SerialNumber any more (go-fabric
+  no longer derives one from the unique id; owner decision: none stated),
+  and the commissionable advertisement now names the node an
+  Aggregator explicitly (`DT`), rather than the first bridged device's type
+  go-fabric would infer. GeneralCommissioning's `LocationCapability` is
+  IndoorOutdoor, go-fabric's new default (was Indoor).
+- go-fabric-ui `v0.9.2` → `v0.13.0`. Every request's `Host` is checked; the
+  add-on admits every request of the Ingress proxy, whose `Host` is the
+  browser's. **Stand-alone without `WEB_ADMIN` the web UI is the status
+  page only**: the selection, fabrics, endpoints, diagnostics, pairing and
+  the Operation page are the administrator's (owner decision). An
+  administrator's write must carry the page's own `Origin`. The page's
+  event streams end when the daemon stops.
+- go-hamapping `v0.4.12` → `v0.5.0`: a fan's percentage maps to its mode in
+  three bands and off to 0 %, a climate entity's fan mode to FanControl's
+  percentage, an `auto` preset to a null percentage; labels and the vendor
+  are cut by UTF-8 bytes, the vendor name to 32.
+
+### Fixed
+
+- A failed reachability change while Home Assistant is away is logged
+  (`bridge.unreachable`, Debug) instead of dropped.
+
 ## [0.6.3] - 2026-11-12
 
 The bump to go-fabric `v0.22.2`, go-fabric-ui `v0.9.2` and go-hamapping
