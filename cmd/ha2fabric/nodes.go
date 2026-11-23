@@ -86,6 +86,11 @@ var (
 // eraseTimeout bounds an erase: the reset and the come-back.
 const eraseTimeout = 30 * time.Second
 
+// eraseGrace is how long a reset under way may still run once the daemon
+// stops: four fifths of the stop budget, so close still stops the nodes
+// inside it.
+func eraseGrace() time.Duration { return stopBudget * 4 / 5 }
+
 // serve builds the owner of a node and starts its first run (start). in
 // is the node's plan input, the bridge's and the provider's; sel its
 // overrides store, which the provider writes.
@@ -253,20 +258,34 @@ func (s *served) Warnings(ctx context.Context) []fabricui.Warning {
 // stopped and keeps its store"): it is stopped before the come-back, and
 // kept as stale when that fails too. A come-back that fails leaves s
 // without a run and the switch on the stopped node; the daemon keeps
-// running. It runs detached from the request but ends with the daemon
-// (s.base), bounded by eraseTimeout; s.mu is held only to take the run
-// out and to put the new one in, so a status read does not wait for the
-// reset (op serialises erase and close).
+// running. It runs detached from the request, bounded by eraseTimeout. A
+// stop of the daemon (s.base ends) does not cut the reset at once — one
+// cut between its fabrics' removal and the store's reset leaves the erase
+// half done — but gives it eraseGrace of the stop budget (decision 29 of
+// the 2026-11-23 review); a reset that fails then keeps its node as stale
+// for close, and no new run starts. s.mu is held only to take the run out
+// and to put the new one in, so a status read does not wait for the reset
+// (op serialises erase and close).
 func (s *served) erase(context.Context) error {
 	s.op.Lock()
 	defer s.op.Unlock()
 	if s.closed {
 		return errStopping
 	}
-	// Detached from the request on purpose: the daemon's base bounds the
-	// reset and the new run (contextcheck below).
-	ectx, cancel := context.WithTimeout(s.base, eraseTimeout)
+	// Detached from the request and, for eraseGrace, from the daemon's
+	// base on purpose (contextcheck below).
+	ectx, cancel := context.WithTimeout(context.WithoutCancel(s.base), eraseTimeout)
 	defer cancel()
+	grace := eraseGrace()
+	defer context.AfterFunc(s.base, func() {
+		t := time.NewTimer(grace)
+		defer t.Stop()
+		select {
+		case <-t.C:
+			cancel()
+		case <-ectx.Done():
+		}
+	})()
 	s.mu.Lock()
 	n := s.n
 	if n != nil {
@@ -289,9 +308,11 @@ func (s *served) erase(context.Context) error {
 		}
 		rerr = factoryReset(n, ectx) //nolint:contextcheck // the daemon's base, above
 		var stale *node.Node
-		if rerr != nil {
-			// Also when the daemon is stopping: a node left running
-			// keeps its port.
+		switch {
+		case rerr != nil && s.base.Err() != nil:
+			// The daemon stops: close stops the node inside its budget.
+			stale = n
+		case rerr != nil:
 			sctx, scancel := context.WithTimeout(context.WithoutCancel(ectx), 10*time.Second)
 			err := stopNode(n, sctx) //nolint:contextcheck // the daemon's base, above
 			scancel()
@@ -308,6 +329,9 @@ func (s *served) erase(context.Context) error {
 		} else {
 			s.log.Info("ha2fabric.node_erased", attrs...)
 		}
+	}
+	if s.base.Err() != nil {
+		return errors.Join(rerr, errStopping)
 	}
 	r, serr := s.launch(s.base) //nolint:contextcheck // the new run lives on the daemon's base, as the first one
 	s.mu.Lock()
@@ -395,8 +419,8 @@ func logPairing(n *node.Node, fabrics int, logger *slog.Logger) {
 
 // close takes the bridge off the connection, ends its worker and stops
 // the node, and a node an erase kept (stale); an erase running meanwhile
-// ends first — it ends with the daemon's base —, and a later one answers
-// errStopping. It waits for the erase until ctx ends. A second call does
+// ends first — its reset within eraseGrace of the daemon's stop —, and a
+// later one answers errStopping. It waits for the erase until ctx ends. A second call does
 // nothing.
 func (s *served) close(ctx context.Context) error {
 	if !lockBy(ctx, &s.op) {

@@ -136,6 +136,47 @@ func TestStopWithinBudget(t *testing.T) {
 	}
 }
 
+// TestStopLetsEraseFinish (HR-P1-err-94, decision 29): a stop that
+// arrives while an erase resets the node does not cancel the reset at
+// once — one cut between "fabrics removed" and "store reset" would leave
+// the erase half done — but lets it finish inside the stop budget; the
+// daemon then exits 0 without bringing the node back.
+func TestStopLetsEraseFinish(t *testing.T) {
+	restoreSeams(t)
+	env, web := eraseEnv(t)
+	d := startDaemon(t, env, web)
+	entered, got := make(chan struct{}), make(chan error, 1)
+	factoryReset = func(n *node.Node, ctx context.Context) error {
+		close(entered)
+		select {
+		case <-ctx.Done():
+			got <- ctx.Err()
+			return ctx.Err()
+		case <-time.After(time.Second):
+			got <- nil
+		}
+		return n.FactoryReset(ctx)
+	}
+	go func() { _, _ = d.call(http.MethodPost, "/api/v1/node/maintenance/erase", eraseBody) }()
+	<-entered
+	d.cancel()
+	d.cancel = nil
+	if err := <-got; err != nil {
+		t.Fatalf("the stop cancelled the reset at once: %v", err)
+	}
+	select {
+	case code := <-d.done:
+		if code != 0 {
+			t.Fatalf("exit %d", code)
+		}
+	case <-time.After(30 * time.Second):
+		t.Fatal("no exit")
+	}
+	if strings.Contains(d.logs.String(), "ha2fabric.node_lost") {
+		t.Fatalf("the stopping daemon tried to bring the node back:\n%s", d.logs.String())
+	}
+}
+
 // TestSignalDuringStart (HR-P1-err-72): a stop that arrives before the
 // daemon has started is an ordinary stop: exit 0.
 func TestSignalDuringStart(t *testing.T) {

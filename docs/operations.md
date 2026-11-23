@@ -621,13 +621,17 @@ daemon stops it before the come-back, so the node comes back as it was
 and the erase answers the error — Erase again. When it cannot be stopped
 either, it is kept: the come-back fails on the port it holds, and the
 next Erase resets that node again. An erase runs while the status pages
-keep answering, and ends when the daemon stops. A registry node in that
+keep answering. A registry node in that
 state is listed as not enabled; its Delete works.
 
 A stop (SIGTERM, the add-on's stop) has one budget of 25 seconds: the web
 server and the Home Assistant connection end first, then every node stops
-at once; an erase in progress ends with the daemon, and a create, rename
-or delete still running is not waited for beyond the budget. The add-on's
+at once. An erase in progress is let finish its reset for up to 20 of
+those seconds and does not bring the node back; one the stop interrupts
+nonetheless (`ha2fabric.node_erased` at warn) may have removed the
+fabrics without resetting the store, and must be repeated after the next
+start. A create, rename or delete still running is not waited for beyond
+the budget. The add-on's
 manifest gives the stop 30 seconds before the Supervisor kills it. A
 second signal ends the process at once; a signal during the start is an
 ordinary stop (exit 0).
