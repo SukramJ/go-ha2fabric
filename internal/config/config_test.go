@@ -251,3 +251,23 @@ func TestHelpHidesPasscode(t *testing.T) {
 		t.Fatalf("environment passcode: %+v %v", c, err)
 	}
 }
+
+// TestHAURL: HA_URL parses as a URL with a host (HR-P0-err-03's
+// configuration half), and one with userinfo is refused without echoing
+// it (HR-P0-leak-25).
+func TestHAURL(t *testing.T) {
+	for _, u := range []string{"ws://ha.local:8123/api/websocket", "wss://[::1]:8123/api/websocket", "ws://10.0.0.2/api/websocket?x=1"} {
+		if _, err := Load(nil, MapEnv(map[string]string{"HA_URL": u, "HA_TOKEN": "t"}), io.Discard); err != nil {
+			t.Errorf("%s: %v", u, err)
+		}
+	}
+	for _, u := range []string{"ws://::/websocket", "ws:///api/websocket", "ws://", "ws://ha.local:http/x", "ws://ha.local:99999/x", "wss://%zz/x"} {
+		if _, err := Load(nil, MapEnv(map[string]string{"HA_URL": u, "HA_TOKEN": "t"}), io.Discard); err == nil || !strings.Contains(err.Error(), "HA_URL") {
+			t.Errorf("%s passed: %v", u, err)
+		}
+	}
+	_, err := Load(nil, MapEnv(map[string]string{"HA_URL": "wss://me:hunter2@ha.local/api/websocket", "HA_TOKEN": "t"}), io.Discard)
+	if err == nil || !strings.Contains(err.Error(), "user") || strings.Contains(err.Error(), "hunter2") {
+		t.Fatalf("userinfo: %v", err)
+	}
+}

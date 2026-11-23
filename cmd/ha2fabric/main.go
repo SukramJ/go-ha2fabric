@@ -83,7 +83,7 @@ func run(ctx context.Context, args []string, env config.Env, stdout, stderr io.W
 	if cfg.DumpPlan {
 		return dumpPlan(ctx, client, input, stdout, logger)
 	}
-	logger.Info("ha2fabric.start", slog.String("version", version.String()), slog.String("ha_url", cfg.HAURL), slog.Bool("addon", cfg.Addon), slog.Bool("camera", cfg.Camera))
+	logger.Info("ha2fabric.start", slog.String("version", version.String()), slog.String("ha_url", ha.LogURL(cfg.HAURL)), slog.Bool("addon", cfg.Addon), slog.Bool("camera", cfg.Camera))
 
 	reg, err := nodes.Open(filepath.Dir(cfg.StorePath), logger)
 	if err != nil {

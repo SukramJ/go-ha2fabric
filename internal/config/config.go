@@ -15,6 +15,7 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -257,8 +258,8 @@ func Load(args []string, env Env, out io.Writer) (*Config, error) {
 	}
 	if c.HAURL == "" {
 		add("HA_URL is required outside the add-on")
-	} else if !strings.HasPrefix(c.HAURL, "ws://") && !strings.HasPrefix(c.HAURL, "wss://") {
-		add("HA_URL must be a ws:// or wss:// URL, got %q", c.HAURL)
+	} else if msg := checkHAURL(c.HAURL); msg != "" {
+		add("HA_URL %s", msg)
 	}
 	if c.HAToken == "" {
 		add("HA_TOKEN is required outside the add-on (a long-lived access token)")
@@ -337,6 +338,33 @@ func Load(args []string, env Env, out io.Writer) (*Config, error) {
 		return nil, &ValidationError{Issues: issues}
 	}
 	return c, nil
+}
+
+// checkHAURL says what is wrong with HA_URL, or "": it parses, its scheme
+// is ws or wss, it names a host and, if any, a port in range, and it
+// carries no user or password — the token is HA_TOKEN's, and a URL is
+// logged. No message echoes the URL, which may hold such a part.
+func checkHAURL(s string) string {
+	u, err := url.Parse(s)
+	switch {
+	case err != nil:
+		return "does not parse as a URL"
+	case u.User != nil:
+		return "carries a user or password; the token is HA_TOKEN's, and the URL is logged"
+	case u.Scheme != "ws" && u.Scheme != "wss":
+		return fmt.Sprintf("must be a ws:// or wss:// URL, got scheme %q", u.Scheme)
+	case u.Hostname() == "":
+		return "names no host"
+	case strings.Contains(u.Hostname(), ":") && !strings.HasPrefix(u.Host, "["):
+		// net/url takes ws://::/x, which its http form refuses.
+		return "names an IPv6 address without brackets ([::1])"
+	}
+	if p := u.Port(); p != "" {
+		if n, err := strconv.Atoi(p); err != nil || n < 1 || n > 65535 {
+			return fmt.Sprintf("port must be 1..65535, got %q", p)
+		}
+	}
+	return ""
 }
 
 func id16(s, key string, add func(string, ...any)) uint16 {

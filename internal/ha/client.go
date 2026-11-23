@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -197,7 +199,7 @@ func (c *Client) serve(ctx context.Context, h Handler) (authed bool, err error) 
 	ws, _, err := websocket.Dial(dctx, c.opts.URL, nil) //nolint:bodyclose // the response body is the connection's
 	cancel()
 	if err != nil {
-		return false, fmt.Errorf("ha: dial: %w", err)
+		return false, fmt.Errorf("ha: dial: %w", scrubURL(err))
 	}
 	ws.SetReadLimit(c.opts.ReadLimit)
 	defer func() { _ = ws.CloseNow() }()
@@ -222,7 +224,7 @@ func (c *Client) serve(ctx context.Context, h Handler) (authed bool, err error) 
 	c.cur = s
 	c.mu.Unlock()
 	c.conn.Store(true)
-	c.log.Info("ha.connected", slog.String("ha_version", version), slog.String("url", c.opts.URL))
+	c.log.Info("ha.connected", slog.String("ha_version", version), slog.String("url", LogURL(c.opts.URL)))
 	h.Connected(version)
 	defer func() {
 		c.conn.Store(false)
@@ -550,3 +552,37 @@ func (c *Client) CallService(ctx context.Context, sc ServiceCall) error {
 	}
 	return c.Call(ctx, cmd, nil)
 }
+
+// LogURL is raw as the log shows it: the scheme, the host and the path,
+// without a user, a query or a fragment, which may carry a proxy's
+// credential. A URL that does not parse is not shown.
+func LogURL(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "(unparsable)"
+	}
+	v := url.URL{Scheme: u.Scheme, Host: u.Host, Path: u.Path}
+	return v.String()
+}
+
+// scrubURL replaces the URL a net/http error names with its [LogURL], in
+// the error and in the messages wrapped around it.
+func scrubURL(err error) error {
+	ue, ok := errors.AsType[*url.Error](err)
+	if !ok {
+		return err
+	}
+	raw := ue.URL
+	ue.URL = LogURL(raw)
+	return scrubbed{msg: strings.ReplaceAll(err.Error(), raw, ue.URL), err: err}
+}
+
+// scrubbed is an error with its message rewritten; it unwraps to the
+// original.
+type scrubbed struct {
+	msg string
+	err error
+}
+
+func (e scrubbed) Error() string { return e.msg }
+func (e scrubbed) Unwrap() error { return e.err }
