@@ -16,7 +16,7 @@ import (
 // FuzzLoad holds Load against any value of the list and number variables
 // (the add-on's options and the stand-alone environment are operator
 // input): it never panics, and what it accepts is in range — a valid
-// passcode, a 12-bit discriminator, non-zero ids, a node limit within
+// passcode or none, a 12-bit discriminator, non-zero ids, a node limit within
 // bounds, a label of at most 32 bytes, IP addresses in WEB_ALLOW, and list
 // items that are non-empty, trimmed and, for MDNS_INTERFACES, unique.
 func FuzzLoad(f *testing.F) {
@@ -36,7 +36,8 @@ func FuzzLoad(f *testing.F) {
 		if err != nil {
 			return
 		}
-		if node.ValidateSetupPIN(c.Passcode) != nil || c.Discriminator > node.MaxDiscriminator || c.VendorID == 0 || c.ProductID == 0 {
+		// 0 is unset: the daemon's random passcode.
+		if c.Passcode != 0 && node.ValidateSetupPIN(c.Passcode) != nil || c.Discriminator > node.MaxDiscriminator || c.VendorID == 0 || c.ProductID == 0 {
 			t.Fatalf("accepted passcode %d, discriminator %d, ids %#x %#x", c.Passcode, c.Discriminator, c.VendorID, c.ProductID)
 		}
 		if c.NodeLimit < 0 || c.NodeLimit > MaxNodeLimit {

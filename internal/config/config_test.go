@@ -18,7 +18,7 @@ func TestDefaultsStandAlone(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.Addon || c.Listen != DefaultListen || c.Passcode != DefaultPasscode || c.Discriminator != DefaultDiscriminator ||
+	if c.Addon || c.Listen != DefaultListen || c.Passcode != 0 || c.Discriminator != DefaultDiscriminator ||
 		c.VendorID != DefaultVendorID || c.ProductID != DefaultProductID || c.Label != DefaultLabel || c.StorePath != DefaultStoreFile ||
 		!c.ExposeAssist || c.LogLevel != slog.LevelInfo || c.WebListen != DefaultWebListen || c.HAToken != "secret" {
 		t.Fatalf("defaults %+v", c)
@@ -180,7 +180,7 @@ func TestTokenNotInErrors(t *testing.T) {
 // TestNodeConfig: the node configuration the daemon hands node.New
 // validates, carries the identity, and accepts TCP with the camera only.
 func TestNodeConfig(t *testing.T) {
-	c, err := Load([]string{"--store-path", t.TempDir() + "/n.db"}, MapEnv(map[string]string{"HA_URL": "ws://a/api/websocket", "HA_TOKEN": "t"}), nil)
+	c, err := Load([]string{"--store-path", t.TempDir() + "/n.db"}, MapEnv(map[string]string{"HA_URL": "ws://a/api/websocket", "HA_TOKEN": "t", "PASSCODE": "34567890"}), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -208,7 +208,7 @@ func TestNodeConfig(t *testing.T) {
 // newlines (the add-on's list), refuse an empty or doubled name, and reach
 // the node's configuration (issue #41).
 func TestMDNSInterfaces(t *testing.T) {
-	base := map[string]string{"HA_URL": "ws://a/api/websocket", "HA_TOKEN": "t"}
+	base := map[string]string{"HA_URL": "ws://a/api/websocket", "HA_TOKEN": "t", "PASSCODE": "34567890"}
 	store := func() string { return t.TempDir() + "/s.db" }
 	c, err := Load([]string{"--store-path", store()}, MapEnv(base), io.Discard)
 	if err != nil || c.MDNSInterfaces != nil || c.Node(nil).Network.MDNS.Interfaces != nil {
@@ -322,5 +322,21 @@ func TestWebAdminOffLoopback(t *testing.T) {
 		if _, err := Load(nil, with("WEB_LISTEN", listen), io.Discard); err != nil {
 			t.Errorf("WEB_ADMIN on %q: %v", listen, err)
 		}
+	}
+}
+
+// TestPasscodeUnset: without PASSCODE the passcode is 0, the daemon's
+// random one; the public test value set explicitly is honoured and
+// reported (HR-P0-cfg-21).
+func TestPasscodeUnset(t *testing.T) {
+	env := map[string]string{"HA_URL": "ws://a/api/websocket", "HA_TOKEN": "t"}
+	c, err := Load(nil, MapEnv(env), io.Discard)
+	if err != nil || c.Passcode != 0 || c.PasscodeIsTestValue() {
+		t.Fatalf("unset: %+v %v", c, err)
+	}
+	env["PASSCODE"] = "20202021"
+	c, err = Load(nil, MapEnv(env), io.Discard)
+	if err != nil || c.Passcode != TestPasscode || !c.PasscodeIsTestValue() {
+		t.Fatalf("the test value: %+v %v", c, err)
 	}
 }

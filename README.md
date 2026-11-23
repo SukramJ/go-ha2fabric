@@ -104,7 +104,8 @@ not an error, and matches once it is created.
 1. **Settings → Apps → Install app**, **⋮ → Repositories** (formerly
    *Settings → Add-ons → Add-on Store*), add
    `https://github.com/SukramJ/go-ha2fabric`.
-2. Install **go-ha2fabric**, change its `passcode`, start it.
+2. Install **go-ha2fabric** and start it (its passcode is random unless you
+   set one).
 3. Open its **Web UI** and pair the QR code from Apple Home, Google Home or
    Alexa.
 
@@ -149,7 +150,7 @@ environment only and never logged or stored.
 | `HA_TOKEN` | add-on: `SUPERVISOR_TOKEN` | An administrator's long-lived access token. |
 | `LISTEN` | `:5540` | UDP address of the Matter node. |
 | `MDNS_INTERFACES` | empty (every interface) | Host interfaces the mDNS responder announces on (comma- or newline-separated), for a dual-homed host behind an mDNS reflector ([`docs/operations.md`](docs/operations.md), mDNS). |
-| `PASSCODE` | `20202021` | Setup passcode; trivial ones are refused. Change it. |
+| `PASSCODE` | unset (random) | Setup passcode; trivial ones are refused. Unset, the configured node gets a random one on its first start, kept in `passcode.json` beside the store; the public test value 20202021 is honoured with a warning (`passcode_test_value`). Set it in the environment: the flag shows in the process list. |
 | `DISCRIMINATOR` | `3840` | 12-bit discriminator. |
 | `VENDOR_ID`, `PRODUCT_ID` | `0xFFF1`, `0x8001` | The CSA test vendor and product. |
 | `LABEL` | `Matter Bridge` | The bridge's node label (at most 32 bytes). |

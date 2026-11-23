@@ -4,11 +4,14 @@
 package main
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/SukramJ/go-ha2fabric/internal/config"
+	"github.com/SukramJ/go-ha2fabric/internal/ha/hatest"
+	"github.com/SukramJ/go-ha2fabric/internal/nodes"
 )
 
 // TestStartWarnings: a configuration the daemon accepts but warns about
@@ -30,3 +33,51 @@ func TestStartWarnings(t *testing.T) {
 	}
 	d.stop()
 }
+
+// TestPasscode: without PASSCODE the configured node's passcode is drawn
+// on the first start and kept beside the store, the same at the next
+// start; the public test value set explicitly is honoured with a log line
+// and a status warning (HR-P0-cfg-21).
+func TestPasscode(t *testing.T) {
+	srv := hatest.New(t)
+	dir := t.TempDir()
+	envOf := func(web string, kv ...string) config.Env {
+		m := map[string]string{
+			"HA_URL": srv.URL(), "HA_TOKEN": hatest.Token, "STORE_PATH": filepath.Join(dir, "ha2fabric.db"),
+			"LISTEN": freePort(t, "udp"), "WEB_LISTEN": web,
+		}
+		for i := 0; i < len(kv); i += 2 {
+			m[kv[i]] = kv[i+1]
+		}
+		return config.MapEnv(m)
+	}
+	web := freePort(t, "tcp")
+	d := startDaemon(t, envOf(web), web)
+	d.stop()
+	first, err := os.ReadFile(filepath.Join(dir, nodes.PasscodeFile))
+	if err != nil || !strings.Contains(d.logs.String(), "msg=ha2fabric.passcode_created") {
+		t.Fatalf("no passcode file (%v) or no log line\n%s", err, d.logs.String())
+	}
+	if strings.Contains(d.logs.String(), "ha2fabric.passcode_test_value") {
+		t.Fatal("the random passcode warned as the test value")
+	}
+
+	web = freePort(t, "tcp")
+	d = startDaemon(t, envOf(web), web)
+	d.stop()
+	again, err := os.ReadFile(filepath.Join(dir, nodes.PasscodeFile))
+	if err != nil || string(again) != string(first) || strings.Contains(d.logs.String(), "ha2fabric.passcode_created") {
+		t.Fatalf("the second start drew again: %v\n%s", err, d.logs.String())
+	}
+
+	web = freePort(t, "tcp")
+	d = startDaemon(t, envOf(web, "PASSCODE", "20202021"), web)
+	if st := d.status("/api/v1/node/status"); !st.warned(warningPasscodeTestValue, "") {
+		t.Fatalf("no %s: %+v", warningPasscodeTestValue, st)
+	}
+	if !strings.Contains(d.logs.String(), "msg=ha2fabric.passcode_test_value") {
+		t.Fatalf("no log line\n%s", d.logs.String())
+	}
+	d.stop()
+}
+

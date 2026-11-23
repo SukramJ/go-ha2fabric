@@ -18,6 +18,8 @@ const (
 	// warningTokenInClear: HA_URL is ws:// to another host (decision 17
 	// of the 2026-11-23 review: a warning, not a refusal).
 	warningTokenInClear = "token_in_clear"
+	// warningPasscodeTestValue: PASSCODE is the public test value.
+	warningPasscodeTestValue = "passcode_test_value"
 )
 
 // startWarnings are what the configuration holds that the daemon accepts
@@ -25,6 +27,15 @@ const (
 // page while the daemon runs.
 func startWarnings(cfg *config.Config, logger *slog.Logger, now time.Time) []fabricui.Warning {
 	var out []fabricui.Warning
+	if cfg.PasscodeIsTestValue() {
+		logger.Warn("ha2fabric.passcode_test_value",
+			slog.String("hint", "PASSCODE is the public test value 20202021: anyone in reach of the node's commissioning window can pair it; unset PASSCODE for a random one, or set your own"))
+		out = append(out, fabricui.Warning{
+			Code:    warningPasscodeTestValue,
+			Message: "the configured node's passcode is the public test value 20202021: anyone in reach of its commissioning window can pair it; unset PASSCODE (the add-on's passcode option) for a random one, or set your own",
+			Since:   now,
+		})
+	}
 	if cfg.TokenInClear() {
 		host := ""
 		if u, err := url.Parse(cfg.HAURL); err == nil {

@@ -92,6 +92,20 @@ func run(ctx context.Context, args []string, env config.Env, stdout, stderr io.W
 		logger.Error("ha2fabric.nodes", slog.String("error", err.Error()))
 		return 1
 	}
+	if cfg.Passcode == 0 {
+		// No PASSCODE: the random one beside the store, as a registry
+		// node's (decision 14 of the 2026-11-23 review).
+		p, created, err := reg.ConfiguredPasscode()
+		if err != nil {
+			logger.Error("ha2fabric.passcode", slog.String("error", err.Error()))
+			return 1
+		}
+		cfg.Passcode = p
+		if created {
+			logger.Info("ha2fabric.passcode_created", slog.String("file", reg.Path(nodes.PasscodeFile)),
+				slog.String("hint", "PASSCODE is unset, so the configured node got a random passcode, kept in this file; the pairing codes follow in ha2fabric.pairing and are on the web UI's pairing page"))
+		}
+	}
 
 	// The cookbook's order (docs/guides/embed-in-a-daemon.md §6): every
 	// node starts before the backend runs and stops after it. The one Home

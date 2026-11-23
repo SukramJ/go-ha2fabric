@@ -14,7 +14,12 @@ bashio::log.info "Starting go-ha2fabric add-on..."
 
 # --- The Matter node ---
 export LISTEN=":$(bashio::config 'port')"
-export PASSCODE="$(bashio::config 'passcode')"
+# Unset, the daemon draws a random passcode on the first start and keeps it
+# in /data/passcode.json; an installation from before 0.7.0 keeps the value
+# it stored (the old default 20202021 gets a warning).
+if bashio::config.has_value 'passcode'; then
+  export PASSCODE="$(bashio::config 'passcode')"
+fi
 export DISCRIMINATOR="$(bashio::config 'discriminator')"
 export VENDOR_ID="$(bashio::config 'vendor_id')"
 export PRODUCT_ID="$(bashio::config 'product_id')"

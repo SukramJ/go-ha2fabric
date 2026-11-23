@@ -468,15 +468,22 @@ func (r *Registry) write(nodes []Node) error {
 	if nodes == nil {
 		nodes = []Node{}
 	}
-	b, err := json.MarshalIndent(file{Nodes: nodes}, "", "  ")
+	return r.writeJSON(File, file{Nodes: nodes})
+}
+
+// writeJSON replaces the file name in the registry's directory with v,
+// atomically and 0600 (os.CreateTemp's mode): a temporary file in the
+// same directory, synced, then a rename.
+func (r *Registry) writeJSON(name string, v any) error {
+	b, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
 		return fmt.Errorf("nodes: %w", err)
 	}
-	tmp, err := os.CreateTemp(r.dir, File+".tmp-*")
+	tmp, err := os.CreateTemp(r.dir, name+".tmp-*")
 	if err != nil {
 		return fmt.Errorf("nodes: %w", err)
 	}
-	name := tmp.Name()
+	tmpName := tmp.Name()
 	_, werr := tmp.Write(append(b, '\n'))
 	if werr == nil {
 		werr = tmp.Sync()
@@ -485,11 +492,11 @@ func (r *Registry) write(nodes []Node) error {
 		werr = cerr
 	}
 	if werr == nil {
-		werr = os.Rename(name, r.Path(File))
+		werr = os.Rename(tmpName, r.Path(name))
 	}
 	if werr != nil {
-		_ = os.Remove(name)
-		return fmt.Errorf("nodes: write %s: %w", r.Path(File), werr)
+		_ = os.Remove(tmpName)
+		return fmt.Errorf("nodes: write %s: %w", r.Path(name), werr)
 	}
 	return nil
 }

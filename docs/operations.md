@@ -15,7 +15,8 @@ The daemon keeps two files for its configured node: the node's SQLite
 store, `STORE_PATH`, and beside it `selection.json`, the web UI's
 per-entity overrides. Each node created in the web UI (Nodes, below) adds
 its pair in the same directory, `ha2fabric-<key>.db` and
-`selection-<key>.json`, and `nodes.json` lists those nodes.
+`selection-<key>.json`, and `nodes.json` lists those nodes. Without `PASSCODE`, `passcode.json`
+beside them holds the configured node's random passcode.
 
 | Where | Path |
 | --- | --- |
@@ -65,6 +66,13 @@ new node takes a key whose files exist, so restoring the file brings them
 back. On Windows, which has no POSIX file modes, the ACL of the data
 directory protects it, as it does the store: that is the service's
 concern.
+
+`passcode.json` is `{"passcode", "created_at"}`, written the same way
+(atomically, 0600) on the first start without `PASSCODE`. One that does not
+parse or holds an invalid passcode is renamed to
+`passcode.json.corrupt-<unix seconds>`, logged (`nodes.passcode_corrupt`),
+and a new one is drawn; a paired node keeps its fabrics, since the passcode
+opens only the node's own window, which opens without a fabric.
 
 The daemon stores nothing else: not the token, not Home Assistant's
 registry, not the states. Everything it knows about Home Assistant it reads
@@ -416,9 +424,16 @@ window closes or expires, so closing it from the page once leaves the
 own window open; a second close closes that too (go-fabric-ui
 `Options.ConfiguredWindow`, which the daemon leaves off).
 
-The defaults are public test values: passcode 20202021, discriminator 3840,
-the CSA test vendor 0xFFF1 and product 0x8001. Change the passcode before
-pairing for real. The bridge carries go-fabric's test attestation chain; a
+The configured node's passcode is `PASSCODE` (the add-on's `passcode`
+option) or, unset, a random valid one drawn on the first start and kept in
+`passcode.json` beside the store (`ha2fabric.passcode_created` in the log),
+as the registry nodes get theirs. The public test value 20202021 — the
+default before 0.7.0, which an add-on installation of that time kept in its
+options — is honoured, with the log line `ha2fabric.passcode_test_value`
+and the status warning `passcode_test_value`: anyone in reach of the
+commissioning window can pair with it. The other defaults are public test
+values too: discriminator 3840, the CSA test vendor 0xFFF1 and product
+0x8001. The bridge carries go-fabric's test attestation chain; a
 controller may warn that it is an uncertified device and needs a
 confirmation to go on.
 

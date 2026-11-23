@@ -19,8 +19,11 @@ attestation chain, and a controller may warn when you pair it.
    not served.
 4. In your controller's app, add an accessory and scan the QR code (or type
    the manual code). The code works while no controller has paired yet.
-5. **Change the passcode** before you pair for real: the default is a
-   public test value.
+5. The passcode is random unless you set the `passcode` option: the add-on
+   draws one on its first start and keeps it. An installation from before
+   0.7.0 kept the old default 20202021, a public test value; the status page
+   warns about it (`passcode_test_value`) — remove the option for a random
+   one, or set your own.
 
 ## Which entities are served
 
@@ -59,7 +62,7 @@ modes are not mapped.
 | Option | Type | Default | Description |
 | --- | --- | --- | --- |
 | `port` | port | `5540` | UDP port of the Matter node. Change it if another Matter node on this host uses 5540. |
-| `passcode` | int | `20202021` | Setup passcode (1 to 99999998; trivial ones such as 11111111 or 12345678 are refused). **Change it.** |
+| `passcode` | int | unset (random) | Setup passcode (1 to 99999998; trivial ones such as 11111111 or 12345678 are refused). Unset, the add-on draws a random one on its first start and keeps it in `/data/passcode.json`; the codes are on the web UI's pairing page. The public test value 20202021 is honoured with a warning. |
 | `discriminator` | int | `3840` | 12-bit discriminator (0 to 4095). |
 | `vendor_id` | int | `65521` | Vendor id (0xFFF1, the CSA test vendor). |
 | `product_id` | int | `32769` | Product id (0x8001). |
@@ -107,7 +110,9 @@ The add-on keeps two files: `/data/ha2fabric.db`, the paired controllers,
 their keys and the endpoint numbers, and `/data/selection.json`, the web
 UI's per-entity choices. Each node created in the web UI adds its own
 pair, `/data/ha2fabric-<key>.db` and `/data/selection-<key>.json`, and
-`/data/nodes.json` lists those nodes with their ports and passcodes. Losing it unpairs the bridge
+`/data/nodes.json` lists those nodes with their ports and passcodes;
+`/data/passcode.json` holds the bridge's own random passcode when the
+`passcode` option is unset. Losing the store unpairs the bridge
 everywhere. A Home Assistant backup stops the add-on briefly to copy it
 consistently. The add-on stores no token and no copy of your
 configuration; it reads Home Assistant again on every start.

@@ -37,11 +37,11 @@ const (
 
 // Defaults. The commissioning values are the public test values of
 // go-fabric's cookbook (docs/guides/embed-in-a-daemon.md §2, CSA test
-// vendor 0xFFF1, product 0x8001); change the passcode before a real
-// pairing.
+// vendor 0xFFF1, product 0x8001). The passcode has no default: without
+// PASSCODE the configured node's is random, drawn on the first start and
+// kept beside the store (internal/nodes ConfiguredPasscode).
 const (
 	DefaultListen        = ":5540"
-	DefaultPasscode      = 20202021
 	DefaultDiscriminator = 3840
 	DefaultVendorID      = 0xFFF1
 	DefaultProductID     = 0x8001
@@ -58,6 +58,12 @@ const (
 	AddonStorePath = "/data/" + DefaultStoreFile
 	// SelectionFile is the web UI's overrides file, beside the store.
 	SelectionFile = "selection.json"
+	// TestPasscode is the public test passcode of go-fabric's examples and
+	// test harness (fabrictest.DefaultPasscode, fabrictest/device.go:35 at
+	// v0.25.0) and the default before 0.7.0: valid, so it is honoured when
+	// set explicitly, with a warning. go-fabric exposes no list of such
+	// values; its validator refuses only the trivial ones.
+	TestPasscode = 20202021
 	// IngressProxy is the Supervisor's Ingress proxy address, the only
 	// client an add-on's Ingress port may serve
 	// (developers.home-assistant.io docs/apps/presentation.md "Ingress").
@@ -82,7 +88,10 @@ type Config struct {
 	// advertises on every multicast-capable one (go-fabric node.MDNS
 	// Interfaces at v0.19.1). One host, one set: every node gets it.
 	MDNSInterfaces []string
-	Passcode       uint32
+	// Passcode is PASSCODE; 0 when unset, and the daemon then uses the
+	// random one kept beside the store (internal/nodes
+	// ConfiguredPasscode) before it builds the node.
+	Passcode uint32
 	Discriminator  uint16
 	VendorID       uint16
 	ProductID      uint16
@@ -160,6 +169,11 @@ func (c *Config) TokenInClear() bool {
 	ip := net.ParseIP(h)
 	return ip == nil || !ip.IsLoopback()
 }
+
+// PasscodeIsTestValue reports whether the passcode is the public
+// [TestPasscode], which anyone in reach of the commissioning window can
+// use; the daemon warns about it.
+func (c *Config) PasscodeIsTestValue() bool { return c.Passcode == TestPasscode }
 
 // ValidationError aggregates every problem [Load] found.
 type ValidationError struct{ Issues []string }
@@ -240,9 +254,6 @@ func Load(args []string, env Env, out io.Writer) (*Config, error) {
 	if *passcode == "" {
 		*passcode = get("PASSCODE")
 	}
-	if *passcode == "" {
-		*passcode = strconv.Itoa(DefaultPasscode)
-	}
 
 	c := &Config{DumpPlan: *dump, Version: *ver}
 	supervisor := get(SupervisorTokenEnv)
@@ -286,7 +297,9 @@ func Load(args []string, env Env, out io.Writer) (*Config, error) {
 	if err := hostPort(c.Listen); err != nil {
 		add("LISTEN %v", err)
 	}
-	if p, err := strconv.ParseUint(*passcode, 10, 32); err != nil {
+	if *passcode == "" {
+		// Unset: the daemon's random one (Passcode).
+	} else if p, err := strconv.ParseUint(*passcode, 10, 32); err != nil {
 		add("PASSCODE must be a number, got %q", *passcode)
 	} else if err := node.ValidateSetupPIN(uint32(p)); err != nil {
 		add("PASSCODE %d is invalid or trivially guessable (%v)", p, err)
