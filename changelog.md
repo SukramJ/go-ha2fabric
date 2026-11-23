@@ -6,6 +6,44 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **The configured node's passcode is random unless set.** Without
+  `PASSCODE` (the add-on's `passcode` option, now optional without a
+  default) the node draws a valid passcode on its first start and keeps it
+  in `passcode.json` beside the store, as the web UI's nodes do. An
+  explicit `20202021`, the public test value and the old default — which an
+  add-on installation from before kept in its options — is honoured with
+  the log line `ha2fabric.passcode_test_value` and the status warning
+  `passcode_test_value`. A paired node keeps its fabrics.
+- **In the add-on the web UI's administrator is a Home Assistant
+  administrator**: the daemon reads the user's groups the Supervisor sets
+  on each Ingress request (`X-Remote-User-Groups`, `system-admin`), which
+  needs Supervisor 2026.10.4 or later; the daemon reads the Supervisor's
+  version at start (`GET /info`). On an older Supervisor, or until the
+  version is read, the web UI is the status page only, with the warning
+  `supervisor_too_old` or `supervisor_unknown`. The manifest sets
+  `panel_admin: true`.
+- `WEB_ADMIN=true` on a `WEB_LISTEN` that is not loopback (the image's
+  `0.0.0.0:8099`) is refused at start without `WEB_ALLOW`; the docs say the
+  page is plain HTTP and an address filter is not authentication. A
+  `WEB_ALLOW` entry that is not an IP address fails the web UI instead of
+  being dropped. In the add-on `WEB_ALLOW` defaults to the Ingress proxy
+  and takes no other value.
+- The pairing codes are logged only while the node has no fabric; a paired
+  node's `ha2fabric.pairing` line points to the pairing page.
+- `HA_URL` must parse as a `ws://` or `wss://` URL with a host (an IPv6
+  address in brackets) and no user or password; the log shows it without
+  a query. The WebSocket handshake follows no redirect. With `ws://` to a
+  host that is neither loopback nor the Supervisor the daemon logs
+  `ha2fabric.token_in_clear` and shows the status warning `token_in_clear`.
+- `-h` no longer prints an environment `PASSCODE` as the flag's default.
+
+### Fixed
+
+- A web UI node's key from a long label could be 57 characters, one over
+  the documented bound of 56.
+
 ## [0.7.0] - 2026-11-23
 
 The move to go-fabric `v0.25.0` under its new module path
