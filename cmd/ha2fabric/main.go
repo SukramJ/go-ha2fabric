@@ -45,10 +45,23 @@ import (
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	// The first signal starts the stop; a second one ends the process
+	// at once (the default action), also while the stop runs.
+	go func() {
+		<-ctx.Done()
+		stop()
+	}()
 	code := run(ctx, os.Args[1:], config.OSEnv, os.Stdout, os.Stderr)
 	stop()
 	os.Exit(code)
 }
+
+// defaultStopBudget bounds the whole stop, below the add-on's stop
+// timeout (addon/config.yaml timeout: 30); stopBudget is it, which the
+// daemon test shortens.
+const defaultStopBudget = 25 * time.Second
+
+var stopBudget = defaultStopBudget
 
 // events are the subscriptions the bridge reads.
 var events = []string{ha.EventStateChanged, ha.EventEntityRegistryUpdated, ha.EventDeviceRegistryUpdated, ha.EventLabelRegistryUpdated}
@@ -133,6 +146,11 @@ func run(ctx context.Context, args []string, env config.Env, stdout, stderr io.W
 	defer cancel()
 	fan := &ha.Fanout{}
 	def, err := serve(rctx, client, fan, cfg.Node(logger), input, sel, logger)
+	if err != nil && ctx.Err() != nil {
+		// A stop during the start is an ordinary stop.
+		logger.Info("ha2fabric.stopping", slog.String("during", "start"), slog.String("error", err.Error()))
+		return 0
+	}
 	if err != nil {
 		logger.Error("ha2fabric.node", slog.String("error", err.Error()))
 		return 1
@@ -169,14 +187,39 @@ func run(ctx context.Context, args []string, env config.Env, stdout, stderr io.W
 			code = 1
 		}
 	}
+	// One deadline for the whole stop, below the add-on's stop timeout
+	// (decision 29 of the 2026-11-23 review): the web server and the Home
+	// Assistant connection first, as the cookbook orders, then every node
+	// at once.
 	logger.Info("ha2fabric.stopping")
-	cancel()
-	wg.Wait()
-	sctx, scancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	sctx, scancel := context.WithTimeout(context.WithoutCancel(ctx), stopBudget)
 	defer scancel()
-	fl.Close(sctx)
-	if err := def.close(sctx); err != nil {
-		logger.Warn("ha2fabric.node_stop", slog.String("error", err.Error()))
+	cancel()
+	backend := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(backend)
+	}()
+	select {
+	case <-backend:
+	case <-sctx.Done():
+		logger.Warn("ha2fabric.stop_budget", slog.Duration("budget", stopBudget),
+			slog.String("hint", "the web server or the Home Assistant connection did not stop within the budget; the nodes stop now"))
+	}
+	var stopping sync.WaitGroup
+	stopping.Go(func() { fl.Close(sctx) })
+	stopping.Go(func() {
+		if err := def.close(sctx); err != nil {
+			logger.Warn("ha2fabric.node_stop", slog.String("error", err.Error()))
+		}
+	})
+	stopping.Wait()
+	select {
+	case err := <-webErr:
+		if err != nil {
+			logger.Warn("ha2fabric.web_stop", slog.String("error", err.Error()))
+		}
+	default:
 	}
 	return code
 }

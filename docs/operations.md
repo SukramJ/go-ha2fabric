@@ -235,6 +235,8 @@ The lines to know:
 | `ha2fabric.node_erased` | info | A node was erased in the web UI (`node=<key>` for a registry node): `fabrics_removed`, `elapsed`; the node comes back next, with `ha2fabric.fabrics count=0` and `ha2fabric.pairing`. At warn with `error` when the reset failed part-way. |
 | `ha2fabric.node_limit` | warn | At start: `nodes.json` holds more nodes (`nodes`) than `NODE_LIMIT` (`limit`) allows; all start, the web UI creates no more (Nodes). |
 | `nodes.mode_tightened` | warn | `nodes.json` or `passcode.json` (`file`) had a mode wider than 0600 (`was`) and was set to 0600 (Files). |
+| `ha2fabric.stop_budget` | warn | At stop: the web server or the Home Assistant connection did not end within the budget; the nodes stop anyway (Erase and factory reset). |
+| `ha2fabric.web_stop` | warn | At stop: the web server's shutdown failed (`error`), e.g. a request still open at its deadline. |
 | `ha2fabric.node_lost` | error | The node did not come back after an erase (`node=<key>` for a registry node). The daemon keeps running; the status page shows `node_erase_failed`. See Erase and factory reset. |
 | `ha2fabric.mdns_interface` | warn | At start, with `MDNS_INTERFACES` set: go-fabric's diagnosis of the list (`code`: `interface_not_found`, `interface_filtered`, `interface_no_addresses`; `node=<key>` for a registry node). See mDNS. |
 | `ha.connected` / `ha.disconnected` | info / warn | The Home Assistant connection. |
@@ -594,8 +596,22 @@ at once, with its commissioning window open: the log says
 removed there. A node that does not come back (`ha2fabric.node_lost`)
 leaves the daemon running, and every node's status page shows
 `node_erase_failed`: Erase again, or restart the daemon, which comes up
-on the erased store. A registry node in that state is listed as not
-enabled; its Delete works.
+on the erased store. A reset that fails (`ha2fabric.node_erased` at warn
+with `error`) can leave the node running on its port and store; the
+daemon stops it before the come-back, so the node comes back as it was
+and the erase answers the error — Erase again. When it cannot be stopped
+either, it is kept: the come-back fails on the port it holds, and the
+next Erase resets that node again. An erase runs while the status pages
+keep answering, and ends when the daemon stops. A registry node in that
+state is listed as not enabled; its Delete works.
+
+A stop (SIGTERM, the add-on's stop) has one budget of 25 seconds: the web
+server and the Home Assistant connection end first, then every node stops
+at once; an erase in progress ends with the daemon, and a create, rename
+or delete still running is not waited for beyond the budget. The add-on's
+manifest gives the stop 30 seconds before the Supervisor kills it. A
+second signal ends the process at once; a signal during the start is an
+ordinary stop (exit 0).
 
 The manual way: stop the daemon and delete the store file (and a `-journal` next to it);
 for every node, delete the `ha2fabric-*.db` and `selection-*.json` files

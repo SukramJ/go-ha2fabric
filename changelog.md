@@ -161,6 +161,17 @@ to reach it from the network, run the image with
 - `NODE_LIMIT` is documented as what it is, the bound on the nodes the web
   UI creates; a registry with more nodes than the limit starts them all
   and says so (`ha2fabric.node_limit`).
+- The stop has one budget of 25 seconds — the web server and the Home
+  Assistant connection, then the configured node and the web UI's nodes at
+  once — and the add-on's manifest gives it 30 (`timeout: 30`; the
+  Supervisor's default 10 could kill it inside a node's stop). An erase in
+  progress ends with the daemon; the web server's shutdown error is logged
+  (`ha2fabric.web_stop`). A second signal ends the process at once; a
+  signal during the start exits 0 instead of 1.
+- An erase whose reset fails without stopping the node no longer orphans
+  it on its port: the node is stopped and comes back, or, when it cannot
+  be stopped, is kept for the next erase to reset. Status pages no longer
+  wait for an erase.
 
 ## [0.6.3] - 2026-11-12
 

@@ -6,8 +6,10 @@ package main
 import (
 	"net"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestImageDefaults holds the plain image's defaults against the
@@ -61,4 +63,26 @@ func TestImageDefaults(t *testing.T) {
 			t.Errorf(".dockerignore lacks %s", p)
 		}
 	}
+}
+
+// TestAddonStopTimeout (HR-P1-err-64, decision 29): the add-on's stop
+// timeout leaves the daemon's stop budget room, so the Supervisor's
+// SIGKILL does not land inside a node's stop (its default is 10 s).
+func TestAddonStopTimeout(t *testing.T) {
+	b, err := os.ReadFile("../../addon/config.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for line := range strings.Lines(string(b)) {
+		v, ok := strings.CutPrefix(strings.TrimSpace(line), "timeout:")
+		if !ok {
+			continue
+		}
+		secs, err := strconv.Atoi(strings.TrimSpace(v))
+		if err != nil || time.Duration(secs)*time.Second < defaultStopBudget+5*time.Second {
+			t.Fatalf("timeout: %s leaves the stop budget %v no room", strings.TrimSpace(v), defaultStopBudget)
+		}
+		return
+	}
+	t.Fatalf("addon/config.yaml sets no timeout; the Supervisor's default 10 s is below the stop budget %v", defaultStopBudget)
 }
