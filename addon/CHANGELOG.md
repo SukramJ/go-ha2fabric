@@ -17,6 +17,14 @@ has the details.
   serial number as Home Assistant knows it.
 - The web UI checks the address it is opened under; through Ingress nothing
   changes for you.
+- The web UI's settings are for Home Assistant administrators only; this
+  needs Supervisor 2026.10.4 or later, below that the web UI shows the
+  status page only.
+- The `passcode` option is optional now: left empty, the bridge picks a
+  random passcode on its first start and keeps it. If your options still
+  hold the old default `20202021`, the bridge warns; remove it or choose
+  your own. A paired bridge stays paired.
+- The pairing codes appear in the log only while the bridge is not paired.
 
 ## 0.6.3
 

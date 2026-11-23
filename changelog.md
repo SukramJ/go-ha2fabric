@@ -6,6 +6,18 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-23
+
+The move to go-fabric `v0.25.0` under its new module path
+`thingfabric.dev/go-fabric`, with go-fabric-ui `v0.13.0` and go-hamapping
+`v0.5.0`. **Back up before updating:** the store's upgrade is one-way.
+
+### Added
+
+- `WEB_ALLOWED_HOSTS` (`--web-allowed-hosts`): the DNS names a stand-alone
+  web UI answers under besides `localhost` and IP addresses; any other name
+  is answered 403 `host_not_allowed` (go-fabric-ui's Host check).
+
 ### Changed
 
 - **The configured node's passcode is random unless set.** Without
@@ -39,25 +51,6 @@ All notable changes to this project are documented here. The format follows
   `ha2fabric.token_in_clear` and shows the status warning `token_in_clear`.
 - `-h` no longer prints an environment `PASSCODE` as the flag's default.
 
-### Fixed
-
-- A web UI node's key from a long label could be 57 characters, one over
-  the documented bound of 56.
-
-## [0.7.0] - 2026-11-23
-
-The move to go-fabric `v0.25.0` under its new module path
-`thingfabric.dev/go-fabric`, with go-fabric-ui `v0.13.0` and go-hamapping
-`v0.5.0`. **Back up before updating:** the store's upgrade is one-way.
-
-### Added
-
-- `WEB_ALLOWED_HOSTS` (`--web-allowed-hosts`): the DNS names a stand-alone
-  web UI answers under besides `localhost` and IP addresses; any other name
-  is answered 403 `host_not_allowed` (go-fabric-ui's Host check).
-
-### Changed
-
 - go-fabric `v0.22.2` → `v0.25.0`, now `thingfabric.dev/go-fabric`
   (repository `github.com/thingfabric/go-fabric`). The store's schema is
   upgraded from version 7 to 12 at the first start, one-way: an older
@@ -86,6 +79,20 @@ The move to go-fabric `v0.25.0` under its new module path
   are cut by UTF-8 bytes, the vendor name to 32.
 
 ### Fixed
+
+- A web UI node's key from a long label could be 57 characters, one over
+  the documented bound of 56.
+- A light command's brightness, colour and colour temperature, a cover's
+  position or tilt and a fan's percentage clamp to their range on every
+  architecture; an out-of-range value from a controller could become the
+  opposite bound (or, for `color_temp_kelvin`, a negative number), notably
+  on 386 and arm/v7.
+- The camera proxy's base URL is derived only from an `HA_URL` that names a
+  host; an unbracketed IPv6 literal such as `ws://::/websocket` is refused
+  instead of giving a URL that cannot be fetched.
+- A WebRTC session queues at most 64 of the controller's ICE candidates
+  until Home Assistant names its session; a call beyond that is answered
+  `RESOURCE_EXHAUSTED`.
 
 - A failed reachability change while Home Assistant is away is logged
   (`bridge.unreachable`, Debug) instead of dropped.

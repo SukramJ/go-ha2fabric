@@ -98,14 +98,14 @@ Measured at the baseline with `git ls-files | xargs wc -l`.
 
 Facts the cut rests on, read at the baseline:
 
-- **Web gate.** `admin` (`cmd/ha2fabric/main.go:190-202`): in the add-on
+- **Web gate.** `admin` (`cmd/ha2fabric/main.go:194-203` at the baseline): in the add-on
   `web.From(config.IngressProxy)` (peer address `172.30.32.2`,
   `internal/config/config.go:60-63`); stand-alone with `WEB_ADMIN`
   go-fabric-ui's token mode (nil); otherwise `web.ReadOnly`. Host check:
   `AllowedHosts` from `WEB_ALLOWED_HOSTS` and, in the add-on, `AllowHost`
-  by the Ingress source (`main.go:116`, `:204-215`).
-- **Client filter.** `internal/web/web.go:83-98` refuses a peer outside
-  `Allow` (`WEB_ALLOW`); empty `Allow` means no filter (`:84-86`); an entry
+  by the Ingress source (`main.go:116`, `:212-217`).
+- **Client filter.** `internal/web/web.go:86-99` refuses a peer outside
+  `Allow` (`WEB_ALLOW`); empty `Allow` means no filter (`:87-89`); an entry
   that does not parse is dropped (`:66-70`; go-fabric-ui HR-7).
 - **Add-on.** `host_network: true`, `ingress_port: 8486`,
   `homeassistant_api: true` (`addon/config.yaml:29-45`); `run.sh` sets
@@ -114,7 +114,7 @@ Facts the cut rests on, read at the baseline:
   Supervisor's proxy as an administrator with `SUPERVISOR_TOKEN`.
 - **Web server.** `ReadHeaderTimeout` 10 s, `ReadTimeout` 30 s,
   `IdleTimeout` 120 s, no `WriteTimeout` (the event stream)
-  (`internal/web/web.go:103-109`); plain HTTP.
+  (`internal/web/web.go:106-110`); plain HTTP.
 - **Home Assistant client.** One WebSocket (`internal/ha/client.go:197`),
   REST for camera stills (`internal/ha/camera.go:95-160`).
 - **Files written.** `selection` and `nodes` write through a temp file and
