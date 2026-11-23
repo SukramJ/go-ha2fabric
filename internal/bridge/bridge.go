@@ -460,25 +460,33 @@ func (b *Bridge) sync(ctx context.Context) {
 	b.forget = map[string]device.SourceKey{}
 	b.mu.Unlock()
 	ch := plan.Diff(served, planned, forget)
+	// A batch is not a transaction (node.Partition.Batch): each operation
+	// applies or fails on its own, so each one's error is kept by its
+	// index, and what failed is not taken as served (settle).
+	opErrs := make([]error, len(ch.Ops))
 	err = b.n.Aggregator().Batch(ctx, func(bt *node.Batch) error {
-		errs := make([]error, 0, len(ch.Ops))
-		for _, op := range ch.Ops {
+		for i, op := range ch.Ops {
+			var e error
 			switch op.Kind {
 			case plan.Remove:
-				errs = append(errs, bt.Remove(op.Key))
+				e = bt.Remove(op.Key)
 			case plan.Forget:
-				errs = append(errs, bt.Forget(op.Key))
+				e = bt.Forget(op.Key)
 			case plan.Replace:
-				errs = append(errs, bt.Replace(op.Key, op.Endpoint))
+				e = bt.Replace(op.Key, op.Endpoint)
 			case plan.Add:
-				errs = append(errs, bt.Add(op.Endpoint))
+				e = bt.Add(op.Endpoint)
+			}
+			if e != nil {
+				opErrs[i] = fmt.Errorf("%s %s: %w", opName(op.Kind), op.Key, e)
 			}
 		}
-		return errors.Join(errs...)
+		return errors.Join(opErrs...)
 	})
 	if err != nil {
 		b.log.Error("bridge.batch", slog.String("error", err.Error()))
 	}
+	b.settle(ch.Ops, opErrs, next)
 	for _, k := range slices.Sorted(maps.Keys(ch.Forgotten)) {
 		b.log.Info("bridge.forget", slog.String("entity", ch.Forgotten[k]), slog.String("key", k))
 	}
@@ -531,6 +539,9 @@ func (b *Bridge) sync(ctx context.Context) {
 	b.down = false
 	b.status.LastSync = time.Now()
 	b.status.SyncError = ""
+	if err != nil {
+		b.status.SyncError = err.Error()
+	}
 	b.status.Endpoints = endpoints
 	b.status.Candidates = len(verdicts)
 	select {
@@ -544,6 +555,67 @@ func (b *Bridge) sync(ctx context.Context) {
 	changed := len(ch.Added)+len(ch.Replaced)+len(ch.Removed) > 0
 	if b.opts.OnChange != nil && (len(moved) > 0 || changed) {
 		b.opts.OnChange(moved, changed)
+	}
+}
+
+// settle takes back what the batch's failed operations did not apply
+// (HR-P1-err-31), so the next sync tries them again: a refused Add's key
+// is not served, so it leaves its group's keys and endpoints; a group
+// with a refused Add or Replace keeps no signature, so the next sync
+// rebuilds it and plan.Diff adds or replaces its keys again; a failed
+// Forget is recorded again for the next sync. A failed Remove needs
+// nothing: the node refuses it for a key it does not serve.
+func (b *Bridge) settle(ops []plan.Op[*device.Device], errs []error, next map[string]*group) {
+	refused := map[string]plan.OpKind{}
+	for i, op := range ops {
+		if errs[i] == nil {
+			continue
+		}
+		switch op.Kind {
+		case plan.Add, plan.Replace:
+			refused[op.Key.String()] = op.Kind
+		case plan.Forget:
+			b.mu.Lock()
+			if _, newer := b.forget[op.Entity]; !newer {
+				b.forget[op.Entity] = op.Key
+			}
+			b.mu.Unlock()
+		}
+	}
+	if len(refused) == 0 {
+		return
+	}
+	for _, g := range next {
+		failed := false
+		keys, devs := g.keys[:0:0], g.devices[:0:0]
+		for i, k := range g.keys {
+			kind, ok := refused[k.String()]
+			failed = failed || ok
+			if kind == plan.Add {
+				continue
+			}
+			keys, devs = append(keys, k), append(devs, g.devices[i])
+		}
+		if !failed {
+			continue
+		}
+		cp := *g.Group
+		cp.Sig = ""
+		g.Group, g.keys, g.devices = &cp, keys, devs
+	}
+}
+
+// opName is a batch operation's name in an error.
+func opName(k plan.OpKind) string {
+	switch k {
+	case plan.Remove:
+		return "remove"
+	case plan.Forget:
+		return "forget"
+	case plan.Replace:
+		return "replace"
+	default:
+		return "add"
 	}
 }
 
