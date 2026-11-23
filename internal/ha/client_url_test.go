@@ -6,6 +6,8 @@ package ha_test
 import (
 	"bytes"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
@@ -56,5 +58,24 @@ func TestClientLogsURLWithoutQuery(t *testing.T) {
 	}
 	if got := ha.LogURL("wss://ha.local:8123/api/websocket?key=s3cret#f"); got != "wss://ha.local:8123/api/websocket" {
 		t.Fatalf("LogURL = %q", got)
+	}
+}
+
+// TestClientRefusesRedirect: the WebSocket dial follows no redirect, so
+// the token is sent only to the configured endpoint (HR-P0-ha-31).
+func TestClientRefusesRedirect(t *testing.T) {
+	target := hatest.New(t)
+	to := "http" + strings.TrimPrefix(target.URL(), "ws")
+	redir := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, to, http.StatusFound)
+	}))
+	t.Cleanup(redir.Close)
+	_, r, _ := start(t, ha.Options{URL: "ws" + strings.TrimPrefix(redir.URL, "http") + "/api/websocket", Token: hatest.Token, MinBackoff: time.Hour, Logger: slog.New(slog.DiscardHandler)})
+	r.wait(t, "disconnected")
+	r.mu.Lock()
+	err := r.errs[0]
+	r.mu.Unlock()
+	if target.Authenticated() != 0 || err == nil || !strings.Contains(err.Error(), "redirect") {
+		t.Fatalf("authenticated %d times through a redirect: %v", target.Authenticated(), err)
 	}
 }

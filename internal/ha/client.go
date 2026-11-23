@@ -135,11 +135,18 @@ func New(opts Options) *Client {
 	if log == nil {
 		log = slog.Default()
 	}
-	// The REST client is built once. The WebSocket dial takes the default
-	// HTTP client's settings (websocket.Dial with nil options); the REST
-	// side does the same, bounded by CallTimeout.
+	// The REST client is built once, bounded by CallTimeout. The
+	// WebSocket dial takes noRedirect.
 	return &Client{opts: opts, log: log, http: &http.Client{Timeout: opts.CallTimeout}}
 }
+
+// errRedirect refuses a redirect of the WebSocket handshake.
+var errRedirect = errors.New("ha: the WebSocket endpoint answered with a redirect, which is not followed; set HA_URL to the final address")
+
+// noRedirect is the WebSocket dial's HTTP client: the default transport,
+// and no redirect followed — the token goes in the first message of the
+// connection, so it would go to wherever a redirect chain ends.
+var noRedirect = &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return errRedirect }}
 
 // Connected reports whether a connection is authenticated now.
 func (c *Client) Connected() bool { return c.conn.Load() }
@@ -196,7 +203,7 @@ type session struct {
 // serve runs one connection; authed reports whether it authenticated.
 func (c *Client) serve(ctx context.Context, h Handler) (authed bool, err error) {
 	dctx, cancel := context.WithTimeout(ctx, c.opts.CallTimeout)
-	ws, _, err := websocket.Dial(dctx, c.opts.URL, nil) //nolint:bodyclose // the response body is the connection's
+	ws, _, err := websocket.Dial(dctx, c.opts.URL, &websocket.DialOptions{HTTPClient: noRedirect}) //nolint:bodyclose // the response body is the connection's
 	cancel()
 	if err != nil {
 		return false, fmt.Errorf("ha: dial: %w", scrubURL(err))
