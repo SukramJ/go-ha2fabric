@@ -226,7 +226,6 @@ func (c *Client) Run(ctx context.Context, h Handler) error {
 		}
 		h.Disconnected(err)
 		if authed {
-			c.setRefused(false)
 			authBackoff = c.opts.AuthBackoff
 		}
 		if up > c.opts.MaxBackoff {
@@ -292,6 +291,9 @@ func (c *Client) serve(ctx context.Context, h Handler) (up time.Duration, authed
 		_ = ws.Close(websocket.StatusPolicyViolation, "auth")
 		return 0, false, err
 	}
+	// The refusal ends with this authentication, not with the end of the
+	// connection it opens (HR-P1-ha-92).
+	c.setRefused(false)
 	began := time.Now()
 	defer func() { up = time.Since(began) }()
 	s := &session{ws: ws, pending: map[int64]chan Message{}, subs: map[int64]bool{}, streams: map[int64]*Subscription{}, done: make(chan struct{}), timeout: c.opts.CallTimeout}

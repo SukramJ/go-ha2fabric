@@ -240,6 +240,29 @@ func TestClientAuthRefusedClears(t *testing.T) {
 	}
 }
 
+// TestClientAuthRefusedThenAccepted (HR-P1-ha-92): a refusal ends with
+// the next authentication, not with the end of that connection.
+func TestClientAuthRefusedThenAccepted(t *testing.T) {
+	var n atomic.Int32
+	url := hostile(t, func(ctx context.Context, ws *websocket.Conn) {
+		send(ctx, ws, `{"type":"auth_required"}`)
+		if _, _, err := ws.Read(ctx); err != nil {
+			return
+		}
+		if n.Add(1) == 1 {
+			send(ctx, ws, `{"type":"auth_invalid","message":"no"}`)
+			return
+		}
+		send(ctx, ws, `{"type":"auth_ok","ha_version":"2026.10.3"}`)
+		<-ctx.Done()
+	})
+	c, r, _ := start(t, ha.Options{URL: url, Token: "t", AuthBackoff: 50 * time.Millisecond, Logger: slog.New(slog.DiscardHandler)})
+	r.wait(t, "connected")
+	if _, refused := c.TokenRefused(); refused {
+		t.Fatal("authenticated, the refusal still reported")
+	}
+}
+
 // TestListSkipsEntryThatDoesNotDecode (HR-P1-data-09): one registry
 // entry with a wrong-typed field costs that entry, not the list; the skip
 // is logged once.
