@@ -247,7 +247,7 @@ func Slug(label string) string {
 	var b strings.Builder
 	dash := false
 	for _, c := range fold.Replace(strings.ToLower(label)) {
-		if !(c >= 'a' && c <= 'z' || c >= '0' && c <= '9') {
+		if (c < 'a' || c > 'z') && (c < '0' || c > '9') {
 			dash = true
 			continue
 		}

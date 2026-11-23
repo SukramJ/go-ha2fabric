@@ -39,7 +39,7 @@ func (r *Registry) ConfiguredPasscode() (p uint32, created bool, err error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	path := r.Path(PasscodeFile)
-	b, err := os.ReadFile(path)
+	b, err := os.ReadFile(r.Path(PasscodeFile))
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
 	case err != nil:

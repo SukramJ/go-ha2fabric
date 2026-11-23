@@ -95,12 +95,12 @@ type Config struct {
 	// Passcode is PASSCODE; 0 when unset, and the daemon then uses the
 	// random one kept beside the store (internal/nodes
 	// ConfiguredPasscode) before it builds the node.
-	Passcode uint32
-	Discriminator  uint16
-	VendorID       uint16
-	ProductID      uint16
-	Label          string
-	StorePath      string
+	Passcode      uint32
+	Discriminator uint16
+	VendorID      uint16
+	ProductID     uint16
+	Label         string
+	StorePath     string
 
 	Include, Exclude []string
 	// IncludeLabels and ExcludeLabels are Home Assistant labels, by name

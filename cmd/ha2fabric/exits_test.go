@@ -60,7 +60,9 @@ func TestCreateRollback(t *testing.T) {
 	}
 
 	t.Cleanup(func() { newNode = node.New })
-	newNode = func(context.Context, node.Config) (*node.Node, error) { return nil, errors.New("the sentinel's start fails") }
+	newNode = func(context.Context, node.Config) (*node.Node, error) {
+		return nil, errors.New("the sentinel's start fails")
+	}
 	d.want(http.MethodPost, "/api/v1/nodes", `{"label":"Alexa"}`, http.StatusInternalServerError)
 	newNode = node.New
 	if l := d.nodes(); len(l.Nodes) != 1 || len(leftovers()) != 0 {

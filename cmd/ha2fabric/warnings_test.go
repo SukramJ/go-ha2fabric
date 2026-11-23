@@ -4,6 +4,7 @@
 package main
 
 import (
+	"bytes"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -67,7 +68,7 @@ func TestPasscode(t *testing.T) {
 	d = startDaemon(t, envOf(web), web)
 	d.stop()
 	again, err := os.ReadFile(filepath.Join(dir, nodes.PasscodeFile))
-	if err != nil || string(again) != string(first) || strings.Contains(d.logs.String(), "ha2fabric.passcode_created") {
+	if err != nil || !bytes.Equal(again, first) || strings.Contains(d.logs.String(), "ha2fabric.passcode_created") {
 		t.Fatalf("the second start drew again: %v\n%s", err, d.logs.String())
 	}
 
@@ -81,7 +82,6 @@ func TestPasscode(t *testing.T) {
 	}
 	d.stop()
 }
-
 
 // TestLogPairing: a node with a fabric, or whose fabrics could not be
 // read, logs no pairing code, only where to find it (HR-P0-leak-24); the

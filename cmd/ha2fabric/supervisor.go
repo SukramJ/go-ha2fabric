@@ -173,6 +173,7 @@ func (g *supervisorGate) Warnings() []fabricui.Warning {
 			Message: msg + "; the web UI's administrator pages need Supervisor " + minSupervisorText + " or later, and until the version is read the web UI shows the status page only",
 			Since:   g.since,
 		}}
+	case gateOpen:
 	}
 	return nil
 }
