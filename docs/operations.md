@@ -106,7 +106,7 @@ again on every connection.
 | TCP `LISTEN` | off; on with `CAMERA` | Matter over TCP on the same port, for a camera's signals (Cameras, below; go-fabric `docs/guides/operations.md:54, 58` at v0.15.5). |
 | UDP 5353, `224.0.0.251`, `ff02::fb` | — | mDNS, below. |
 | IPv6 on the LAN | required | Matter's operational network is IPv6. |
-| TCP `WEB_LISTEN` | `127.0.0.1:8099`; add-on `0.0.0.0:8486`, image `0.0.0.0:8099` | The web UI. Empty disables it. Reached by a DNS name, the name must be in `WEB_ALLOWED_HOSTS` (The web UI, below). |
+| TCP `WEB_LISTEN` | `127.0.0.1:8099`, the image's too; add-on `0.0.0.0:8486` | The web UI. Empty disables it. The image keeps it on loopback: `-e WEB_LISTEN=0.0.0.0:8099` (with `WEB_ALLOW` for `WEB_ADMIN`) opens it to the network. Reached by a DNS name, the name must be in `WEB_ALLOWED_HOSTS` (The web UI, below). |
 | Outbound WebSocket | `HA_URL`; add-on `ws://supervisor/core/websocket` | Home Assistant's WebSocket API. |
 | Outbound HTTP | derived from `HA_URL` | The camera proxy's stills, only with `CAMERA` (Cameras, below). |
 
@@ -412,8 +412,8 @@ mode (every request carries a per-process token the page reads from
 administrator). Stand-alone without `WEB_ADMIN` the UI is the status page
 only.
 
-`WEB_ADMIN=true` on a `WEB_LISTEN` that is not a loopback address (the
-image's `0.0.0.0:8099`, for example) is refused at start (exit 2) unless
+`WEB_ADMIN=true` on a `WEB_LISTEN` that is not a loopback address
+(`0.0.0.0:8099`, for example) is refused at start (exit 2) unless
 `WEB_ALLOW` names the clients: either bind the UI to loopback
 (`127.0.0.1:8099`) and reach it through a proxy of one's own, or list the
 administrators' addresses in `WEB_ALLOW`. The page is plain HTTP — the

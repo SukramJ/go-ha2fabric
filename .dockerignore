@@ -1,0 +1,16 @@
+# The build context of both images (Dockerfile, addon/Dockerfile): the
+# sources only. Nothing here reaches a final image, but the build stage and
+# its cache would hold it (HR-P1-sup-19).
+.git
+.github
+.claude
+notes
+held
+dist
+bin
+.env
+*.env
+*.db
+*.db-*
+*.out
+coverage.*

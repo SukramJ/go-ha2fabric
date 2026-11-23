@@ -12,8 +12,11 @@ The move to go-fabric `v0.25.0` under its new module path
 `thingfabric.dev/go-fabric`, with go-fabric-ui `v0.13.0` and go-hamapping
 `v0.5.0`. **Back up before updating:** the store's upgrade is one-way.
 **Stand-alone with `WEB_ADMIN=true` on a listener that is not loopback
-(the image's default) and no `WEB_ALLOW`, the daemon no longer starts**:
+and no `WEB_ALLOW`, the daemon no longer starts**:
 set `WEB_ALLOW` or a loopback `WEB_LISTEN` before updating (Changed).
+**The container image's web UI now listens on loopback** (`127.0.0.1:8099`):
+to reach it from the network, run the image with
+`-e WEB_LISTEN=0.0.0.0:8099` (and `WEB_ALLOW` for `WEB_ADMIN`) (Changed).
 
 ### Added
 
@@ -46,13 +49,21 @@ set `WEB_ALLOW` or a loopback `WEB_LISTEN` before updating (Changed).
   every 10 minutes, so an updated Supervisor needs no restart. The manifest sets
   `panel_admin: true`.
 - **Breaking:** `WEB_ADMIN=true` on a `WEB_LISTEN` that is not loopback
-  (the image's `0.0.0.0:8099`) is refused at start without `WEB_ALLOW`
+  (`0.0.0.0:8099`) is refused at start without `WEB_ALLOW`
   (exit 2: the whole daemon, the bridge included, not only the web UI);
   the docs say the page is plain HTTP and an address filter is not
   authentication. A
   `WEB_ALLOW` entry that is not an IP address fails the web UI instead of
   being dropped. In the add-on `WEB_ALLOW` defaults to the Ingress proxy
   and takes no other value.
+- **Breaking for the container image:** it no longer sets
+  `WEB_LISTEN=0.0.0.0:8099`; the web UI takes the binary's default,
+  `127.0.0.1:8099`, so the status page is not answered to the whole
+  network. Run it with `-e WEB_LISTEN=0.0.0.0:8099` to reach the web UI
+  from another machine, with `WEB_ALLOW` naming the administrators'
+  addresses for `WEB_ADMIN`. The image declares `5540/tcp` (Matter over
+  TCP with `CAMERA`), and a `.dockerignore` keeps the notes and the
+  repository's history out of the build context.
 - The pairing codes are logged only while the node has no fabric; a paired
   node's `ha2fabric.pairing` line points to the pairing page.
 - `HA_URL` must parse as a `ws://` or `wss://` URL with a host (an IPv6
