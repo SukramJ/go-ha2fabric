@@ -49,11 +49,22 @@ a new fabric, and every controller sees a new device.
 
 `selection.json` is `{"version": 1, "entities": {"<entity_id>": {"enabled":
 true, "name": "…"}}}`, written atomically (a temporary file, then a rename)
-and read at start. A file that does not parse is renamed to
-`selection.json.corrupt-<unix seconds>`, logged (`selection.corrupt`) and
-the daemon starts without overrides. The add-on's cold backup holds it with
-the store. An override keyed by an entity id does not follow a rename of
-that id.
+and read at start; before each write the file it replaces is kept as
+`selection.json.bak`, the last-good copy. A file of another version (a
+restored backup, a downgrade) is read leniently: its entities in this
+shape apply, the rest is ignored, and the log (`selection.version`) and
+the status page (`selection_corrupt`) say so until the next start; saving
+the selection rewrites it as version 1. A file that does not parse is
+renamed to `selection.json.corrupt-<unix seconds>`, logged
+(`selection.corrupt`), and the last-good copy is read instead, which loses
+at most the last change. Only when that does not parse either does the
+configured node start without overrides — and then entities turned off in
+the web UI are exposed again wherever `EXPOSE_ASSIST`, `INCLUDE` and the
+labels expose them; the status warning says so. A web UI node's rule is
+its selection alone, so without overrides it exposes nothing. Keys that are
+not entity ids are ignored and names longer than 256 bytes cut. The
+add-on's cold backup holds the file with the store. An override keyed by
+an entity id does not follow a rename of that id.
 
 `nodes.json` is the node registry, `{"nodes": [{"key", "label",
 "listen", "discriminator", "passcode", "created_at"}]}`: written
@@ -233,7 +244,8 @@ The lines to know:
 | `bridge.label_unresolved` | warn | A label of `INCLUDE_LABELS`/`EXCLUDE_LABELS` names no Home Assistant label; it is used as a label id. Logged when the set changes; also on the web UI's status page. |
 | `bridge.selection_applied` | info | The web UI stored overrides. |
 | `bridge.forget` | info | An entity removed from Home Assistant's registry: its endpoint number is forgotten (`entity`, `key`); created again, it gets a fresh one. |
-| `selection.corrupt` | warn | `selection.json` did not parse and was moved aside; also on the web UI's status page. |
+| `selection.corrupt` | warn | `selection.json` did not parse and was moved aside (`moved_to`); `restored` names the last-good copy read instead, empty when none could be (Files); also on the web UI's status page. |
+| `selection.version` | warn | `selection.json` is of another version (`version`) and was read leniently (Files); also on the web UI's status page. |
 | `bridge.camera_disabled` | info | Once per start: exposed cameras skipped because `CAMERA` is off (`skipped`). |
 | `camera.session` / `camera.session_ended` | info | A controller opened or ended a camera session (`entity_id`, `session`). |
 | `camera.ha_error` | warn | Home Assistant reported an error for a session (`code`, `message`, e.g. `go2rtc_webrtc_offer_failed`); the session ends. |
@@ -534,8 +546,8 @@ for all its fabrics, so a different scope is a different node.
   refused it, which leaves the registry's name standing). A controller
   that writes a name later wins in turn.
 - **Delete** is final: the node leaves every fabric it holds (its
-  controllers lose it), stops, and its store, its selection and its
-  record are removed (`ha2fabric.node_deleted`). The configured node
+  controllers lose it), stops, and its store, its selection (with its
+  `.bak` and any copy moved aside) and its record are removed (`ha2fabric.node_deleted`). The configured node
   cannot be deleted (409 `node_is_default`).
 - **Erase** starts the node over for the controllers and keeps it: as
   for the configured node (Erase and factory reset), its fabrics, its

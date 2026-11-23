@@ -56,7 +56,7 @@ func TestRoundTrip(t *testing.T) {
 }
 
 func TestCorruptFileIsMovedAside(t *testing.T) {
-	for name, body := range map[string]string{"garbage": "{not json", "version": `{"version": 2, "entities": {}}`} {
+	for name, body := range map[string]string{"garbage": "{not json", "another version in another shape": `{"version": 2, "entities": [1]}`} {
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()
 			path := filepath.Join(dir, fileName)

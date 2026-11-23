@@ -137,6 +137,13 @@ set `WEB_ALLOW` or a loopback `WEB_LISTEN` before updating (Changed).
   session and tells the controller, instead of leaving it listed without a
   stream; an answer without an SDP ends the session as Home Assistant's
   error does.
+- An overrides file (`selection.json`) that does not parse no longer turns
+  every entity hidden in the web UI back on: each write keeps the file it
+  replaces as `selection.json.bak`, which is read instead (losing at most
+  the last change); a file of another version is read leniently. Only
+  when neither helps does the configured node start without overrides,
+  and the status warning now says that entities turned off are exposed
+  again. Keys that are not entity ids are ignored, names cut to 256 bytes.
 
 ## [0.6.3] - 2026-11-12
 

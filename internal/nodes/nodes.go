@@ -448,11 +448,12 @@ func (r *Registry) Remove(key string) error {
 }
 
 // RemoveFiles deletes the store of n — with SQLite's -journal, -wal and
-// -shm beside it — its selection and any selection moved aside as
-// corrupt. A file that is not there is no error.
+// -shm beside it — its selection, the selection's last-good copy (.bak,
+// selection.BackupSuffix) and any selection moved aside as corrupt. A
+// file that is not there is no error.
 func (r *Registry) RemoveFiles(n *Node) error {
 	store := r.Path(n.StoreFile())
-	paths := []string{store, store + "-journal", store + "-wal", store + "-shm", r.Path(n.SelectionFile())}
+	paths := []string{store, store + "-journal", store + "-wal", store + "-shm", r.Path(n.SelectionFile()), r.Path(n.SelectionFile()) + ".bak"}
 	aside, _ := filepath.Glob(r.Path(n.SelectionFile()) + ".corrupt-*")
 	var errs []error
 	for _, p := range append(paths, aside...) {
