@@ -19,8 +19,14 @@ const (
 	ProductName = "Home Assistant bridge"
 )
 
-// spake2Salt is the SPAKE2+ salt of the node's passcode verifier (16 to 32
-// bytes, node.PBKDFSaltMin..Max); it is not a secret, the passcode is.
+// spake2Salt is the node's configured SPAKE2+ salt (16 to 32 bytes,
+// node.PBKDFSaltMin..Max). Since go-fabric v0.23.0 it answers no
+// commissioning window: the node's own and an administrator's basic
+// window each draw a fresh 32-byte salt when they open, as matter.js
+// (go-fabric CHANGELOG 0.23.0, review II decision 251; node.Commissioning
+// Salt's godoc at v0.25.0). node.Config.Validate still checks it — a salt
+// outside the bounds fails (node/config.go:958-966 at v0.25.0) — so it
+// stays.
 var spake2Salt = []byte("go-ha2fabric-spake2p-salt")
 
 // spake2Iterations is the verifier's PBKDF2 iteration count, the value of
