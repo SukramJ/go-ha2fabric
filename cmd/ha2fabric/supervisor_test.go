@@ -125,3 +125,27 @@ func TestSupervisorGateRechecks(t *testing.T) {
 		t.Fatalf("an unparsable version: %+v", w)
 	}
 }
+
+// TestSupervisorGateNoRedirectNoProxy (HR-P1-ha-13, -ha-14): the gate's
+// request carries SUPERVISOR_TOKEN, so it follows no redirect and takes
+// no proxy from the environment; the call to the Supervisor never leaves
+// the host.
+func TestSupervisorGateNoRedirectNoProxy(t *testing.T) {
+	var elsewhere atomic.Int32
+	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		elsewhere.Add(1)
+		_, _ = fmt.Fprint(w, `{"result":"ok","data":{"supervisor":"2026.10.4"}}`)
+	}))
+	t.Cleanup(other.Close)
+	redirect := httptest.NewServer(http.RedirectHandler(other.URL+"/info", http.StatusFound))
+	t.Cleanup(redirect.Close)
+	g, logs := runGate(t, redirect.URL, "sup-token")
+	eventually(t, "a failed read", func() bool { return strings.Contains(logs.String(), "ha2fabric.supervisor_unreadable") })
+	if elsewhere.Load() != 0 || g.open() {
+		t.Fatalf("the redirect was followed: %d requests elsewhere, open %v", elsewhere.Load(), g.open())
+	}
+	tr, ok := g.client.Transport.(*http.Transport)
+	if !ok || tr.Proxy != nil {
+		t.Fatalf("the gate's transport takes a proxy: %T", g.client.Transport)
+	}
+}

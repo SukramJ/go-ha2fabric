@@ -349,10 +349,10 @@ func TestCandidatesBeforeSessionAreBounded(t *testing.T) {
 	}
 	up.stream(0).push(session("01HA"))
 	eventually(t, "the queued candidates", func() bool { return len(up.cands()) == bound })
-	if err := h.ProvideIceCandidates(ctx, 1, cands(bound+1)); err != nil {
+	if err := h.ProvideIceCandidates(ctx, 1, cands(bound)); err != nil {
 		t.Fatalf("candidates after the session event: %v", err)
 	}
-	if n := len(up.cands()); n != 2*bound+1 {
+	if n := len(up.cands()); n != 2*bound {
 		t.Fatalf("%d candidates relayed", n)
 	}
 }

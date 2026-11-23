@@ -401,3 +401,28 @@ func TestAppliedStateIsNotACommand(t *testing.T) {
 		t.Fatalf("an applied state was handed out: %+v", got)
 	}
 }
+
+// TestServiceRangeNeverInverted (HR-P1-adpt-30): a bound that crosses the
+// other moves the other with it, so the call is never one Home Assistant
+// refuses for a low above its high (climate/services.py:121-131 at
+// 2026.10.3); the controller's next write of the other bound follows.
+func TestServiceRangeNeverInverted(t *testing.T) {
+	climate := state("climate.a", "heat_cool", map[string]any{"target_temp_low": 18.0, "target_temp_high": 24.0})
+	for _, c := range []struct {
+		method, payload string
+		low, high       float64
+	}{
+		{"temperature_low", "25", 25, 25},
+		{"temperature_high", "16", 16, 16},
+		{"temperature_low", "24", 24, 24},
+		{"temperature_high", "30", 18, 30},
+	} {
+		sc, err := adapt.Service(cmd("climate.a", c.method, c.payload), climate)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if lo, hi := sc.Data["target_temp_low"], sc.Data["target_temp_high"]; lo != c.low || hi != c.high {
+			t.Errorf("%s %s: low %v high %v, want %v %v", c.method, c.payload, lo, hi, c.low, c.high)
+		}
+	}
+}

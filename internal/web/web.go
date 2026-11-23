@@ -38,7 +38,11 @@ type Options struct {
 	// Listen is the address; Allow restricts the clients (empty: all).
 	Listen string
 	Allow  []string
-	Logger *slog.Logger
+	// Loopback refuses, in Run, a listener that did not bind a loopback
+	// address: the configuration judged WEB_LISTEN loopback by its text
+	// ("localhost" by name), the bound address is what counts.
+	Loopback bool
+	Logger   *slog.Logger
 	// UI are go-fabric-ui's options (Node, Exposure, Admin, Reassemble,
 	// Events, Operations — [NewOperations] over [NewLogger]'s ring); their
 	// Logger defaults to Logger.
@@ -117,6 +121,10 @@ func (s *Server) Run(ctx context.Context) error {
 	ln, err := lc.Listen(ctx, "tcp", s.opts.Listen)
 	if err != nil {
 		return fmt.Errorf("web: %w", err)
+	}
+	if a, ok := ln.Addr().(*net.TCPAddr); s.opts.Loopback && (!ok || !a.IP.IsLoopback()) {
+		_ = ln.Close()
+		return fmt.Errorf("web: %s bound %s, which is not a loopback address; with WEB_ADMIN and no WEB_ALLOW the web UI serves loopback only", s.opts.Listen, ln.Addr())
 	}
 	s.log.Info("web.listening", slog.String("addr", ln.Addr().String()), slog.Int("allow", len(s.allow)))
 	errc := make(chan error, 1)

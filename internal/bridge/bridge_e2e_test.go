@@ -66,6 +66,8 @@ type setup struct {
 	bridge.Options
 	camera bool
 	sel    *selection.Store
+	// wrap, when set, stands between the bridge and the HA client.
+	wrap func(bridge.Upstream) bridge.Upstream
 }
 
 func newEnv(t *testing.T, rule expose.Rule, edit ...func(*setup)) *env {
@@ -117,7 +119,11 @@ func newEnv(t *testing.T, rule expose.Rule, edit ...func(*setup)) *env {
 	if s.camera && opts.CameraUpstream == nil {
 		opts.CameraUpstream = camera.HA(cl)
 	}
-	br := bridge.New(dev.Node(), cl, opts)
+	var up bridge.Upstream = cl
+	if s.wrap != nil {
+		up = s.wrap(cl)
+	}
+	br := bridge.New(dev.Node(), up, opts)
 	prov := exposure.New(br, exposure.Options{Input: s.Input, Selection: s.sel, Logger: logger()})
 	rctx, stop := context.WithCancel(ctx)
 	done := make(chan struct{}, 2)

@@ -278,7 +278,7 @@ func TestRemoveFiles(t *testing.T) {
 	dir := t.TempDir()
 	r := open(t, dir)
 	n := nodes.Node{Key: "alexa"}
-	names := []string{"ha2fabric-alexa.db", "ha2fabric-alexa.db-journal", "ha2fabric-alexa.db-wal", "selection-alexa.json", "selection-alexa.json.corrupt-1", "ha2fabric.db", "selection.json"}
+	names := []string{"ha2fabric-alexa.db", "ha2fabric-alexa.db-journal", "ha2fabric-alexa.db-wal", "selection-alexa.json", "selection-alexa.json.corrupt-1", "selection-alexa.json.bak", "ha2fabric.db", "selection.json", "selection.json.bak"}
 	for _, f := range names {
 		if err := os.WriteFile(filepath.Join(dir, f), nil, 0o600); err != nil {
 			t.Fatal(err)
@@ -288,7 +288,7 @@ func TestRemoveFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	left, _ := filepath.Glob(filepath.Join(dir, "*"))
-	if len(left) != 2 {
+	if len(left) != 3 {
 		t.Fatalf("left %q: the configured node's files stay, the node's go", left)
 	}
 }

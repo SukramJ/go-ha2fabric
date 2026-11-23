@@ -107,3 +107,35 @@ func TestResolveAndUnresolved(t *testing.T) {
 		t.Errorf("Unresolved without a registry %q", got)
 	}
 }
+
+// TestLabelIDsFollowARename (HR-P1-cfg-34): a value that resolved to a
+// label by its name keeps that label's id after a rename, for an
+// exclusion and an inclusion alike, and only while the label exists.
+func TestLabelIDsFollowARename(t *testing.T) {
+	before := Labels{"nm": "No Matter", "on": "On bridge"}
+	r := Rule{Assist: true, IncludeLabels: []string{"On bridge"}, ExcludeLabels: []string{"No Matter"}}
+	r.LabelIDs = r.Resolutions(before)
+	renamed := Labels{"nm": "Off bridge", "on": "Bridged"}
+	if d := r.Decide(Entity{EntityID: "lock.a", ExposedToAssist: true, Labels: []string{"nm"}}, renamed); d.Exposed || d.Source != SourceExclude {
+		t.Errorf("exclusion lapsed: %+v", d)
+	}
+	if d := r.Decide(Entity{EntityID: "light.a", Labels: []string{"on"}}, renamed); !d.Exposed || d.Source != SourceLabel {
+		t.Errorf("inclusion dropped: %+v", d)
+	}
+	if got := r.Unresolved(renamed); len(got) != 0 {
+		t.Errorf("Unresolved %q", got)
+	}
+	if got := r.Followed(renamed); len(got) != 2 || got["No Matter"] != "nm" {
+		t.Errorf("Followed %v", got)
+	}
+	if got := r.Resolutions(renamed); got["No Matter"] != "nm" || got["On bridge"] != "on" {
+		t.Errorf("Resolutions %v", got)
+	}
+	gone := Labels{"on": "Bridged"}
+	if d := r.Decide(Entity{EntityID: "lock.a", ExposedToAssist: true, Labels: []string{"nm"}}, gone); !d.Exposed {
+		t.Errorf("a deleted label still excludes: %+v", d)
+	}
+	if got := r.Unresolved(gone); !slices.Equal(got, []string{"No Matter"}) || !r.Excludes("No Matter") || r.Excludes("On bridge") {
+		t.Errorf("Unresolved %q", got)
+	}
+}

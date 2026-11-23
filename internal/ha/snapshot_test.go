@@ -38,12 +38,15 @@ func (f *failing) GetConfig(context.Context) (ha.Config, error)           { retu
 
 func (f *failing) ListExposed(context.Context) (ha.Exposed, error) { return ha.Exposed{}, f.read() }
 
-// TestReadSnapshot: each read's failure names its command, and the
+// TestReadSnapshot: each read's failure names its command, the states
+// are read before the registries (HR-P1-data-67: an entity registered
+// between the two reads has no state yet and stays out until its
+// state_changed, rather than being planned once as unregistered), and the
 // exposure list is read only for a rule that follows Assist.
 func TestReadSnapshot(t *testing.T) {
 	for i, cmd := range []string{
-		"config/entity_registry/list", "config/device_registry/list", "config/area_registry/list",
-		"config/label_registry/list", "get_states", "get_config", "homeassistant/expose_entity/list",
+		"get_states", "config/entity_registry/list", "config/device_registry/list", "config/area_registry/list",
+		"config/label_registry/list", "get_config", "homeassistant/expose_entity/list",
 	} {
 		_, err := ha.ReadSnapshot(context.Background(), &failing{fail: i + 1}, true)
 		if !errors.Is(err, errRead) || !strings.HasPrefix(err.Error(), cmd+": ") {

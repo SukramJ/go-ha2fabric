@@ -133,18 +133,27 @@ func Service(cmd model.Command, cur *ha.State) (ha.ServiceCall, error) {
 		}
 	case domain == "climate" && (cmd.Method == hamapping.MethodTemperatureLow || cmd.Method == hamapping.MethodTemperatureHigh):
 		// climate/services.py:49-62: target_temp_low and target_temp_high
-		// are Inclusive — both or neither; the other bound is the current.
+		// are Inclusive — both or neither; the other bound is the current
+		// (cur, which the bridge completes with the bounds it last sent).
+		// Home Assistant refuses a low above the high (:121-131), so a
+		// bound that crosses the other takes the other with it: a range
+		// moved past its old high is two commands (go-hamapping gives one
+		// per bound), and the first must not be refused.
 		f, ok := number(payload)
 		if !ok {
 			break
 		}
+		low := cmd.Method == hamapping.MethodTemperatureLow
 		set, other := "target_temp_low", "target_temp_high"
-		if cmd.Method == hamapping.MethodTemperatureHigh {
+		if !low {
 			set, other = other, set
 		}
 		o, ok := toFloat(attrs[other])
 		if !ok {
 			return ha.ServiceCall{}, fmt.Errorf("%w: %s %s without a current %s", ErrCommand, id, set, other)
+		}
+		if low && f > o || !low && f < o {
+			o = f
 		}
 		return call("set_temperature", map[string]any{set: f, other: o})
 	case domain == "fan" && cmd.Method == hamapping.MethodPercentage:

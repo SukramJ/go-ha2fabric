@@ -50,3 +50,34 @@ merges.
 | --- | --- | --- |
 | 21 | Publishing HR-P0-auth-20 (no tag carries the fix at the merge, decision 8) | **Neutral wording now, held until the tag**: code comments, docs and the squash message describe the admin check as it is, not the condition before it; the held reports stay unpublished until the `0.7.0` tag (the owner's release go with the live Ingress test) and are then published in a notes pull request. Replaces decision 13's "published with the phase 0 pull request" |
 | 22 | HR-P0-cfg-27, binding the add-on's listener tighter | **After the live test**: the listener stays on `0.0.0.0:8486` (the peer filter and the header check hold); the owner's live Ingress test checks the Supervisor's source and gateway address, then a follow-up issue binds it |
+
+## 2026-11-23, after phase 1's verification
+
+Put as two wizards of four questions, the recommendation first; the owner
+took every recommendation and, in row 30, also the third issue. Sources:
+`phase-1-S.md`, `phase-1-GA.md`, `phase-1-GB.md`, `phase-1-verify.md`
+(section 7). The held row is named by ID only.
+
+| # | Subject | Decision |
+| --- | --- | --- |
+| 23 | S's four held camera lows (HR-P1-bound-02, -conc-03, -ha-04, -bound-17) | **Published now**, as HR-P0-bound-28 was: only a commissioned controller reaches them (decision 11). HR-P1-ha-04 is merged into HR-P1-ha-62 (one defect); fixed in phase 1's pull request |
+| 24 | (held) HR-P1-auth-01 | **Held until it is measured and tagged**: X1 (phase 2) or the owner's live Ingress test measures it; published with the `0.7.0` tag or later, together with the tighter bind of decision 22. Until then every tracked file describes the admin check as it is (decision 21) |
+| 25 | HR-P1-err-06 (with -cfg-35), a corrupt or other-version `selection.json` | **A last-good copy**: `selection.json.bak` written before each rename and read when the file does not parse; a lenient read of a file of another version; a warning that says entities turned off are exposed again when neither helps |
+| 26 | HR-P1-adpt-30, a climate range setpoint from stale state | **Both**: a local stop-gap (the bounds last sent per entity, closes the race and the refused raise) and a go-hamapping issue for one range command carrying both bounds |
+| 27 | HR-P1-cfg-12, the container image's listener (T6) | **Bound to loopback**: the image drops `WEB_LISTEN=0.0.0.0:8099` and takes the binary's default; breaking for image users (`changelog.md`, docs: `-e WEB_LISTEN=…` with `WEB_ALLOW`) |
+| 28 | HR-P1-ha-07, -ha-08, a refused token and the back-off | **Slow down and warn**: the back-off no longer resets on an authentication that is followed by a drop; after `auth_invalid` minutes, then hourly; a status warning; no exit, in the add-on and stand-alone alike |
+| 29 | HR-P1-err-64, the stop budget | **`timeout: 30` and one deadline**: `addon/config.yaml` `timeout: 30`; one deadline for the whole stop; the configured node stopped in parallel with the registry nodes; the web server's shutdown error logged |
+| 30 | go-hamapping issues (decision 9) | **Three issues**: the range command (HR-P1-adpt-30), an exported stable-key helper (HR-P1-adpt-69), and the primary endpoint's independence of input order as a question (HR-P1-adpt-68) |
+
+## 2026-11-23, after phase 1's fix wave
+
+Put as one wizard of four questions, the recommendation first; the owner
+took every recommendation and both further issues. Sources:
+`phase-1-fix-F1.md`, `phase-1-fix-F2.md`.
+
+| # | Subject | Decision |
+| --- | --- | --- |
+| 31 | HR-P1-conc-03, the idle end of a camera session | **1 h**, beside the cap of 8 sessions per camera; replaced by go-fabric's signal that a session's controller is gone once it exists |
+| 32 | HR-P1-adpt-30, how long the range last sent is held | **30 s** (or until a state shows it); the stop-gap goes with go-hamapping #39 |
+| 33 | HR-P1-cfg-34, the label ids a renamed label is followed by | **In memory only**; the warning says the exclusion lapsed, the docs recommend the label id |
+| 34 | Follow-up issues after phase 1's pull request | **Three**: go-fabric's camera kit (a session cap option, a signal that a session's controller is gone, whether CameraAvStreamManagement serialises its commands; a Fable-checked hand-over); here a `--health` flag for an image health check (HR-P1-sup-19); here the add-on as an unprivileged user with a profile and a watchdog after the live Ingress test (HR-P1-sup-18) |

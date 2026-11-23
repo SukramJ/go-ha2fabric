@@ -12,8 +12,11 @@ The move to go-fabric `v0.25.0` under its new module path
 `thingfabric.dev/go-fabric`, with go-fabric-ui `v0.13.0` and go-hamapping
 `v0.5.0`. **Back up before updating:** the store's upgrade is one-way.
 **Stand-alone with `WEB_ADMIN=true` on a listener that is not loopback
-(the image's default) and no `WEB_ALLOW`, the daemon no longer starts**:
+and no `WEB_ALLOW`, the daemon no longer starts**:
 set `WEB_ALLOW` or a loopback `WEB_LISTEN` before updating (Changed).
+**The container image's web UI now listens on loopback** (`127.0.0.1:8099`):
+to reach it from the network, run the image with
+`-e WEB_LISTEN=0.0.0.0:8099` (and `WEB_ALLOW` for `WEB_ADMIN`) (Changed).
 
 ### Added
 
@@ -46,13 +49,21 @@ set `WEB_ALLOW` or a loopback `WEB_LISTEN` before updating (Changed).
   every 10 minutes, so an updated Supervisor needs no restart. The manifest sets
   `panel_admin: true`.
 - **Breaking:** `WEB_ADMIN=true` on a `WEB_LISTEN` that is not loopback
-  (the image's `0.0.0.0:8099`) is refused at start without `WEB_ALLOW`
+  (`0.0.0.0:8099`) is refused at start without `WEB_ALLOW`
   (exit 2: the whole daemon, the bridge included, not only the web UI);
   the docs say the page is plain HTTP and an address filter is not
   authentication. A
   `WEB_ALLOW` entry that is not an IP address fails the web UI instead of
   being dropped. In the add-on `WEB_ALLOW` defaults to the Ingress proxy
   and takes no other value.
+- **Breaking for the container image:** it no longer sets
+  `WEB_LISTEN=0.0.0.0:8099`; the web UI takes the binary's default,
+  `127.0.0.1:8099`, so the status page is not answered to the whole
+  network. Run it with `-e WEB_LISTEN=0.0.0.0:8099` to reach the web UI
+  from another machine, with `WEB_ALLOW` naming the administrators'
+  addresses for `WEB_ADMIN`. The image declares `5540/tcp` (Matter over
+  TCP with `CAMERA`), and a `.dockerignore` keeps the notes and the
+  repository's history out of the build context.
 - The pairing codes are logged only while the node has no fabric; a paired
   node's `ha2fabric.pairing` line points to the pairing page.
 - `HA_URL` must parse as a `ws://` or `wss://` URL with a host (an IPv6
@@ -109,6 +120,87 @@ set `WEB_ALLOW` or a loopback `WEB_LISTEN` before updating (Changed).
 
 - A failed reachability change while Home Assistant is away is logged
   (`bridge.unreachable`, Debug) instead of dropped.
+- A Home Assistant connection that authenticates and drops at once is
+  retried with a back-off that keeps doubling to a minute, instead of every
+  second; the back-off starts again only after a connection that stayed up
+  longer than a minute.
+- A token Home Assistant refuses (`auth_invalid`) is retried after five
+  minutes, doubling to hourly, instead of every minute, with the log line
+  `ha.token_refused` and the status warning `ha_token_refused`, which
+  clears as soon as Home Assistant accepts the token again; the daemon
+  keeps running.
+- A camera offer whose controller gave up before Home Assistant answered no
+  longer leaves Home Assistant's WebRTC session open until the connection
+  drops: the subscription is ended once the answer arrives.
+- One registry or state entry with a field of an unexpected type (a name
+  that is a number) no longer fails every sync: that entry is skipped and
+  logged once per list (`ha.entry_skipped`). An entity whose entity or
+  device registry entry is skipped is not exposed until it reads again (its
+  hidden flag and labels are unknown), and a skipped label entry fails the
+  sync while `INCLUDE_LABELS` or `EXCLUDE_LABELS` name labels.
+- A command whose caller gave up while it was being written no longer
+  closes the Home Assistant connection every node shares.
+- A camera holds at most 8 WebRTC sessions: a further offer ends the
+  session idle longest (a minute or more), or is answered
+  `RESOURCE_EXHAUSTED`; a session without signalling for an hour ends,
+  which also ends what a controller that went away left open.
+- A controller's ICE candidates are bounded after Home Assistant's session
+  event too: 64 per call, 256 per session (`RESOURCE_EXHAUSTED` beyond).
+- Concurrent snapshots of one camera share one camera proxy request, and a
+  still younger than a second is reused for the same size.
+- A camera re-offer whose new Home Assistant session fails ends the
+  session and tells the controller, instead of leaving it listed without a
+  stream; an answer without an SDP ends the session as Home Assistant's
+  error does.
+- An overrides file (`selection.json`) that does not parse no longer turns
+  every entity hidden in the web UI back on: each write keeps the file it
+  replaces as `selection.json.bak`, which is read instead and written back
+  (losing at most the last change), also when `selection.json` is missing;
+  a file of another version is read leniently. Only when neither helps —
+  or nothing in the file is understood — does the configured node start
+  without overrides, and the status warning now says that entities turned
+  off are exposed again. Keys that are not entity ids are ignored, names cut to 256 bytes.
+- A `nodes.json` or `passcode.json` that is there with a mode wider than
+  0600 (a restored backup, a copy) is set to 0600 when read, and so is a
+  copy moved aside as corrupt (`nodes.mode_tightened`).
+- `NODE_LIMIT` is documented as what it is, the bound on the nodes the web
+  UI creates; a registry with more nodes than the limit starts them all
+  and says so (`ha2fabric.node_limit`).
+- The stop has one budget of 25 seconds — the web server and the Home
+  Assistant connection, then the configured node and the web UI's nodes at
+  once — and the add-on's manifest gives it 30 (`timeout: 30`; the
+  Supervisor's default 10 could kill it inside a node's stop). An erase in
+  progress may finish its reset for up to 20 of those seconds and does not
+  bring the node back; the web server's shutdown error is logged
+  (`ha2fabric.web_stop`). A second signal ends the process at once; a
+  signal during the start exits 0 instead of 1.
+- An erase whose reset fails without stopping the node no longer orphans
+  it on its port: the node is stopped and comes back, or, when it cannot
+  be stopped, is kept for the next erase to reset. Status pages no longer
+  wait for an erase.
+- `LABEL` must be UTF-8 text without control characters. With `WEB_ADMIN`
+  and no `WEB_ALLOW`, the web UI refuses to serve when `WEB_LISTEN`
+  (`localhost`, by name) bound an address that is not loopback. The
+  add-on's Supervisor check follows no redirect and takes no proxy from
+  the environment; the docs say that the Home Assistant connection does
+  take one (`HTTP_PROXY`).
+- A controller that moves a thermostat's heat/cool range writes two
+  setpoints; the second call now carries the first one's new bound instead
+  of the stale state's, and a bound that crosses the other moves it along,
+  so Home Assistant no longer refuses the first call (HR-P1-adpt-30).
+- A burst of Home Assistant events that overflows the bridge's queue no
+  longer loses the promised re-sync, the unreachable marking of an outage or
+  the forgetting of a removed entity (HR-P1-conc-32).
+- An endpoint go-fabric refuses in a sync's batch is no longer counted as
+  served: the status shows `sync_error`, the web UI's reassemble returns it,
+  and the next sync adds it again (HR-P1-err-31).
+- A controller command still queued when its entity leaves the bridge is
+  dropped (`bridge.command_unserved`), not sent to Home Assistant
+  (HR-P1-conc-33).
+- An include or exclude label configured by its name keeps working after
+  the label is renamed in Home Assistant, while the daemon runs; the warning
+  of an exclude label that names no label says it excludes nothing now
+  (HR-P1-cfg-34).
 
 ## [0.6.3] - 2026-11-12
 

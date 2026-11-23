@@ -45,10 +45,23 @@ import (
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	// The first signal starts the stop; a second one ends the process
+	// at once (the default action), also while the stop runs.
+	go func() {
+		<-ctx.Done()
+		stop()
+	}()
 	code := run(ctx, os.Args[1:], config.OSEnv, os.Stdout, os.Stderr)
 	stop()
 	os.Exit(code)
 }
+
+// defaultStopBudget bounds the whole stop, below the add-on's stop
+// timeout (addon/config.yaml timeout: 30); stopBudget is it, which the
+// daemon test shortens.
+const defaultStopBudget = 25 * time.Second
+
+var stopBudget = defaultStopBudget
 
 // events are the subscriptions the bridge reads.
 var events = []string{ha.EventStateChanged, ha.EventEntityRegistryUpdated, ha.EventDeviceRegistryUpdated, ha.EventLabelRegistryUpdated}
@@ -133,6 +146,11 @@ func run(ctx context.Context, args []string, env config.Env, stdout, stderr io.W
 	defer cancel()
 	fan := &ha.Fanout{}
 	def, err := serve(rctx, client, fan, cfg.Node(logger), input, sel, logger)
+	if err != nil && ctx.Err() != nil {
+		// A stop during the start is an ordinary stop.
+		logger.Info("ha2fabric.stopping", slog.String("during", "start"), slog.String("error", err.Error()))
+		return 0
+	}
 	if err != nil {
 		logger.Error("ha2fabric.node", slog.String("error", err.Error()))
 		return 1
@@ -146,15 +164,14 @@ func run(ctx context.Context, args []string, env config.Env, stdout, stderr io.W
 	}
 	webErr := make(chan error, 1)
 	if cfg.WebListen != "" {
-		ws, err := web.New(web.Options{Listen: cfg.WebListen, Allow: cfg.WebAllow, Logger: logger, UI: fabricui.Options{
-			Node: def.sw, Exposure: def.prov, Admin: admin(cfg, gate), Reassemble: def.Resync, Events: def.events, Warnings: warnings(def, fl, hostWarnings(startup, gate)), Counters: counters(def, fl), Erase: def.erase, Logger: logger,
+		ws, err := web.New(webOptions(cfg, gate, logger, fabricui.Options{
+			Node: def.sw, Exposure: def.prov, Reassemble: def.Resync, Events: def.events, Warnings: warnings(def, fl, hostWarnings(startup, gate, client.TokenRefused)), Counters: counters(def, fl), Erase: def.erase, Logger: logger,
 			Operations: web.NewOperations(ring, version.Version, started),
 			Registry:   fl, NodeConfig: nodeConfig(cfg),
-			AllowedHosts: cfg.WebAllowedHosts, AllowHost: allowHost(cfg),
 			// The streams end when the daemon stops, before the server's
 			// shutdown waits for its connections.
 			Done: rctx.Done(),
-		}})
+		}))
 		if err != nil {
 			webErr <- err
 		} else {
@@ -170,14 +187,39 @@ func run(ctx context.Context, args []string, env config.Env, stdout, stderr io.W
 			code = 1
 		}
 	}
+	// One deadline for the whole stop, below the add-on's stop timeout
+	// (decision 29 of the 2026-11-23 review): the web server and the Home
+	// Assistant connection first, as the cookbook orders, then every node
+	// at once.
 	logger.Info("ha2fabric.stopping")
-	cancel()
-	wg.Wait()
-	sctx, scancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	sctx, scancel := context.WithTimeout(context.WithoutCancel(ctx), stopBudget)
 	defer scancel()
-	fl.Close(sctx)
-	if err := def.close(sctx); err != nil {
-		logger.Warn("ha2fabric.node_stop", slog.String("error", err.Error()))
+	cancel()
+	backend := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(backend)
+	}()
+	select {
+	case <-backend:
+	case <-sctx.Done():
+		logger.Warn("ha2fabric.stop_budget", slog.Duration("budget", stopBudget),
+			slog.String("hint", "the web server or the Home Assistant connection did not stop within the budget; the nodes stop now"))
+	}
+	var stopping sync.WaitGroup
+	stopping.Go(func() { fl.Close(sctx) })
+	stopping.Go(func() {
+		if err := def.close(sctx); err != nil {
+			logger.Warn("ha2fabric.node_stop", slog.String("error", err.Error()))
+		}
+	})
+	stopping.Wait()
+	select {
+	case err := <-webErr:
+		if err != nil {
+			logger.Warn("ha2fabric.web_stop", slog.String("error", err.Error()))
+		}
+	default:
 	}
 	return code
 }
@@ -194,11 +236,19 @@ func warnings(def *served, fl *fleet, host func() []fabricui.Warning) func(conte
 	}
 }
 
-// hostWarnings are the start-up warnings and, in the add-on, the
-// Supervisor gate's.
-func hostWarnings(startup []fabricui.Warning, gate *supervisorGate) func() []fabricui.Warning {
+// hostWarnings are the start-up warnings, the refused token's while Home
+// Assistant refuses it (refused, the client's TokenRefused) and, in the
+// add-on, the Supervisor gate's.
+func hostWarnings(startup []fabricui.Warning, gate *supervisorGate, refused func() (time.Time, bool)) func() []fabricui.Warning {
 	return func() []fabricui.Warning {
 		out := slices.Clone(startup)
+		if since, ok := refused(); ok {
+			out = append(out, fabricui.Warning{
+				Code:    warningTokenRefused,
+				Message: "Home Assistant refuses the access token (auth_invalid), so the bridge has no connection and the nodes serve their last state; the daemon tries again after minutes, then hourly. Stand-alone, set a valid long-lived token in HA_TOKEN and restart; in the add-on, restart it",
+				Since:   since,
+			})
+		}
 		if gate != nil {
 			out = append(out, gate.Warnings()...)
 		}
@@ -236,6 +286,20 @@ func nodeConfig(cfg *config.Config) *fabricui.NodeConfigView {
 		ProductID: cfg.ProductID, ProductName: config.ProductName,
 		Store: cfg.StorePath,
 	}
+}
+
+// webOptions is the web server's options: ui with who may do what set
+// from the configuration — the client filter (WEB_ALLOW), the
+// administrator check (admin) and the Host check (WEB_ALLOWED_HOSTS,
+// allowHost). run and the admin table's test (TestAdminTable) build the
+// server through it.
+func webOptions(cfg *config.Config, gate *supervisorGate, logger *slog.Logger, ui fabricui.Options) web.Options {
+	ui.Admin = admin(cfg, gate)
+	ui.AllowedHosts, ui.AllowHost = cfg.WebAllowedHosts, allowHost(cfg)
+	// WEB_ADMIN without WEB_ALLOW was accepted for a loopback WEB_LISTEN
+	// by its text; the bound address must be loopback too.
+	loopback := cfg.WebAdmin && !cfg.Addon && len(cfg.WebAllow) == 0
+	return web.Options{Listen: cfg.WebListen, Allow: cfg.WebAllow, Loopback: loopback, Logger: logger, UI: ui}
 }
 
 // admin is the web UI's administrator check. In the add-on: a request of
@@ -318,6 +382,9 @@ func dumpPlan(ctx context.Context, client *ha.Client, input func() plan.Input, o
 	}
 	in := input()
 	snap, err := ha.ReadSnapshot(ctx, client, in.Rule.Assist)
+	if err == nil {
+		err = plan.Check(snap, in)
+	}
 	if err != nil {
 		logger.Error("ha2fabric.dump_plan", slog.String("error", err.Error()))
 		return 1

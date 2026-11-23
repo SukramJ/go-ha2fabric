@@ -6,6 +6,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -77,11 +78,31 @@ type supervisorGate struct {
 	since   time.Time
 }
 
+// errSupervisorRedirect refuses a redirect of the gate's request, which
+// carries SUPERVISOR_TOKEN.
+var errSupervisorRedirect = errors.New("supervisor: GET /info answered with a redirect, which is not followed")
+
+// supervisorClient is the gate's HTTP client: bounded, no redirect
+// followed and no proxy taken from the environment (HTTP_PROXY), so the
+// Bearer header goes to the Supervisor and nowhere else.
+func supervisorClient() *http.Client {
+	base, ok := http.DefaultTransport.(*http.Transport)
+	if !ok {
+		base = &http.Transport{}
+	}
+	tr := base.Clone()
+	tr.Proxy = nil
+	return &http.Client{
+		Timeout: 10 * time.Second, Transport: tr,
+		CheckRedirect: func(*http.Request, []*http.Request) error { return errSupervisorRedirect },
+	}
+}
+
 // newSupervisorGate is the add-on's gate on the Supervisor's API.
 func newSupervisorGate(token string, log *slog.Logger) *supervisorGate {
 	return &supervisorGate{
 		url: supervisorInfoURL, token: token, log: log, retry: 30 * time.Second, recheck: recheckInterval,
-		client: &http.Client{Timeout: 10 * time.Second},
+		client: supervisorClient(),
 		since:  time.Now(),
 	}
 }

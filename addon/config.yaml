@@ -40,6 +40,11 @@ host_network: true
 # add-on first, so the backup holds a consistent store.
 backup: cold
 
+# The Supervisor's SIGKILL follows SIGTERM after this many seconds (its
+# default 10). The daemon stops within 25 s: the web server, the Home
+# Assistant connection, then every node at once.
+timeout: 30
+
 ingress: true
 ingress_port: 8486
 # Only Home Assistant administrators open the panel; the daemon also checks

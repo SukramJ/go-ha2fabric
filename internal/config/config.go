@@ -21,6 +21,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"thingfabric.dev/go-fabric/node"
 
@@ -336,6 +338,8 @@ func Load(args []string, env Env, out io.Writer) (*Config, error) {
 		// NodeLabel is at most 32 bytes (go-fabric
 		// cluster/core/basic_information.go:853 at v0.11.0).
 		add("LABEL is %d bytes, at most 32", len(c.Label))
+	} else if !utf8.ValidString(c.Label) || strings.ContainsFunc(c.Label, unicode.IsControl) {
+		add("LABEL must be UTF-8 text without control characters, got %q", c.Label)
 	}
 	if dir := filepath.Dir(c.StorePath); dir != "." {
 		if st, err := os.Stat(dir); err != nil || !st.IsDir() {

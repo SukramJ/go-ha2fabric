@@ -16,6 +16,7 @@ package plan
 
 import (
 	"encoding/json"
+	"fmt"
 	"slices"
 	"sort"
 	"strings"
@@ -77,6 +78,25 @@ func (g *Group) Describe(id string, st *ha.State, unit string) string {
 // is off.
 const CameraOff = "the camera option is off (CAMERA, add-on option camera)"
 
+// The expose reasons of an entity a snapshot cannot judge: its registry
+// entry, or its device's, did not decode (ha.Snapshot.Skipped), so its
+// hidden_by, disabled_by and labels are unknown (HR-P1-data-90).
+const (
+	UnreadEntity = "its entity registry entry could not be read; not exposed until it can (ha.entry_skipped)"
+	UnreadDevice = "its device registry entry could not be read; not exposed until it can (ha.entry_skipped)"
+)
+
+// Check refuses a snapshot the rule cannot be applied to: a label
+// registry entry that did not decode while the rule names labels, which
+// would leave a label value unresolved — an exclude label excluding
+// nothing (HR-P1-data-90).
+func Check(s *ha.Snapshot, in Input) error {
+	if len(s.Skipped.Labels) > 0 && len(in.Rule.IncludeLabels)+len(in.Rule.ExcludeLabels) > 0 {
+		return fmt.Errorf("config/label_registry/list: %d entries could not be read (ha.entry_skipped) while INCLUDE_LABELS or EXCLUDE_LABELS name labels; the sync waits for a list that reads", len(s.Skipped.Labels))
+	}
+	return nil
+}
+
 // isCamera reports whether an entity id is of the camera domain.
 func isCamera(id string) bool { return strings.HasPrefix(id, "camera.") }
 
@@ -115,6 +135,14 @@ func Assess(s *ha.Snapshot, in Input) ([]Verdict, []*Group) {
 	}
 	for id := range reg {
 		ids[id] = true
+	}
+	unreadEnt := map[string]bool{}
+	for _, id := range s.Skipped.Entities {
+		unreadEnt[id], ids[id] = true, true
+	}
+	unreadDev := map[string]bool{}
+	for _, id := range s.Skipped.Devices {
+		unreadDev[id] = true
 	}
 	order := make([]string, 0, len(ids))
 	for id := range ids {
@@ -159,6 +187,12 @@ func Assess(s *ha.Snapshot, in Input) ([]Verdict, []*Group) {
 		}
 		if d.Exposed && st == nil {
 			v.Exposed, v.ExposeReason = false, d.Reason+"; no state yet"
+		}
+		switch {
+		case unreadEnt[id]:
+			v.Exposed, v.ExposeReason = false, UnreadEntity
+		case r != nil && unreadDev[r.DeviceID]:
+			v.Exposed, v.ExposeReason = false, UnreadDevice
 		}
 		if !v.Exposed {
 			verdicts = append(verdicts, v)

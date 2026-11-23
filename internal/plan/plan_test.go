@@ -5,6 +5,8 @@ package plan_test
 
 import (
 	"encoding/json"
+	"fmt"
+	"math/rand/v2"
 	"strings"
 	"testing"
 
@@ -184,6 +186,16 @@ func TestWarnings(t *testing.T) {
 	if got := plan.Warnings(plan.Input{Rule: expose.Rule{IncludeLabels: []string{"MATTER"}}}, labels); got != nil {
 		t.Fatalf("no finding %q", got)
 	}
+	// An exclude label that names nothing excludes nothing: the warning
+	// says so (HR-P1-cfg-34); one that follows a renamed label names it.
+	ex := plan.Warnings(plan.Input{Rule: expose.Rule{ExcludeLabels: []string{"Gone"}}}, labels)
+	if len(ex) != 1 || !strings.Contains(ex[0], `exclude label "Gone"`) || !strings.Contains(ex[0], "excludes nothing now") {
+		t.Fatalf("exclude warning %q", ex)
+	}
+	fw := plan.Warnings(plan.Input{Rule: expose.Rule{ExcludeLabels: []string{"Old"}, LabelIDs: map[string]string{"Old": "matter"}}}, labels)
+	if len(fw) != 1 || !strings.Contains(fw[0], `follows the label id "matter"`) || !strings.Contains(fw[0], `now named "Matter"`) {
+		t.Fatalf("followed warning %q", fw)
+	}
 }
 
 // TestRemovedKey: the key is the one go-hamapping gives the entity's
@@ -247,5 +259,34 @@ func TestDescribe(t *testing.T) {
 	moved.Attributes = map[string]any{"supported_color_modes": []any{"onoff"}}
 	if g.Describe("light.kitchen", &moved, unit) == g.Descs["light.kitchen"] {
 		t.Fatal("a moved capability describes the same")
+	}
+}
+
+// TestAssessIgnoresInputOrder (HR-P1-test-38): the registries and the
+// states in any order give the same verdicts and the same groups, keys
+// and signatures; Home Assistant's lists carry no order the plan may
+// rest on.
+func TestAssessIgnoresInputOrder(t *testing.T) {
+	in := plan.Input{Rule: expose.Rule{Assist: true, IncludeLabels: []string{"Matter"}}}
+	shape := func(s *ha.Snapshot) string {
+		verdicts, groups := plan.Assess(s, in)
+		out := fmt.Sprintf("%+v\n", verdicts)
+		for _, g := range groups {
+			out += g.Key + " " + g.Sig + "\n"
+		}
+		return out
+	}
+	want := shape(snapshot(t))
+	rng := rand.New(rand.NewPCG(1, 2))
+	for range 20 {
+		s := snapshot(t)
+		rng.Shuffle(len(s.States), func(i, j int) { s.States[i], s.States[j] = s.States[j], s.States[i] })
+		rng.Shuffle(len(s.Entities), func(i, j int) { s.Entities[i], s.Entities[j] = s.Entities[j], s.Entities[i] })
+		rng.Shuffle(len(s.Devices), func(i, j int) { s.Devices[i], s.Devices[j] = s.Devices[j], s.Devices[i] })
+		rng.Shuffle(len(s.Labels), func(i, j int) { s.Labels[i], s.Labels[j] = s.Labels[j], s.Labels[i] })
+		rng.Shuffle(len(s.Areas), func(i, j int) { s.Areas[i], s.Areas[j] = s.Areas[j], s.Areas[i] })
+		if got := shape(s); got != want {
+			t.Fatalf("the plan moved with the input order:\n got %s\nwant %s", got, want)
+		}
 	}
 }

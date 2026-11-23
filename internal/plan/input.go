@@ -6,6 +6,7 @@ package plan
 import (
 	"fmt"
 	"maps"
+	"slices"
 
 	"github.com/SukramJ/go-hamqtt/model"
 
@@ -89,15 +90,22 @@ func (in Input) clone() Input {
 
 // Warnings are the input's findings against the label registry: each
 // label value that names no Home Assistant label, which is used as a
-// label_id and matches once such a label exists. nil is none.
+// label_id and matches once such a label exists (an exclude label then
+// excludes nothing), and each value that follows the label it named
+// before a rename (expose.Rule.LabelIDs). nil is none.
 func Warnings(in Input, labels expose.Labels) []string {
-	unresolved := in.Rule.Unresolved(labels)
-	if len(unresolved) == 0 {
-		return nil
-	}
-	out := make([]string, 0, len(unresolved))
-	for _, v := range unresolved {
+	var out []string
+	for _, v := range in.Rule.Unresolved(labels) {
+		if in.Rule.Excludes(v) {
+			out = append(out, fmt.Sprintf("exclude label %q names no Home Assistant label; it excludes nothing now, and matches a label with that id once one exists", v))
+			continue
+		}
 		out = append(out, fmt.Sprintf("label %q names no Home Assistant label; it matches a label with that id once one exists", v))
+	}
+	followed := in.Rule.Followed(labels)
+	for _, v := range slices.Sorted(maps.Keys(followed)) {
+		id := followed[v]
+		out = append(out, fmt.Sprintf("label %q names no Home Assistant label now; it follows the label id %q it named before (now named %q) until this daemon restarts: configure the id or the new name", v, id, labels[id]))
 	}
 	return out
 }

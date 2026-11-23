@@ -64,17 +64,32 @@ type served struct {
 	lost   error
 	lostAt time.Time
 	live   atomic.Bool
+	// stale is a node an erase's reset did not stop (and a stop did not
+	// either): it keeps its port and store, so it is kept — the next
+	// erase resets it again, close stops it.
+	stale *node.Node
 	// discarded is the discards of the runs an erase ended, so Discards
 	// counts since the daemon started (go-fabric-ui contract 0.8.0,
 	// Counter.Value).
 	discarded uint64
 }
 
-// newNode is node.New; the daemon test swaps it to fail a come-back.
-var newNode = node.New
+// newNode is node.New; factoryReset and stopNode are the node's
+// FactoryReset and Stop. The daemon tests swap them to fail a come-back,
+// a reset or a stop.
+var (
+	newNode      = node.New
+	factoryReset = (*node.Node).FactoryReset
+	stopNode     = (*node.Node).Stop
+)
 
 // eraseTimeout bounds an erase: the reset and the come-back.
 const eraseTimeout = 30 * time.Second
+
+// eraseGrace is how long a reset under way may still run once the daemon
+// stops: four fifths of the stop budget, so close still stops the nodes
+// inside it.
+func eraseGrace() time.Duration { return stopBudget * 4 / 5 }
 
 // serve builds the owner of a node and starts its first run (start). in
 // is the node's plan input, the bridge's and the provider's; sel its
@@ -88,20 +103,37 @@ func serve(base context.Context, client *ha.Client, fan *ha.Fanout, ncfg node.Co
 	return s, nil
 }
 
-// start runs a node and its bridge in the cookbook's order (go-fabric
-// docs/guides/embed-in-a-daemon.md §6): node.New and Start, the fabrics
-// and the pairing codes to the log, the bridge on the node, its worker on
-// base, and the bridge on the connection's fan-out, which hands it
-// Connected at once when Home Assistant is up; then the switch points at
-// the node. s.mu is held, or s is not shared yet.
+// nodeRun is one node and its bridge's worker.
+type nodeRun struct {
+	n      *node.Node
+	br     *bridge.Bridge
+	cancel context.CancelFunc
+	done   chan struct{}
+}
+
+// start runs a node and its bridge (launch) and makes it s's run
+// (install). s.mu is held, or s is not shared yet.
 func (s *served) start(base context.Context) error {
+	r, err := s.launch(base)
+	if err != nil {
+		return err
+	}
+	s.install(r)
+	return nil
+}
+
+// launch runs a node and its bridge in the cookbook's order (go-fabric
+// docs/guides/embed-in-a-daemon.md §6): node.New and Start, the fabrics
+// and the pairing codes to the log, the bridge on the node and its worker
+// on base. It touches none of s's run, so it needs no lock.
+func (s *served) launch(base context.Context) (nodeRun, error) {
 	n, err := newNode(base, s.ncfg)
 	if err != nil {
-		return fmt.Errorf("node: %w", err)
+		return nodeRun{}, fmt.Errorf("node: %w", err)
 	}
 	if err := n.Start(base); err != nil {
 		_ = n.Stop(context.WithoutCancel(base))
-		return fmt.Errorf("node start: %w", err)
+		return nodeRun{}, fmt.Errorf("node start: %w", err)
 	}
 	fabrics := logFabrics(base, n, s.log)
 	logPairing(n, fabrics, s.log)
@@ -125,17 +157,23 @@ func (s *served) start(base context.Context) error {
 		defer close(done)
 		_ = br.Run(ctx)
 	}()
-	s.n, s.br, s.cancel, s.done, s.lost = n, br, cancel, done, nil
+	return nodeRun{n: n, br: br, cancel: cancel, done: done}, nil
+}
+
+// install makes r s's run: the bridge on the connection's fan-out, which
+// hands it Connected at once when Home Assistant is up; then the switch
+// points at the node. s.mu is held, or s is not shared yet.
+func (s *served) install(r nodeRun) {
+	s.n, s.br, s.cancel, s.done, s.lost = r.n, r.br, r.cancel, r.done, nil
 	s.live.Store(true)
-	s.fan.Add(br)
+	s.fan.Add(r.br)
 	// Set only after the new node started, never on a failed one
 	// (go-fabric-ui fabricui/nodeswitch.go at v0.7.1).
 	if s.sw == nil {
-		s.sw = fabricui.NewNodeSwitch(n)
+		s.sw = fabricui.NewNodeSwitch(r.n)
 	} else {
-		s.sw.Set(n)
+		s.sw.Set(r.n)
 	}
-	return nil
 }
 
 // stopRun takes the bridge off the connection and ends its worker; the
@@ -214,32 +252,77 @@ func (s *served) Warnings(ctx context.Context) []fabricui.Warning {
 // only on a started node, so no Stop before it —, it stops, its store and
 // endpoint records are erased), and a new run starts from the same
 // configuration on the erased store. Without a run — a come-back that
-// failed — it only starts. A come-back that fails leaves s without a run
-// and the switch on the stopped node; the daemon keeps running. It runs
-// detached from the request, bounded by eraseTimeout.
-func (s *served) erase(ctx context.Context) error {
+// failed — it only starts, after resetting a node an earlier reset did
+// not stop (stale). A reset that fails may leave the node running
+// (go-fabric node/factory_reset.go:51-55 at v0.25.0: "the node is not
+// stopped and keeps its store"): it is stopped before the come-back, and
+// kept as stale when that fails too. A come-back that fails leaves s
+// without a run and the switch on the stopped node; the daemon keeps
+// running. It runs detached from the request, bounded by eraseTimeout. A
+// stop of the daemon (s.base ends) does not cut the reset at once — one
+// cut between its fabrics' removal and the store's reset leaves the erase
+// half done — but gives it eraseGrace of the stop budget (decision 29 of
+// the 2026-11-23 review); a reset that fails then keeps its node as stale
+// for close, and no new run starts. s.mu is held only to take the run out
+// and to put the new one in, so a status read does not wait for the reset
+// (op serialises erase and close).
+func (s *served) erase(context.Context) error { //nolint:contextcheck // detached from the request on purpose, below
 	s.op.Lock()
 	defer s.op.Unlock()
-	if s.closed {
+	if s.closed || s.base.Err() != nil {
 		return errStopping
 	}
-	ectx, cancel := context.WithTimeout(context.WithoutCancel(ctx), eraseTimeout)
+	// Detached from the request and, for eraseGrace, from the daemon's
+	// base on purpose (contextcheck below).
+	ectx, cancel := context.WithTimeout(context.WithoutCancel(s.base), eraseTimeout)
 	defer cancel()
-	var rerr error
+	grace := eraseGrace()
+	defer context.AfterFunc(s.base, func() { //nolint:contextcheck // the daemon's stop starts the grace
+		t := time.NewTimer(grace)
+		defer t.Stop()
+		select {
+		case <-t.C:
+			cancel()
+		case <-ectx.Done():
+		}
+	})()
 	s.mu.Lock()
-	if s.n != nil {
+	n := s.n
+	if n != nil {
+		s.stopRun()
+		s.discarded += s.br.Status().Discards
+		s.n, s.br, s.cancel, s.done = nil, nil, nil, nil
+		s.live.Store(false)
+	} else {
+		n = s.stale
+	}
+	s.mu.Unlock()
+	var rerr error
+	if n != nil {
 		// Logged before the come-back, whose fabrics line (count=0) and
 		// pairing codes it explains.
 		began := time.Now()
-		s.stopRun()
 		removed := 0
-		if infos, err := s.n.FabricInfos(ectx); err == nil {
+		if infos, err := n.FabricInfos(ectx); err == nil { //nolint:contextcheck // the daemon's base, above
 			removed = len(infos)
 		}
-		s.discarded += s.br.Status().Discards
-		rerr = s.n.FactoryReset(ectx)
-		s.n, s.br, s.cancel, s.done = nil, nil, nil, nil
-		s.live.Store(false)
+		rerr = factoryReset(n, ectx) //nolint:contextcheck // the daemon's base, above
+		var stale *node.Node
+		switch {
+		case rerr != nil && s.base.Err() != nil:
+			// The daemon stops: close stops the node inside its budget.
+			stale = n
+		case rerr != nil:
+			sctx, scancel := context.WithTimeout(context.WithoutCancel(ectx), 10*time.Second)
+			err := stopNode(n, sctx) //nolint:contextcheck // the daemon's base, above
+			scancel()
+			if err != nil {
+				stale, rerr = n, errors.Join(rerr, fmt.Errorf("stop: %w", err))
+			}
+		}
+		s.mu.Lock()
+		s.stale = stale
+		s.mu.Unlock()
 		attrs := []any{slog.Int("fabrics_removed", removed), slog.Duration("elapsed", time.Since(began))}
 		if rerr != nil {
 			s.log.Warn("ha2fabric.node_erased", append(attrs, slog.String("error", rerr.Error()))...)
@@ -247,8 +330,14 @@ func (s *served) erase(ctx context.Context) error {
 			s.log.Info("ha2fabric.node_erased", attrs...)
 		}
 	}
-	serr := s.start(s.base) //nolint:contextcheck // the new run lives on the daemon's base, as the first one; the request governs only the reset
-	if serr != nil {
+	if s.base.Err() != nil {
+		return errors.Join(rerr, errStopping)
+	}
+	r, serr := s.launch(s.base) //nolint:contextcheck // the new run lives on the daemon's base, as the first one
+	s.mu.Lock()
+	if serr == nil {
+		s.install(r)
+	} else {
 		s.lost, s.lostAt = serr, time.Now()
 	}
 	s.mu.Unlock()
@@ -329,10 +418,14 @@ func logPairing(n *node.Node, fabrics int, logger *slog.Logger) {
 }
 
 // close takes the bridge off the connection, ends its worker and stops
-// the node; an erase running meanwhile ends first, and a later one
-// answers errStopping. A second call does nothing.
+// the node, and a node an erase kept (stale); an erase running meanwhile
+// ends first — its reset within eraseGrace of the daemon's stop —, and a
+// later one answers errStopping. It waits for the erase until ctx ends. A second call does
+// nothing.
 func (s *served) close(ctx context.Context) error {
-	s.op.Lock()
+	if !lockBy(ctx, &s.op) {
+		return fmt.Errorf("an erase or a delete still runs: %w", ctx.Err())
+	}
 	defer s.op.Unlock()
 	if s.closed {
 		return nil
@@ -340,11 +433,32 @@ func (s *served) close(ctx context.Context) error {
 	s.closed = true
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.n == nil {
-		return nil
+	var errs []error
+	if s.stale != nil {
+		errs = append(errs, stopNode(s.stale, ctx))
+		s.stale = nil
 	}
-	s.stopRun()
-	return s.n.Stop(ctx)
+	if s.n != nil {
+		s.stopRun()
+		errs = append(errs, stopNode(s.n, ctx))
+	}
+	return errors.Join(errs...)
+}
+
+// lockBy takes mu, or gives up when ctx ends: the stop's one deadline
+// (decision 29 of the 2026-11-23 review) also bounds the wait for an
+// operation that holds it.
+func lockBy(ctx context.Context, mu *sync.Mutex) bool {
+	t := time.NewTicker(10 * time.Millisecond)
+	defer t.Stop()
+	for !mu.TryLock() {
+		select {
+		case <-ctx.Done():
+			return false
+		case <-t.C:
+		}
+	}
+	return true
 }
 
 // member is one registry node: its record and its served node (nil when
@@ -383,9 +497,15 @@ type fleet struct {
 }
 
 // newFleet starts every node of reg on base; a node that does not start
-// is logged and listed as not enabled.
+// is logged and listed as not enabled. NODE_LIMIT bounds what the web UI
+// creates: more nodes in the registry than it allows all start, with a
+// warning.
 func newFleet(base context.Context, cfg *config.Config, client *ha.Client, fan *ha.Fanout, reg *nodes.Registry, log *slog.Logger) *fleet {
 	f := &fleet{base: base, cfg: cfg, client: client, fan: fan, reg: reg, log: log}
+	if n := reg.Len(); n > cfg.NodeLimit {
+		log.Warn("ha2fabric.node_limit", slog.Int("nodes", n), slog.Int("limit", cfg.NodeLimit),
+			slog.String("hint", "nodes.json holds more nodes than NODE_LIMIT allows; all of them start, and the web UI creates no more until enough are deleted"))
+	}
 	for _, rec := range reg.Nodes() {
 		s, err := f.start(&rec)
 		if err != nil {
@@ -660,21 +780,29 @@ func leave(ctx context.Context, n *node.Node, log *slog.Logger) int {
 	return removed
 }
 
-// Close stops every registry node; Create, Rename and Delete fail after
-// it.
+// Close stops every registry node, in parallel, until ctx ends; Create,
+// Rename and Delete fail after it. A Create, Rename or Delete still
+// running when ctx ends is not waited for further.
 func (f *fleet) Close(ctx context.Context) {
-	f.op.Lock()
+	if !lockBy(ctx, &f.op) {
+		f.log.Warn("ha2fabric.node_stop", slog.String("error", "a create, rename or delete still runs: "+ctx.Err().Error()))
+		return
+	}
 	defer f.op.Unlock()
 	f.closed = true
 	f.mu.RLock()
 	members := slices.Clone(f.members)
 	f.mu.RUnlock()
+	var wg sync.WaitGroup
 	for _, m := range members {
 		if m.s == nil {
 			continue
 		}
-		if err := m.s.close(ctx); err != nil {
-			f.log.Warn("ha2fabric.node_stop", slog.String("node", m.rec.Key), slog.String("error", err.Error()))
-		}
+		wg.Go(func() {
+			if err := m.s.close(ctx); err != nil {
+				f.log.Warn("ha2fabric.node_stop", slog.String("node", m.rec.Key), slog.String("error", err.Error()))
+			}
+		})
 	}
+	wg.Wait()
 }

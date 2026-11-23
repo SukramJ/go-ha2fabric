@@ -14,9 +14,10 @@ var quietLog = slog.New(slog.DiscardHandler)
 
 // FuzzOpen holds Open against any content of the overrides file: it never
 // panics and never fails on content (only on the file system); a file that
-// does not parse is moved aside and the store starts empty, a file that
-// parses keeps its entries, and what Open read writes back and reads
-// again as the same entries.
+// does not parse is moved aside and the store starts empty (there is no
+// last-good copy), a file that parses — of any version — keeps its
+// entries with an entity id for a key, and what Open read writes back and
+// reads again, as this version, as the same entries.
 func FuzzOpen(f *testing.F) {
 	for _, s := range []string{
 		`{"version":1,"entities":{"light.a":{"enabled":true,"name":"Lamp"},"switch.b":{"enabled":false}}}`,
@@ -34,14 +35,19 @@ func FuzzOpen(f *testing.F) {
 		if err != nil {
 			t.Fatalf("Open: %v", err)
 		}
-		if r, ok := s.Recovered(); ok {
-			if len(s.Entries()) != 0 {
+		if r, ok := s.Recovered(); ok && r.MovedTo != "" {
+			if r.Restored == "" && len(s.Entries()) != 0 {
 				t.Fatalf("recovered %+v with entries", r)
 			}
 			if _, err := os.Stat(r.MovedTo); err != nil {
 				t.Fatalf("moved aside to %s: %v", r.MovedTo, err)
 			}
 			return
+		}
+		for id, e := range s.Entries() {
+			if !EntityID(id) || len(e.Name) > MaxName {
+				t.Fatalf("entry %q %+v", id, e)
+			}
 		}
 		want := s.Entries()
 		if err := s.Set(nil, nil); err != nil {

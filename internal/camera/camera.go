@@ -86,10 +86,14 @@ var (
 	ErrNotJPEG = errors.New("camera: the still is not a JPEG")
 	// ErrClosed is an offer to a host that was closed.
 	ErrClosed = errors.New("camera: the host is closed")
-	// ErrTooManyCandidates refuses a ProvideICECandidates call that would
-	// queue more than MaxPendingCandidates before Home Assistant named
-	// its session; it travels with RESOURCE_EXHAUSTED.
-	ErrTooManyCandidates = errors.New("camera: too many ICE candidates before Home Assistant's session")
+	// ErrTooManyCandidates refuses a ProvideICECandidates call of more
+	// than MaxPendingCandidates, one that would queue more than that
+	// before Home Assistant named its session, or one beyond the
+	// session's MaxSessionCandidates; it travels with RESOURCE_EXHAUSTED.
+	ErrTooManyCandidates = errors.New("camera: too many ICE candidates")
+	// ErrTooManySessions refuses an offer beyond MaxSessions while no
+	// session is idle; it travels with RESOURCE_EXHAUSTED.
+	ErrTooManySessions = errors.New("camera: too many WebRTC sessions of the camera")
 )
 
 // MaxPendingCandidates bounds the controller's ICE candidates a session
@@ -104,6 +108,41 @@ var (
 // answered. After Home Assistant's session event candidates pass through
 // unqueued.
 const MaxPendingCandidates = 64
+
+// MaxSessionCandidates bounds the controller's ICE candidates of one
+// session, queued or sent; MaxPendingCandidates also bounds one call
+// after Home Assistant's session event. Each candidate is one
+// camera/webrtc/candidate command, and the kit holds its command lock for
+// the whole call, so an unbounded list would hold the camera's other
+// commands. MaxPendingCandidates' reasoning — a few dozen per gathering —
+// holds for the whole session; four gatherings' worth allows for ICE
+// restarts.
+const MaxSessionCandidates = 256
+
+// MaxSessions bounds a camera's WebRTC sessions. Each is a session of
+// Home Assistant's WebRTC provider (a go2rtc consumer, a peer connection)
+// and a relay here; go-fabric's kit bounds only the id space (65 535).
+// A controller ecosystem opens one live view per viewer, and eight
+// viewers of one camera is beyond any household. At the bound the
+// session idle longest makes room when it has been idle for EvictIdle
+// (a controller that went away never ends its session); otherwise the
+// offer is refused with RESOURCE_EXHAUSTED before Home Assistant is
+// asked.
+const MaxSessions = 8
+
+// Defaults of [Options].
+const (
+	// DefaultIdleTimeout ends a session without signalling for an hour:
+	// once the peer connection stands, a live view signals nothing, so
+	// the bound is long; it ends what a controller left behind.
+	DefaultIdleTimeout = time.Hour
+	// DefaultEvictIdle is a minute: far beyond a session's signalling
+	// phase, so a session being set up is never evicted.
+	DefaultEvictIdle = time.Minute
+	// StillReuse is how long a camera proxy still is handed to a further
+	// snapshot of the same size instead of a new request.
+	StillReuse = time.Second
+)
 
 // Stream is one camera/webrtc/offer subscription (*ha.Subscription).
 type Stream interface {
@@ -163,6 +202,12 @@ type Options struct {
 	// SignalTimeout bounds one signal and one Home Assistant command; 0
 	// is 10 s.
 	SignalTimeout time.Duration
+	// IdleTimeout ends a session without a controller command or a Home
+	// Assistant event for so long; 0 is DefaultIdleTimeout.
+	IdleTimeout time.Duration
+	// EvictIdle is how long a session must have been idle to make room
+	// for a new offer at MaxSessions; 0 is DefaultEvictIdle.
+	EvictIdle time.Duration
 }
 
 // Host serves one camera entity's ports. Its methods are safe for
@@ -182,6 +227,9 @@ type Host struct {
 	sig      Signaller
 	sessions map[uint16]*session
 	closed   bool
+	// still is the latest camera proxy request, shared by the snapshots
+	// that arrive while it runs and reused for StillReuse.
+	still *still
 }
 
 // session is one WebRTC session: the controller's id and Home Assistant's.
@@ -193,6 +241,24 @@ type session struct {
 	// MaxPendingCandidates.
 	haID    string
 	pending []ha.ICECandidate
+	// sent counts the controller's candidates, queued or sent, against
+	// MaxSessionCandidates.
+	sent int
+	// last is the time of the last controller command or Home Assistant
+	// event; idle ends the session IdleTimeout after it.
+	last time.Time
+	idle *time.Timer
+}
+
+// still is one camera proxy request; its fields are set before done
+// closes.
+type still struct {
+	w, h int
+	done chan struct{}
+	at   time.Time
+	data []byte
+	ct   string
+	err  error
 }
 
 // dryHost stands in for a camera's host in a plan without a node: it has
@@ -225,6 +291,12 @@ func New(entityID string, up Upstream, opts Options) *Host {
 	}
 	if opts.SignalTimeout <= 0 {
 		opts.SignalTimeout = 10 * time.Second
+	}
+	if opts.IdleTimeout <= 0 {
+		opts.IdleTimeout = DefaultIdleTimeout
+	}
+	if opts.EvictIdle <= 0 {
+		opts.EvictIdle = DefaultEvictIdle
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Host{
@@ -259,6 +331,7 @@ func (h *Host) Attach(s Signaller) {
 	}
 	h.mu.Unlock()
 	for _, ss := range stale {
+		ss.stopIdle()
 		h.unsubscribe(h.ctx, ss)
 	}
 }
@@ -297,6 +370,7 @@ func (h *Host) Close(ctx context.Context) {
 	}
 	h.mu.Unlock()
 	for _, ss := range all {
+		ss.stopIdle()
 		h.unsubscribe(ctx, ss)
 		if sig != nil {
 			ectx, cancel := context.WithTimeout(context.WithoutCancel(ctx), h.opts.SignalTimeout)
@@ -324,31 +398,63 @@ func (h *Host) ProvideAnswer(context.Context, uint16, string) error { return Err
 // ProvideOffer implements wpdef.ProviderPort: the controller's offer goes
 // to camera/webrtc/offer, and the session the kit stores is returned. A
 // re-offer of a session the host holds replaces its Home Assistant
-// session.
+// session; when the new one fails, the session ends (the controller is
+// told, which takes it out of CurrentSessions). A new session beyond
+// MaxSessions evicts the one idle longest, or is refused.
 func (h *Host) ProvideOffer(ctx context.Context, args wpdef.OfferArgs) (wpdef.WebRTCSessionStruct, error) {
 	h.mu.Lock()
-	closed := h.closed
-	old := h.sessions[args.SessionID]
-	delete(h.sessions, args.SessionID)
-	h.mu.Unlock()
-	if closed {
+	if h.closed {
+		h.mu.Unlock()
 		return wpdef.WebRTCSessionStruct{}, ErrClosed
 	}
+	old := h.sessions[args.SessionID]
+	delete(h.sessions, args.SessionID)
+	var victim *session
+	if old == nil && len(h.sessions) >= MaxSessions {
+		victim = h.idlest()
+		if victim == nil {
+			n := len(h.sessions)
+			h.mu.Unlock()
+			return wpdef.WebRTCSessionStruct{}, fmt.Errorf("%w: %d held, session %d: %w", ErrTooManySessions, n, args.SessionID,
+				contract.StatusError{Status: contract.StatusResourceExhausted, Message: ErrTooManySessions.Error()})
+		}
+		delete(h.sessions, victim.id)
+		h.wg.Add(1)
+	}
+	h.mu.Unlock()
+	if victim != nil {
+		h.log.Info("camera.session_evicted", slog.Int("session", int(victim.id)), slog.Int("for", int(args.SessionID)))
+		victim.stopIdle()
+		h.unsubscribe(ctx, victim)
+		// The controller that left it may be gone: its End must not hold
+		// the new offer.
+		go func() {
+			defer h.wg.Done()
+			h.tell(h.ctx, victim.id, ReasonUnknown) //nolint:contextcheck // outlives the request, bounded by the host
+		}()
+	}
 	if old != nil {
+		old.stopIdle()
 		h.unsubscribe(ctx, old)
 	}
 	stream, err := h.up.Subscribe(ctx, h.entity, args.Sdp)
 	if err != nil {
 		h.log.Warn("camera.offer_failed", slog.Int("session", int(args.SessionID)), slog.String("error", err.Error()))
+		if old != nil {
+			// The kit keeps a session whose re-offer failed; its stream is
+			// gone, so end it.
+			h.tell(ctx, args.SessionID, ReasonICEFailed)
+		}
 		return wpdef.WebRTCSessionStruct{}, err
 	}
-	ss := &session{id: args.SessionID, stream: stream}
+	ss := &session{id: args.SessionID, stream: stream, last: time.Now()}
 	h.mu.Lock()
 	if h.closed {
 		h.mu.Unlock()
 		h.unsubscribe(ctx, ss)
 		return wpdef.WebRTCSessionStruct{}, ErrClosed
 	}
+	ss.idle = time.AfterFunc(h.opts.IdleTimeout, func() { h.expire(ss) })
 	h.sessions[ss.id] = ss
 	h.wg.Add(1)
 	h.mu.Unlock()
@@ -366,6 +472,47 @@ func (h *Host) ProvideOffer(ctx context.Context, args wpdef.OfferArgs) (wpdef.We
 	return out, nil
 }
 
+// idlest is the session idle longest when it has been idle for
+// EvictIdle, else nil. h.mu is held.
+func (h *Host) idlest() *session {
+	var out *session
+	for _, ss := range h.sessions {
+		if out == nil || ss.last.Before(out.last) {
+			out = ss
+		}
+	}
+	if out == nil || time.Since(out.last) < h.opts.EvictIdle {
+		return nil
+	}
+	return out
+}
+
+// touch records activity on ss and pushes its idle end back.
+func (h *Host) touch(ss *session) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	ss.last = time.Now()
+	if ss.idle != nil {
+		ss.idle.Reset(h.opts.IdleTimeout)
+	}
+}
+
+// expire ends ss after IdleTimeout without activity.
+func (h *Host) expire(ss *session) {
+	if !h.own(ss) {
+		return
+	}
+	h.log.Info("camera.session_idle", slog.Int("session", int(ss.id)), slog.Duration("idle", h.opts.IdleTimeout))
+	h.end(h.ctx, ss, ReasonUnknown)
+}
+
+// stopIdle stops the session's idle end.
+func (ss *session) stopIdle() {
+	if ss.idle != nil {
+		ss.idle.Stop()
+	}
+}
+
 // streams is the session's stream list: the first stream of the
 // validated list, the nominal stream when the list is empty, none when
 // the offer named no stream of the kind.
@@ -381,8 +528,9 @@ func streams(l *[]uint16) *[]uint16 {
 
 // ProvideIceCandidates implements wpdef.ProviderPort: each candidate goes
 // to camera/webrtc/candidate with Home Assistant's session id; before
-// Home Assistant named it, the candidates wait, at most
-// MaxPendingCandidates (a call beyond is refused whole).
+// Home Assistant named it, the candidates wait. A call carries at most
+// MaxPendingCandidates, the queue holds at most as many, and a session
+// takes at most MaxSessionCandidates; a call beyond is refused whole.
 func (h *Host) ProvideIceCandidates(ctx context.Context, sessionID uint16, candidates []wpdef.ICECandidateStruct) error {
 	h.mu.Lock()
 	ss := h.sessions[sessionID]
@@ -390,18 +538,32 @@ func (h *Host) ProvideIceCandidates(ctx context.Context, sessionID uint16, candi
 		h.mu.Unlock()
 		return fmt.Errorf("%w: %d", gfcamera.ErrUnknownSession, sessionID)
 	}
+	refuse := func(what string, n int) error {
+		return fmt.Errorf("%w: %s %d, %d more, session %d: %w", ErrTooManyCandidates, what, n, len(candidates), sessionID,
+			contract.StatusError{Status: contract.StatusResourceExhausted, Message: ErrTooManyCandidates.Error()})
+	}
+	switch {
+	case len(candidates) > MaxPendingCandidates:
+		h.mu.Unlock()
+		return refuse("call of at most", MaxPendingCandidates)
+	case ss.sent+len(candidates) > MaxSessionCandidates:
+		sent := ss.sent
+		h.mu.Unlock()
+		return refuse("session holds", sent)
+	case ss.haID == "" && len(ss.pending)+len(candidates) > MaxPendingCandidates:
+		queued := len(ss.pending)
+		h.mu.Unlock()
+		return refuse("queued", queued)
+	}
+	ss.sent += len(candidates)
+	ss.last = time.Now()
+	ss.idle.Reset(h.opts.IdleTimeout)
 	out := make([]ha.ICECandidate, len(candidates))
 	for i, c := range candidates {
 		out[i] = toHA(c)
 	}
 	haID := ss.haID
 	if haID == "" {
-		if len(ss.pending)+len(out) > MaxPendingCandidates {
-			queued := len(ss.pending)
-			h.mu.Unlock()
-			return fmt.Errorf("%w: %d queued, %d more, session %d: %w", ErrTooManyCandidates, queued, len(out), sessionID,
-				contract.StatusError{Status: contract.StatusResourceExhausted, Message: ErrTooManyCandidates.Error()})
-		}
 		ss.pending = append(ss.pending, out...)
 		h.mu.Unlock()
 		return nil
@@ -423,6 +585,7 @@ func (h *Host) EndSession(ctx context.Context, sessionID uint16, reason uint8) e
 	delete(h.sessions, sessionID)
 	h.mu.Unlock()
 	if ss != nil {
+		ss.stopIdle()
 		h.log.Info("camera.session_ended", slog.Int("session", int(sessionID)), slog.Int("reason", int(reason)))
 		h.unsubscribe(ctx, ss)
 	}
@@ -486,6 +649,7 @@ func (h *Host) relay(ctx context.Context, ss *session) {
 			h.log.Warn("camera.event_refused", slog.Int("session", int(ss.id)), slog.String("error", err.Error()))
 			continue
 		}
+		h.touch(ss)
 		if !h.event(ctx, ss, ev) {
 			return
 		}
@@ -516,6 +680,13 @@ func (h *Host) event(ctx context.Context, ss *session, ev ha.WebRTCEvent) bool {
 			}
 		}
 	case ha.WebRTCAnswer:
+		if ev.Answer == "" {
+			// No SDP to relay: the session cannot stand, as after Home
+			// Assistant's error.
+			h.log.Warn("camera.answer_empty", slog.Int("session", int(ss.id)))
+			h.end(ctx, ss, ReasonICEFailed)
+			return false
+		}
 		return h.signal(ctx, ss, "Answer", func(ctx context.Context, s Signaller) error { return s.Answer(ctx, ss.id, ev.Answer) })
 	case ha.WebRTCCandidate:
 		if ev.Candidate == nil || ev.Candidate.Candidate == "" {
@@ -600,6 +771,13 @@ func (h *Host) end(ctx context.Context, ss *session, reason uint8) {
 	if !h.drop(ctx, ss) {
 		return
 	}
+	h.tell(ctx, ss.id, reason)
+}
+
+// tell sends the controller End for the session of id, also when ctx has
+// ended, bounded by SignalTimeout; the kit takes the session out of
+// CurrentSessions whether or not the command arrives.
+func (h *Host) tell(ctx context.Context, id uint16, reason uint8) {
 	h.mu.Lock()
 	s := h.sig
 	h.mu.Unlock()
@@ -608,8 +786,8 @@ func (h *Host) end(ctx context.Context, ss *session, reason uint8) {
 	}
 	ectx, cancel := context.WithTimeout(context.WithoutCancel(ctx), h.opts.SignalTimeout)
 	defer cancel()
-	if err := s.End(ectx, ss.id, reason); err != nil {
-		h.log.Debug("camera.end", slog.Int("session", int(ss.id)), slog.String("error", err.Error()))
+	if err := s.End(ectx, id, reason); err != nil {
+		h.log.Debug("camera.end", slog.Int("session", int(id)), slog.String("error", err.Error()))
 	}
 }
 
@@ -623,6 +801,7 @@ func (h *Host) drop(ctx context.Context, ss *session) bool {
 	}
 	h.mu.Unlock()
 	if ours {
+		ss.stopIdle()
 		h.unsubscribe(ctx, ss)
 	}
 	return ours
@@ -674,9 +853,12 @@ func nominal(id uint16) error {
 
 // CaptureSnapshot implements csdef.SnapshotCapturePort: Home Assistant's
 // camera proxy still at the requested resolution, which Home Assistant
-// scales down only; the response names the size the JPEG has.
+// scales down only; the response names the size the JPEG has. One
+// request runs per camera at a time; a snapshot of the size it asks
+// shares its result, and a still younger than StillReuse is reused
+// (HR-P1-bound-17).
 func (h *Host) CaptureSnapshot(ctx context.Context, _ *uint16, res csdef.VideoResolutionStruct) (csdef.CaptureSnapshotResponse, error) {
-	data, ct, err := h.up.Image(ctx, h.entity, int(res.Width), int(res.Height))
+	data, ct, err := h.image(ctx, int(res.Width), int(res.Height))
 	if err != nil {
 		h.log.Warn("camera.snapshot_failed", slog.String("error", err.Error()))
 		return csdef.CaptureSnapshotResponse{}, err
@@ -695,6 +877,51 @@ func (h *Host) CaptureSnapshot(ctx context.Context, _ *uint16, res csdef.VideoRe
 		Data: data, ImageCodec: csdef.ImageCodecJpeg,
 		Resolution: csdef.VideoResolutionStruct{Width: uint16(cfg.Width), Height: uint16(cfg.Height)},
 	}, nil
+}
+
+// image is the camera proxy's still of w×ht through the host's one
+// request (Host.still). The request runs on the host's context, bounded
+// by the upstream's own timeout, so a caller that gives up does not fail
+// the others; each caller waits on its own ctx.
+func (h *Host) image(ctx context.Context, w, ht int) (data []byte, contentType string, err error) {
+	for {
+		h.mu.Lock()
+		st := h.still
+		if st != nil {
+			select {
+			case <-st.done:
+				if st.w == w && st.h == ht && st.err == nil && time.Since(st.at) < StillReuse {
+					h.mu.Unlock()
+					return st.data, st.ct, nil
+				}
+			default:
+				h.mu.Unlock()
+				select {
+				case <-st.done:
+				case <-ctx.Done():
+					return nil, "", ctx.Err()
+				}
+				if st.w == w && st.h == ht {
+					return st.data, st.ct, st.err
+				}
+				continue
+			}
+		}
+		if h.closed {
+			h.mu.Unlock()
+			return nil, "", ErrClosed
+		}
+		st = &still{w: w, h: ht, done: make(chan struct{})}
+		h.still = st
+		h.wg.Add(1)
+		h.mu.Unlock()
+		go func() {
+			defer h.wg.Done()
+			st.data, st.ct, st.err = h.up.Image(h.ctx, h.entity, w, ht) //nolint:contextcheck // shared by every waiting snapshot; the host bounds it
+			st.at = time.Now()
+			close(st.done)
+		}()
+	}
 }
 
 // The host serves every port of the camera row.

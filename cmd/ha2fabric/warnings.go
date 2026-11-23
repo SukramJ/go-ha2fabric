@@ -23,6 +23,10 @@ const (
 	// warningPasscodeNotKept: PASSCODE is unset and passcode.json could
 	// not be read or written; the passcode is this start's only.
 	warningPasscodeNotKept = "passcode_not_kept"
+	// warningTokenRefused: Home Assistant answered the access token with
+	// auth_invalid; the client retries after minutes, then hourly
+	// (decision 28 of the 2026-11-23 review).
+	warningTokenRefused = "ha_token_refused"
 )
 
 // startWarnings are what the configuration holds that the daemon accepts

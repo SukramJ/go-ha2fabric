@@ -39,6 +39,13 @@ type Rule struct {
 	// Overrides are the web UI's per-entity choices, by entity id: true
 	// exposes, false hides, absent leaves the entity to the lists.
 	Overrides map[string]bool
+	// LabelIDs are the label ids the label values resolved to before, by
+	// value ([Rule.Resolutions] of an earlier registry; the bridge keeps
+	// them from sync to sync). A value that names no label now follows
+	// its id while a label with that id exists: Home Assistant keeps a
+	// label's label_id when it is renamed, so a rename neither lifts an
+	// exclusion nor drops an inclusion configured by the label's name.
+	LabelIDs map[string]string
 }
 
 // Entity is what the rule reads about one entity.
@@ -115,20 +122,71 @@ func (r Rule) Validate() error {
 	return nil
 }
 
-// Unresolved are the rule's label values that name no label of l: a
-// warning for the operator, not an error (a label may be created later).
-func (r Rule) Unresolved(l Labels) []string {
+// resolve is the label id value names in l ([Labels.Resolve]), else the
+// id it resolved to before ([Rule.LabelIDs]) while l still has that
+// label; followed says the second.
+func (r Rule) resolve(value string, l Labels) (id string, known, followed bool) {
+	if id, known = l.Resolve(value); known {
+		return id, true, false
+	}
+	if prev, ok := r.LabelIDs[strings.TrimSpace(value)]; ok {
+		if _, live := l[prev]; live {
+			return prev, true, true
+		}
+	}
+	return id, false, false
+}
+
+// values are the rule's non-empty label values, includes first.
+func (r Rule) values() []string {
 	var out []string
 	for _, v := range append(append([]string(nil), r.IncludeLabels...), r.ExcludeLabels...) {
-		if strings.TrimSpace(v) == "" {
-			continue
-		}
-		if _, ok := l.Resolve(v); !ok {
+		if strings.TrimSpace(v) != "" {
 			out = append(out, v)
 		}
 	}
 	return out
 }
+
+// Unresolved are the rule's label values that name no label of l and
+// follow no earlier one ([Rule.LabelIDs]): a warning for the operator,
+// not an error (a label may be created later).
+func (r Rule) Unresolved(l Labels) []string {
+	var out []string
+	for _, v := range r.values() {
+		if _, ok, _ := r.resolve(v, l); !ok {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
+// Followed are the rule's label values that name no label of l now and
+// follow the label id they named before, by value: a renamed label.
+func (r Rule) Followed(l Labels) map[string]string {
+	out := map[string]string{}
+	for _, v := range r.values() {
+		if id, _, followed := r.resolve(v, l); followed {
+			out[v] = id
+		}
+	}
+	return out
+}
+
+// Resolutions are the label ids the rule's label values resolve to in l,
+// by trimmed value, followed ones included: the next [Rule.LabelIDs].
+func (r Rule) Resolutions(l Labels) map[string]string {
+	out := map[string]string{}
+	for _, v := range r.values() {
+		if id, ok, _ := r.resolve(v, l); ok {
+			out[strings.TrimSpace(v)] = id
+		}
+	}
+	return out
+}
+
+// Excludes says whether value is one of the rule's exclude labels.
+func (r Rule) Excludes(value string) bool { return slices.Contains(r.ExcludeLabels, value) }
 
 // Decide applies the rule to one entity: disabled, hidden, the override,
 // exclude (ids, globs, labels), include (ids, globs, labels), Assist.
@@ -148,13 +206,13 @@ func (r Rule) Decide(e Entity, l Labels) Decision {
 	if p, ok := match(r.Exclude, e.EntityID); ok {
 		return Decision{Reason: "excluded by " + p, Source: SourceExclude}
 	}
-	if id, ok := label(r.ExcludeLabels, e.Labels, l); ok {
+	if id, ok := r.label(r.ExcludeLabels, e.Labels, l); ok {
 		return Decision{Reason: "excluded by label '" + l.name(id) + "'", Source: SourceExclude}
 	}
 	if p, ok := match(r.Include, e.EntityID); ok {
 		return Decision{Exposed: true, Reason: "included by " + p, Source: SourceInclude}
 	}
-	if id, ok := label(r.IncludeLabels, e.Labels, l); ok {
+	if id, ok := r.label(r.IncludeLabels, e.Labels, l); ok {
 		return Decision{Exposed: true, Reason: "included by label '" + l.name(id) + "'", Source: SourceLabel}
 	}
 	if r.Assist && e.ExposedToAssist {
@@ -167,12 +225,12 @@ func (r Rule) Decide(e Entity, l Labels) Decision {
 }
 
 // label is the first configured value whose label the entity carries.
-func label(values, carried []string, l Labels) (string, bool) {
+func (r Rule) label(values, carried []string, l Labels) (string, bool) {
 	for _, v := range values {
 		if strings.TrimSpace(v) == "" {
 			continue
 		}
-		if id, _ := l.Resolve(v); slices.Contains(carried, id) {
+		if id, _, _ := r.resolve(v, l); slices.Contains(carried, id) {
 			return id, true
 		}
 	}
