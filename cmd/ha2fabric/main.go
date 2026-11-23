@@ -146,15 +146,14 @@ func run(ctx context.Context, args []string, env config.Env, stdout, stderr io.W
 	}
 	webErr := make(chan error, 1)
 	if cfg.WebListen != "" {
-		ws, err := web.New(web.Options{Listen: cfg.WebListen, Allow: cfg.WebAllow, Logger: logger, UI: fabricui.Options{
-			Node: def.sw, Exposure: def.prov, Admin: admin(cfg, gate), Reassemble: def.Resync, Events: def.events, Warnings: warnings(def, fl, hostWarnings(startup, gate, client.TokenRefused)), Counters: counters(def, fl), Erase: def.erase, Logger: logger,
+		ws, err := web.New(webOptions(cfg, gate, logger, fabricui.Options{
+			Node: def.sw, Exposure: def.prov, Reassemble: def.Resync, Events: def.events, Warnings: warnings(def, fl, hostWarnings(startup, gate, client.TokenRefused)), Counters: counters(def, fl), Erase: def.erase, Logger: logger,
 			Operations: web.NewOperations(ring, version.Version, started),
 			Registry:   fl, NodeConfig: nodeConfig(cfg),
-			AllowedHosts: cfg.WebAllowedHosts, AllowHost: allowHost(cfg),
 			// The streams end when the daemon stops, before the server's
 			// shutdown waits for its connections.
 			Done: rctx.Done(),
-		}})
+		}))
 		if err != nil {
 			webErr <- err
 		} else {
@@ -244,6 +243,17 @@ func nodeConfig(cfg *config.Config) *fabricui.NodeConfigView {
 		ProductID: cfg.ProductID, ProductName: config.ProductName,
 		Store: cfg.StorePath,
 	}
+}
+
+// webOptions is the web server's options: ui with who may do what set
+// from the configuration — the client filter (WEB_ALLOW), the
+// administrator check (admin) and the Host check (WEB_ALLOWED_HOSTS,
+// allowHost). run and the admin table's test (TestAdminTable) build the
+// server through it.
+func webOptions(cfg *config.Config, gate *supervisorGate, logger *slog.Logger, ui fabricui.Options) web.Options {
+	ui.Admin = admin(cfg, gate)
+	ui.AllowedHosts, ui.AllowHost = cfg.WebAllowedHosts, allowHost(cfg)
+	return web.Options{Listen: cfg.WebListen, Allow: cfg.WebAllow, Logger: logger, UI: ui}
 }
 
 // admin is the web UI's administrator check. In the add-on: a request of
