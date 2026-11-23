@@ -129,8 +129,9 @@ type Config struct {
 	// open the window, remove a fabric) and show the pairing code, with
 	// the UI's per-process token against cross-site requests. Default
 	// false: the stand-alone UI serves the status page only (go-fabric-ui
-	// v0.10's administrator reading routes). The add-on ignores it: the
-	// Ingress proxy is the administrator there.
+	// v0.10's administrator reading routes). The add-on ignores it: there
+	// a Home Assistant administrator, through Ingress, is the web UI's
+	// administrator (cmd/ha2fabric admin).
 	WebAdmin bool
 
 	// Camera maps camera entities onto go-fabric's Camera device type and

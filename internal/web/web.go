@@ -135,10 +135,9 @@ func (s *Server) Run(ctx context.Context) error {
 }
 
 // From is a predicate that admits a request whose client address is ip:
-// the add-on's Host check admits the Ingress proxy by it. It says who sent
-// the request, not who the user is: the proxy forwards every Home
-// Assistant user's request, so it is no administrator check by itself
-// ([IngressAdmin] is).
+// the add-on's Host check admits the Ingress proxy by it. The proxy's
+// address says who sent the request, not who the user is; the add-on's
+// administrator check is [IngressAdmin].
 func From(ip string) func(*http.Request) bool {
 	want := net.ParseIP(ip)
 	return func(r *http.Request) bool {
@@ -149,10 +148,9 @@ func From(ip string) func(*http.Request) bool {
 }
 
 // Ingress user headers: the Supervisor sets the Home Assistant user's
-// groups on every request it forwards through Ingress, comma-separated,
-// and drops a value the browser sent (supervisor/api/ingress.py:47-64,
-// :412-419, const.py:115, :625, :653-659 at fe91b8db; from Supervisor
-// 2026.10.4).
+// groups on every request it forwards through Ingress, comma-separated
+// (supervisor/api/ingress.py:412-419, const.py:115, :625, :653-659 at
+// fe91b8db; from Supervisor 2026.10.4).
 const (
 	UserGroupsHeader = "X-Remote-User-Groups"
 	AdminGroup       = "system-admin"
@@ -161,9 +159,9 @@ const (
 // IngressAdmin is the add-on's Admin: a request from the Ingress proxy at
 // proxy whose user is a Home Assistant administrator — UserGroupsHeader
 // lists AdminGroup (an owner's groups include it). Without the header the
-// request is no administrator's. The header is trustworthy only on a
-// Supervisor that strips the browser's own value (2026.10.4 and later),
-// which the daemon checks before it uses this predicate.
+// request is no administrator's. The daemon applies it on a Supervisor of
+// 2026.10.4 or later, which it reads at start (cmd/ha2fabric
+// supervisorGate).
 func IngressAdmin(proxy string) func(*http.Request) bool {
 	from := From(proxy)
 	return func(r *http.Request) bool {

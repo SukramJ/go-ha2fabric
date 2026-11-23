@@ -178,8 +178,8 @@ func TestRun(t *testing.T) {
 }
 
 // TestIngressAdmin: the add-on's administrator is a request of the
-// Ingress proxy whose user's groups hold system-admin; the proxy's
-// address alone is not enough.
+// Ingress proxy whose user's groups hold system-admin; any other request
+// is not.
 func TestIngressAdmin(t *testing.T) {
 	a := IngressAdmin("172.30.32.2")
 	for _, c := range []struct {

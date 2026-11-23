@@ -228,11 +228,10 @@ func nodeConfig(cfg *config.Config) *fabricui.NodeConfigView {
 
 // admin is the web UI's administrator check. In the add-on: a request of
 // the Ingress proxy whose Home Assistant user is an administrator
-// (web.IngressAdmin: the user's groups, which the Supervisor sets), and
-// only once gate knows the Supervisor sets them (minSupervisor); the
-// proxy forwards every user's request, so its address alone decides
-// nothing. Stand-alone the status page only unless WEB_ADMIN, which
-// selects the UI's token mode (nil).
+// (web.IngressAdmin: the user's groups, which the Supervisor sets), once
+// gate has read a Supervisor of minSupervisor or later. Stand-alone the
+// status page only unless WEB_ADMIN, which selects the UI's token mode
+// (nil).
 func admin(cfg *config.Config, gate *supervisorGate) func(*http.Request) bool {
 	switch {
 	case cfg.Addon:

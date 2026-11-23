@@ -343,15 +343,15 @@ but the status: the selection, fabrics, endpoints, diagnostics, pairing
 with its code and the Operation page — is in the add-on a Home Assistant
 administrator: a request of the Ingress proxy (`172.30.32.2`) whose
 `X-Remote-User-Groups`, which the Supervisor sets from the Home Assistant
-user and strips from the browser's request, lists `system-admin` (an
-owner's groups include it). The proxy forwards every user's request, so
-its address alone decides nothing; without the header the request is
-not an administrator's. The Supervisor sets that header from 2026.10.4: the
-add-on reads the Supervisor's version at start (`GET
-http://supervisor/info` with `SUPERVISOR_TOKEN`, `ha2fabric.supervisor`
-in the log) and, below 2026.10.4 or until it has read it, has no
-administrator — the status page only, with the warning
-`supervisor_too_old` or `supervisor_unknown`. The manifest sets
+user, lists `system-admin` (an owner's groups include it); without the
+header the request is not an administrator's. The check needs Supervisor
+2026.10.4 or later: the add-on reads the Supervisor's version at start
+(`GET http://supervisor/info` with `SUPERVISOR_TOKEN`,
+`ha2fabric.supervisor` in the log) and, below 2026.10.4 or until it has
+read it, has no administrator — the status page only, with the warning
+`supervisor_too_old` or `supervisor_unknown`; while it is below, it reads
+the version again every 10 minutes and gets its administrator once the
+Supervisor is updated. The manifest sets
 `panel_admin: true`, so the panel is an administrator's as well.
 Stand-alone nobody, unless `WEB_ADMIN=true`, which selects the UI's token
 mode (every request carries a per-process token the page reads from

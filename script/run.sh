@@ -71,7 +71,8 @@ export MDNS_INTERFACES
 
 # --- Web UI through Ingress ---
 # On the host's network: listen on ingress_port and serve only the Ingress
-# proxy (172.30.32.2), which is also the web UI's administrator.
+# proxy (172.30.32.2); the daemon's administrator there is a Home Assistant
+# administrator (docs/operations.md, The web UI).
 export WEB_LISTEN="0.0.0.0:8486"
 export WEB_ALLOW="172.30.32.2"
 

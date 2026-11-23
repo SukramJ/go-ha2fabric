@@ -25,11 +25,11 @@ import (
 // api/root.py:40-44, at fe91b8db).
 const supervisorInfoURL = "http://supervisor/info"
 
-// minSupervisor is the first Supervisor version that sets the Ingress
-// user's groups (web.UserGroupsHeader) and drops a value the browser
-// sent: 2026.10.4 (Supervisor commit 3fbb083b; the header constant is in
-// supervisor/api/ingress.py from that tag on). Before it the header
-// cannot tell an administrator.
+// minSupervisor is the minimum Supervisor version of the admin check,
+// which reads the Ingress user's groups (web.UserGroupsHeader): 2026.10.4
+// (Supervisor commit 3fbb083b; the header constant is in
+// supervisor/api/ingress.py from that tag on). Below it the add-on's web
+// UI has no administrator.
 var minSupervisor = [3]int{2026, 10, 4}
 
 // minSupervisorText is minSupervisor as the messages name it.
