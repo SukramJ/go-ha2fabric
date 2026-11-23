@@ -348,6 +348,14 @@ func Load(args []string, env Env, out io.Writer) (*Config, error) {
 			add("WEB_ALLOW %q is not an IP address", a)
 		}
 	}
+	// WEB_ADMIN makes whoever reaches the port the administrator, over
+	// plain HTTP: off loopback only with WEB_ALLOW naming who that is.
+	// An address filter is not authentication; it is the explicit
+	// statement (decision 15 of the 2026-11-23 review). The add-on
+	// ignores WEB_ADMIN.
+	if c.WebAdmin && !c.Addon && c.WebListen != "" && len(c.WebAllow) == 0 && !loopback(c.WebListen) {
+		add("WEB_ADMIN=true on WEB_LISTEN %q, which is not a loopback address, makes every client that reaches it the administrator: set WEB_ALLOW to the administrators' addresses, or bind WEB_LISTEN to loopback (%s)", c.WebListen, DefaultWebListen)
+	}
 	for _, h := range c.WebAllowedHosts {
 		if msg := allowedHost(h); msg != "" {
 			add("WEB_ALLOWED_HOSTS %q %s", h, msg)
@@ -405,6 +413,20 @@ func hostPort(s string) error {
 		return fmt.Errorf("port must be 1..65535, got %q", port)
 	}
 	return nil
+}
+
+// loopback reports whether the host of the address hostPort is a
+// loopback address or "localhost"; an empty host is every interface.
+func loopback(hostPort string) bool {
+	h, _, err := net.SplitHostPort(hostPort)
+	if err != nil {
+		return false
+	}
+	if h == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(h)
+	return ip != nil && ip.IsLoopback()
 }
 
 // allowedHost says what is wrong with a WEB_ALLOWED_HOSTS entry, or "":

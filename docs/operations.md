@@ -330,8 +330,18 @@ with its code and the Operation page — is in the add-on the Ingress proxy
 stand-alone nobody, unless `WEB_ADMIN=true`, which selects the UI's token
 mode (every request carries a per-process token the page reads from
 `/api/v1/node/status`, so anyone who can reach the port is the
-administrator — keep it on a trusted network). Stand-alone without
-`WEB_ADMIN` the UI is the status page only.
+administrator). Stand-alone without `WEB_ADMIN` the UI is the status page
+only.
+
+`WEB_ADMIN=true` on a `WEB_LISTEN` that is not a loopback address (the
+image's `0.0.0.0:8099`, for example) is refused at start (exit 2) unless
+`WEB_ALLOW` names the clients: either bind the UI to loopback
+(`127.0.0.1:8099`) and reach it through a proxy of one's own, or list the
+administrators' addresses in `WEB_ALLOW`. The page is plain HTTP — the
+pairing code and the token mode's token cross the network unencrypted —
+and an address filter is not authentication: any host that has, or can
+take, a listed address is the administrator. `WEB_ALLOW` entries must be
+IP addresses; one that is not fails the start.
 
 Every request's `Host` is checked: loopback names (`localhost`) and IP
 addresses pass; a DNS name passes only when `WEB_ALLOWED_HOSTS` lists it

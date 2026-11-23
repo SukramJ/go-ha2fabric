@@ -52,8 +52,9 @@ type Server struct {
 	h     http.Handler
 }
 
-// New returns the server; [Server.Run] binds it. It fails on options
-// go-fabric-ui refuses, such as an AllowedHosts entry with a port.
+// New returns the server; [Server.Run] binds it. It fails on an Allow
+// entry that is not an IP address and on options go-fabric-ui refuses,
+// such as an AllowedHosts entry with a port.
 func New(opts Options) (*Server, error) {
 	log := opts.Logger
 	if log == nil {
@@ -64,9 +65,12 @@ func New(opts Options) (*Server, error) {
 	}
 	s := &Server{opts: opts, log: log}
 	for _, a := range opts.Allow {
-		if ip := net.ParseIP(a); ip != nil {
-			s.allow = append(s.allow, ip)
+		ip := net.ParseIP(a)
+		if ip == nil {
+			// Dropping it could leave no entry, which serves everyone.
+			return nil, fmt.Errorf("web: Allow entry %q is not an IP address", a)
 		}
+		s.allow = append(s.allow, ip)
 	}
 	h, err := fabricui.NewHandler(opts.UI)
 	if err != nil {

@@ -65,8 +65,16 @@ func TestHandler(t *testing.T) {
 	}
 }
 
+// TestAllow: the client filter serves the listed addresses only, and an
+// entry that is not an IP address fails New instead of being dropped —
+// with none left the filter would serve everyone (HR-P0-err-26).
 func TestAllow(t *testing.T) {
-	s := mustNew(t, Options{Allow: []string{"172.30.32.2", "nonsense"}})
+	for _, allow := range [][]string{{"172.30.32.2", "nonsense"}, {"nonsense"}, {""}} {
+		if _, err := New(Options{Allow: allow}); err == nil || !strings.Contains(err.Error(), "not an IP address") {
+			t.Fatalf("Allow %q: %v", allow, err)
+		}
+	}
+	s := mustNew(t, Options{Allow: []string{"172.30.32.2"}})
 	if code, _ := get(t, s.Handler(), "/api/v1/node/status", "172.30.32.2:4321"); code != http.StatusOK {
 		t.Fatalf("Ingress proxy refused: %d", code)
 	}

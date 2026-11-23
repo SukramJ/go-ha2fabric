@@ -291,3 +291,36 @@ func TestTokenInClear(t *testing.T) {
 		}
 	}
 }
+
+// TestWebAdminOffLoopback: WEB_ADMIN on a listener that is not loopback
+// needs WEB_ALLOW; the refusal names both remedies (HR-P0-cfg-22).
+func TestWebAdminOffLoopback(t *testing.T) {
+	base := map[string]string{"HA_URL": "ws://127.0.0.1/api/websocket", "HA_TOKEN": "t", "WEB_ADMIN": "true"}
+	with := func(kv ...string) Env {
+		m := map[string]string{}
+		for k, v := range base {
+			m[k] = v
+		}
+		for i := 0; i < len(kv); i += 2 {
+			m[kv[i]] = kv[i+1]
+		}
+		return MapEnv(m)
+	}
+	for _, listen := range []string{"0.0.0.0:8099", ":8099", "192.168.1.2:8099", "[::]:8099", "bridge.lan:8099"} {
+		_, err := Load(nil, with("WEB_LISTEN", listen), io.Discard)
+		if err == nil || !strings.Contains(err.Error(), "WEB_ALLOW") || !strings.Contains(err.Error(), "loopback") {
+			t.Errorf("WEB_ADMIN on %s without WEB_ALLOW: %v", listen, err)
+		}
+		if _, err := Load(nil, with("WEB_LISTEN", listen, "WEB_ALLOW", "192.168.1.10"), io.Discard); err != nil {
+			t.Errorf("WEB_ADMIN on %s with WEB_ALLOW: %v", listen, err)
+		}
+		if _, err := Load(nil, with("WEB_LISTEN", listen, "WEB_ADMIN", "false"), io.Discard); err != nil {
+			t.Errorf("status page only on %s: %v", listen, err)
+		}
+	}
+	for _, listen := range []string{"127.0.0.1:8099", "[::1]:8099", "localhost:8099", ""} {
+		if _, err := Load(nil, with("WEB_LISTEN", listen), io.Discard); err != nil {
+			t.Errorf("WEB_ADMIN on %q: %v", listen, err)
+		}
+	}
+}

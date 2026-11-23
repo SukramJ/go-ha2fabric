@@ -160,9 +160,9 @@ environment only and never logged or stored.
 | `INCLUDE_LABELS`, `EXCLUDE_LABELS` | empty | Home Assistant labels, by name or id (comma- or newline-separated). |
 | `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error`. |
 | `WEB_LISTEN` | `127.0.0.1:8099` | The web UI; empty disables it. |
-| `WEB_ALLOW` | empty (all) | Client addresses the web UI serves. |
+| `WEB_ALLOW` | empty (all) | Client addresses (IP addresses) the web UI serves. An address filter, not authentication. |
 | `WEB_ALLOWED_HOSTS` | empty | Stand-alone: DNS names the web UI answers under besides `localhost` and IP addresses (comma-separated host names, no port). The add-on needs none. |
-| `WEB_ADMIN` | `false` | Stand-alone: make the web UI's user the administrator (every page, the writes, the pairing code), with the UI's per-process token; without it the UI is the status page only. The add-on ignores it: the Ingress proxy is the administrator. |
+| `WEB_ADMIN` | `false` | Stand-alone: make the web UI's user the administrator (every page, the writes, the pairing code), with the UI's per-process token; without it the UI is the status page only. Plain HTTP: whoever reaches the port is the administrator, so on a `WEB_LISTEN` that is not loopback (the image's `0.0.0.0:8099`) it is refused without `WEB_ALLOW`. The add-on ignores it: the Ingress proxy is the administrator. |
 
 [`docs/operations.md`](docs/operations.md) covers the files, ports, mDNS,
 the token's role, logs, health, pairing, Erase and a factory reset.
