@@ -603,6 +603,7 @@ func (b *Bridge) settle(ops []plan.Op[*device.Device], errs []error, next map[st
 				b.forget[op.Entity] = op.Key
 			}
 			b.mu.Unlock()
+		case plan.Remove:
 		}
 	}
 	if len(refused) == 0 {

@@ -180,8 +180,9 @@ func rangeCmd(method, payload string) model.Command {
 func rangeCalls(t *testing.T, b *Bridge, up *fakeUp, cmds ...model.Command) []ha.ServiceCall {
 	t.Helper()
 	var out []ha.ServiceCall
-	for _, c := range cmds {
-		b.command(t.Context(), c)
+	for i := range cmds {
+		c := &cmds[i]
+		b.command(t.Context(), *c)
 		select {
 		case sc := <-up.calls:
 			out = append(out, sc)
