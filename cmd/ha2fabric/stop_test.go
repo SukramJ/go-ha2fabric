@@ -6,7 +6,9 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -190,5 +192,31 @@ func TestSignalDuringStart(t *testing.T) {
 	var logs strings.Builder
 	if code := run(ctx, nil, env, io.Discard, &logs); code != 0 {
 		t.Fatalf("exit %d\n%s", code, logs.String())
+	}
+}
+
+// TestEraseAfterStopRefused (HR-P1-err-101): an erase that takes the
+// node's lock after the daemon's stop began but before close is refused,
+// so no reset starts outside the stop budget.
+func TestEraseAfterStopRefused(t *testing.T) {
+	base, cancel := context.WithCancel(context.Background())
+	cancel()
+	restoreSeams(t)
+	reset := false
+	factoryReset = func(*node.Node, context.Context) error { reset = true; return nil }
+	// A node kept for the next erase: without the refusal the erase would
+	// reach it (and its reset) although the daemon already stops.
+	s := &served{base: base, stale: &node.Node{}, log: slog.New(slog.DiscardHandler)}
+	var err error
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				err = fmt.Errorf("the erase went on and panicked: %v", r)
+			}
+		}()
+		err = s.erase(context.Background())
+	}()
+	if !errors.Is(err, errStopping) || reset {
+		t.Fatalf("erase after the stop: err=%v reset=%v, want errStopping and no reset", err, reset)
 	}
 }

@@ -269,7 +269,7 @@ func (s *served) Warnings(ctx context.Context) []fabricui.Warning {
 func (s *served) erase(context.Context) error { //nolint:contextcheck // detached from the request on purpose, below
 	s.op.Lock()
 	defer s.op.Unlock()
-	if s.closed {
+	if s.closed || s.base.Err() != nil {
 		return errStopping
 	}
 	// Detached from the request and, for eraseGrace, from the daemon's
