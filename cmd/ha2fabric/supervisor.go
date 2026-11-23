@@ -35,6 +35,12 @@ var minSupervisor = [3]int{2026, 10, 4}
 // minSupervisorText is minSupervisor as the messages name it.
 const minSupervisorText = "2026.10.4"
 
+// recheckInterval is how often a closed gate reads the Supervisor's
+// version again. A Supervisor updates seldom (days apart) and GET /info is
+// a cheap local call; ten minutes opens the web UI soon after an update
+// without a restart and without a log line or request every few seconds.
+const recheckInterval = 10 * time.Minute
+
 // Warning codes of the gate.
 const (
 	warningSupervisorTooOld  = "supervisor_too_old"
@@ -47,7 +53,7 @@ type gateState int32
 const (
 	gateUnknown gateState = iota // not read yet: no administrator
 	gateOpen                     // minSupervisor or later
-	gateClosed                   // older, or a version that does not parse
+	gateClosed                   // older, a pre-release of the floor, or a version that does not parse
 )
 
 // supervisorGate decides whether the add-on's web UI may have an
@@ -56,11 +62,12 @@ const (
 // only, with a warning. run reads the version at start and again every
 // retry until it has one.
 type supervisorGate struct {
-	url    string
-	token  string
-	client *http.Client
-	log    *slog.Logger
-	retry  time.Duration
+	url     string
+	token   string
+	client  *http.Client
+	log     *slog.Logger
+	retry   time.Duration
+	recheck time.Duration
 
 	state atomic.Int32
 
@@ -73,7 +80,7 @@ type supervisorGate struct {
 // newSupervisorGate is the add-on's gate on the Supervisor's API.
 func newSupervisorGate(token string, log *slog.Logger) *supervisorGate {
 	return &supervisorGate{
-		url: supervisorInfoURL, token: token, log: log, retry: 30 * time.Second,
+		url: supervisorInfoURL, token: token, log: log, retry: 30 * time.Second, recheck: recheckInterval,
 		client: &http.Client{Timeout: 10 * time.Second},
 		since:  time.Now(),
 	}
@@ -82,37 +89,53 @@ func newSupervisorGate(token string, log *slog.Logger) *supervisorGate {
 // open reports whether the Supervisor is known to be recent enough.
 func (g *supervisorGate) open() bool { return gateState(g.state.Load()) == gateOpen }
 
-// run reads the Supervisor's version until it has one or ctx ends.
+// run reads the Supervisor's version until the gate opens or ctx ends:
+// every retry while it cannot be read, and every recheck while the gate
+// is closed, so a Supervisor updated meanwhile opens it without a restart.
 func (g *supervisorGate) run(ctx context.Context) {
 	for attempt := 0; ; attempt++ {
+		wait := g.retry
 		v, err := g.read(ctx)
-		if err == nil {
+		switch {
+		case err == nil && atLeast(v, minSupervisor):
 			g.mu.Lock()
 			g.version, g.err, g.since = v, "", time.Now()
 			g.mu.Unlock()
-			if atLeast(v, minSupervisor) {
-				g.state.Store(int32(gateOpen))
-				g.log.Info("ha2fabric.supervisor", slog.String("version", v), slog.Bool("admin", true))
-			} else {
-				g.state.Store(int32(gateClosed))
-				g.log.Warn("ha2fabric.supervisor", slog.String("version", v), slog.Bool("admin", false),
+			g.state.Store(int32(gateOpen))
+			g.log.Info("ha2fabric.supervisor", slog.String("version", v), slog.Bool("admin", true))
+			return
+		case err == nil:
+			g.mu.Lock()
+			changed := gateState(g.state.Load()) != gateClosed || g.version != v
+			if changed {
+				g.since = time.Now()
+			}
+			g.version, g.err = v, ""
+			g.mu.Unlock()
+			g.state.Store(int32(gateClosed))
+			if changed {
+				g.log.Warn("ha2fabric.supervisor", slog.String("version", v), slog.Bool("admin", false), slog.Duration("recheck_in", g.recheck),
 					slog.String("hint", "the web UI's administrator pages need Supervisor "+minSupervisorText+" or later; until the Supervisor is updated the web UI shows the status page only"))
 			}
+			wait = g.recheck
+		case ctx.Err() != nil:
 			return
+		default:
+			closed := gateState(g.state.Load()) == gateClosed
+			g.mu.Lock()
+			g.err = err.Error()
+			g.mu.Unlock()
+			level := slog.LevelDebug
+			if attempt == 0 {
+				level = slog.LevelWarn
+			}
+			if closed {
+				wait = g.recheck
+			}
+			g.log.Log(ctx, level, "ha2fabric.supervisor_unreadable", slog.String("error", err.Error()), slog.Duration("retry_in", wait),
+				slog.String("hint", "the web UI shows the status page only until the Supervisor's version is read"))
 		}
-		if ctx.Err() != nil {
-			return
-		}
-		g.mu.Lock()
-		g.err = err.Error()
-		g.mu.Unlock()
-		level := slog.LevelDebug
-		if attempt == 0 {
-			level = slog.LevelWarn
-		}
-		g.log.Log(ctx, level, "ha2fabric.supervisor_unreadable", slog.String("error", err.Error()), slog.Duration("retry_in", g.retry),
-			slog.String("hint", "the web UI shows the status page only until the Supervisor's version is read"))
-		t := time.NewTimer(g.retry)
+		t := time.NewTimer(wait)
 		select {
 		case <-ctx.Done():
 			t.Stop()
@@ -158,9 +181,16 @@ func (g *supervisorGate) Warnings() []fabricui.Warning {
 	defer g.mu.Unlock()
 	switch gateState(g.state.Load()) {
 	case gateClosed:
+		if _, _, ok := parseVersion(g.version); !ok {
+			return []fabricui.Warning{{
+				Code:    warningSupervisorUnknown,
+				Message: fmt.Sprintf("the Supervisor's version %q does not parse; the web UI's administrator pages need Supervisor %s or later, so until a version is read that does, the web UI shows the status page only", g.version, minSupervisorText),
+				Since:   g.since,
+			}}
+		}
 		return []fabricui.Warning{{
 			Code:    warningSupervisorTooOld,
-			Message: "the Supervisor is " + g.version + "; the web UI's administrator pages need Supervisor " + minSupervisorText + " or later, which tells the add-on whether the Home Assistant user is an administrator: update the Supervisor, then restart the add-on. Until then the web UI shows the status page only",
+			Message: "the Supervisor is " + g.version + "; the web UI's administrator pages need Supervisor " + minSupervisorText + " or later, which tells the add-on whether the Home Assistant user is an administrator. Until the Supervisor is updated the web UI shows the status page only; the add-on reads the version again every few minutes",
 			Since:   g.since,
 		}}
 	case gateUnknown:
@@ -178,15 +208,14 @@ func (g *supervisorGate) Warnings() []fabricui.Warning {
 	return nil
 }
 
-// atLeast reports whether the version v (year.month.patch, a suffix such
-// as ".dev1201" or "b1" after the numbers ignored) is floor or later; a
-// version that does not parse is not.
-func atLeast(v string, floor [3]int) bool {
+// parseVersion reads year.month.patch from v; suffix reports anything
+// after the third number (".dev1201", "b1", ".post1"); ok is false when v
+// does not start with three numbers.
+func parseVersion(v string) (nums [3]int, suffix, ok bool) {
 	parts := strings.SplitN(v, ".", 4)
 	if len(parts) < 3 {
-		return false
+		return nums, false, false
 	}
-	var got [3]int
 	for i := range 3 {
 		p := parts[i]
 		end := 0
@@ -194,18 +223,33 @@ func atLeast(v string, floor [3]int) bool {
 			end++
 		}
 		if end == 0 || i < 2 && end != len(p) {
-			return false
+			return nums, false, false
 		}
 		n, err := strconv.Atoi(p[:end])
 		if err != nil {
-			return false
+			return nums, false, false
 		}
-		got[i] = n
+		nums[i] = n
+		if i == 2 && end != len(p) {
+			suffix = true
+		}
+	}
+	return nums, suffix || len(parts) == 4, true
+}
+
+// atLeast reports whether the version v is floor or later. A version with
+// a suffix after its numbers is admitted only when the numbers are above
+// floor: a development or pre-release build numbered for floor itself
+// may predate what floor brings. A version that does not parse is not.
+func atLeast(v string, floor [3]int) bool {
+	got, suffix, ok := parseVersion(v)
+	if !ok {
+		return false
 	}
 	for i := range 3 {
 		if got[i] != floor[i] {
 			return got[i] > floor[i]
 		}
 	}
-	return true
+	return !suffix
 }

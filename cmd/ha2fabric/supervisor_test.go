@@ -18,7 +18,9 @@ import (
 func TestAtLeast(t *testing.T) {
 	for v, want := range map[string]bool{
 		"2026.10.4": true, "2026.10.5": true, "2026.10.10": true, "2026.11.0": true, "2027.1.0": true,
-		"2026.11.0.dev1201": true, "2026.10.4b1": true,
+		"2026.11.0.dev1201": true, "2026.10.5b1": true, "2026.10.4.post1": false,
+		// A pre-release of the floor itself counts as below it (HR-P0-auth-50).
+		"2026.10.4b1": false, "2026.10.4.dev1": false, "2026.10.4rc0": false,
 		"2026.10.3": false, "2026.10.2": false, "2026.9.9": false, "2025.12.0": false,
 		"": false, "2026.10": false, "x.y.z": false, "2026.x10.4": false, "dev": false,
 	} {
@@ -53,7 +55,7 @@ func runGate(t *testing.T, url, token string) (*supervisorGate, *safeBuffer) {
 	t.Helper()
 	var logs safeBuffer
 	g := newSupervisorGate(token, slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug})))
-	g.url, g.retry = url+"/info", 10*time.Millisecond
+	g.url, g.retry, g.recheck = url+"/info", 10*time.Millisecond, 10*time.Millisecond
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() { defer close(done); g.run(ctx) }()
@@ -95,5 +97,31 @@ func TestSupervisorGate(t *testing.T) {
 	eventually(t, "a warning", func() bool { w := g.Warnings(); return len(w) == 1 && strings.Contains(w[0].Message, "401") })
 	if g.open() || g.Warnings()[0].Code != warningSupervisorUnknown {
 		t.Fatalf("an unread version: open %v, %+v", g.open(), g.Warnings())
+	}
+}
+
+// TestSupervisorGateRechecks: a closed gate reads the version again and
+// opens once the Supervisor is updated, without a restart; a version that
+// does not parse is reported as such (HR-P0-auth-51).
+func TestSupervisorGateRechecks(t *testing.T) {
+	var version atomic.Value
+	version.Store("2026.10.3")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = fmt.Fprintf(w, `{"result":"ok","data":{"supervisor":%q}}`, version.Load())
+	}))
+	t.Cleanup(srv.Close)
+	g, _ := runGate(t, srv.URL, "sup-token")
+	eventually(t, "the gate shuts", func() bool { return gateState(g.state.Load()) == gateClosed })
+	version.Store("2026.10.4")
+	eventually(t, "the gate opens after the update", g.open)
+	if len(g.Warnings()) != 0 {
+		t.Fatalf("warnings after the update: %+v", g.Warnings())
+	}
+
+	odd, _ := fakeSupervisor(t, "latest", 0)
+	g, _ = runGate(t, odd.URL, "sup-token")
+	eventually(t, "the gate shuts", func() bool { return gateState(g.state.Load()) == gateClosed })
+	if w := g.Warnings()[0]; g.open() || !strings.Contains(w.Message, `"latest"`) || !strings.Contains(w.Message, "does not parse") {
+		t.Fatalf("an unparsable version: %+v", w)
 	}
 }
