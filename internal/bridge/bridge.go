@@ -168,6 +168,9 @@ type Bridge struct {
 	// sync forgets it instead of removing it ([Bridge.noteRemoved]).
 	// Recorded under mu at the event, never through the droppable queue.
 	forget map[string]device.SourceKey
+	// ranges are the heat/cool ranges the command loop last sent, by
+	// entity id, until a state shows them ([Bridge.sentRangeLocked]).
+	ranges map[string]sentRange
 }
 
 // New returns the bridge of node n and upstream up. The node may be
@@ -185,7 +188,7 @@ func New(n *node.Node, up Upstream, opts Options) *Bridge {
 		work:   make(chan func(context.Context), 1024),
 		cmds:   make(chan model.Command, 256),
 		groups: map[string]*group{}, owner: map[string]*group{}, known: map[string]bool{},
-		forget: map[string]device.SourceKey{},
+		forget: map[string]device.SourceKey{}, ranges: map[string]sentRange{},
 		states: map[string]*ha.State{},
 		synced: make(chan struct{}),
 	}
@@ -416,6 +419,7 @@ func (b *Bridge) sync(ctx context.Context) {
 	b.states = map[string]*ha.State{}
 	for i := range snap.States {
 		b.states[snap.States[i].EntityID] = &snap.States[i]
+		b.settleRangeLocked(snap.States[i].EntityID, &snap.States[i])
 	}
 	b.mu.Unlock()
 	b.known = map[string]bool{}
@@ -681,6 +685,7 @@ func (b *Bridge) stateChanged(ctx context.Context, sc ha.StateChanged) {
 		delete(b.states, sc.EntityID)
 	} else {
 		b.states[sc.EntityID] = sc.NewState
+		b.settleRangeLocked(sc.EntityID, sc.NewState)
 	}
 	b.mu.Unlock()
 	if sc.NewState == nil || !b.known[sc.EntityID] {
