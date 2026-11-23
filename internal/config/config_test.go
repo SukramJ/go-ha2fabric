@@ -271,3 +271,23 @@ func TestHAURL(t *testing.T) {
 		t.Fatalf("userinfo: %v", err)
 	}
 }
+
+// TestTokenInClear: ws:// to a host that is neither loopback nor the
+// Supervisor sends the token unencrypted (HR-P0-ha-23).
+func TestTokenInClear(t *testing.T) {
+	for u, want := range map[string]bool{
+		"ws://homeassistant.local:8123/api/websocket": true,
+		"ws://192.168.1.2:8123/api/websocket":         true,
+		"ws://[fd00::2]:8123/api/websocket":           true,
+		"wss://homeassistant.local/api/websocket":     false,
+		"ws://127.0.0.1:8123/api/websocket":           false,
+		"ws://[::1]:8123/api/websocket":               false,
+		"ws://localhost:8123/api/websocket":           false,
+		SupervisorURL:                                 false,
+	} {
+		c := &Config{HAURL: u}
+		if got := c.TokenInClear(); got != want {
+			t.Errorf("%s: %v, want %v", u, got, want)
+		}
+	}
+}

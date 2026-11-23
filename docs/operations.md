@@ -145,6 +145,20 @@ and never logged or written to disk. The daemon only reads Home Assistant
 and calls the services of the entities it serves; it never writes the
 exposure settings or the registries.
 
+The token is only as private as the hop it crosses. `HA_URL` with
+`wss://` sends it over TLS, with the certificate verified; with `ws://` it
+crosses the network unencrypted, and anyone who can read or answer for that
+host on the network gets an administrator's token. The add-on's hop is the
+Supervisor's internal name (`ws://supervisor/core/websocket`). Stand-alone,
+use `wss://` where Home Assistant has TLS, or run the daemon on Home
+Assistant's host (`ws://127.0.0.1:8123/api/websocket`); with `ws://` to
+any other host the daemon starts but logs `ha2fabric.token_in_clear` and
+shows the warning `token_in_clear` on every status page. The WebSocket
+handshake follows no redirect: an `HA_URL` that answers with one fails to
+connect (`ha.disconnected`, naming the redirect), so set it to the final
+address. `HA_URL` must name a host and carry no user or password; the log
+shows it without a query.
+
 ## What the daemon reads and writes
 
 | Command | When | Home Assistant core at 2026.10.3 |
@@ -354,8 +368,9 @@ re-sync's debounce keeps its endpoint. A rename is the endpoint's name in the co
 as typed (its node label, at most 32 bytes), without the device name
 go-hamapping puts in front of an entity name otherwise. The status page
 lists the configuration's warnings: unresolved label values
-(`label_unresolved`) and an overrides file moved aside at start
-(`selection_corrupt`); under them the daemon's counters (`discards`,
+(`label_unresolved`), an overrides file moved aside at start
+(`selection_corrupt`) and the token sent unencrypted (`token_in_clear`,
+The token); under them the daemon's counters (`discards`,
 Health).
 
 The Operation page shows the daemon's version and uptime, its recent log

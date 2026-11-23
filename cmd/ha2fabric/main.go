@@ -24,6 +24,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -84,6 +85,7 @@ func run(ctx context.Context, args []string, env config.Env, stdout, stderr io.W
 		return dumpPlan(ctx, client, input, stdout, logger)
 	}
 	logger.Info("ha2fabric.start", slog.String("version", version.String()), slog.String("ha_url", ha.LogURL(cfg.HAURL)), slog.Bool("addon", cfg.Addon), slog.Bool("camera", cfg.Camera))
+	host := startWarnings(cfg, logger, started)
 
 	reg, err := nodes.Open(filepath.Dir(cfg.StorePath), logger)
 	if err != nil {
@@ -110,7 +112,7 @@ func run(ctx context.Context, args []string, env config.Env, stdout, stderr io.W
 	webErr := make(chan error, 1)
 	if cfg.WebListen != "" {
 		ws, err := web.New(web.Options{Listen: cfg.WebListen, Allow: cfg.WebAllow, Logger: logger, UI: fabricui.Options{
-			Node: def.sw, Exposure: def.prov, Admin: admin(cfg), Reassemble: def.Resync, Events: def.events, Warnings: warnings(def, fl), Counters: counters(def, fl), Erase: def.erase, Logger: logger,
+			Node: def.sw, Exposure: def.prov, Admin: admin(cfg), Reassemble: def.Resync, Events: def.events, Warnings: warnings(def, fl, host), Counters: counters(def, fl), Erase: def.erase, Logger: logger,
 			Operations: web.NewOperations(ring, version.Version, started),
 			Registry:   fl, NodeConfig: nodeConfig(cfg),
 			AllowedHosts: cfg.WebAllowedHosts, AllowHost: allowHost(cfg),
@@ -145,13 +147,15 @@ func run(ctx context.Context, args []string, env config.Env, stdout, stderr io.W
 	return code
 }
 
-// warnings is the web UI's Options.Warnings: the configured node's
-// findings and the registry nodes', which every node's status page
-// reports (a registry node's handler inherits the default's, go-fabric-ui
-// fabricui/handler.go:401 at v0.7.1).
-func warnings(def *served, fl *fleet) func(context.Context) []fabricui.Warning {
+// warnings is the web UI's Options.Warnings: the host's (startWarnings),
+// the configured node's findings and the registry nodes', which every
+// node's status page reports (a registry node's handler inherits the
+// default's, go-fabric-ui fabricui/handler.go:401 at v0.7.1).
+func warnings(def *served, fl *fleet, host []fabricui.Warning) func(context.Context) []fabricui.Warning {
 	return func(ctx context.Context) []fabricui.Warning {
-		return append(def.Warnings(ctx), fl.Warnings(ctx)...)
+		out := slices.Clone(host)
+		out = append(out, def.Warnings(ctx)...)
+		return append(out, fl.Warnings(ctx)...)
 	}
 }
 

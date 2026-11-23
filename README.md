@@ -123,6 +123,10 @@ docker run --network host -v ha2fabric:/data \
   ghcr.io/sukramj/go-ha2fabric
 ```
 
+`ws://` sends the token unencrypted to that host; use `wss://` where Home
+Assistant has TLS (the daemon warns about `ws://` to another host,
+[`docs/operations.md`](docs/operations.md), The token).
+
 or the release binary:
 
 ```sh
@@ -141,7 +145,7 @@ environment only and never logged or stored.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `HA_URL` | add-on: `ws://supervisor/core/websocket` | Home Assistant's WebSocket API. |
+| `HA_URL` | add-on: `ws://supervisor/core/websocket` | Home Assistant's WebSocket API; `wss://` where Home Assistant has TLS — with `ws://` to another host the token crosses the network unencrypted (a warning, `token_in_clear`). No user or password in the URL; a redirect is not followed. |
 | `HA_TOKEN` | add-on: `SUPERVISOR_TOKEN` | An administrator's long-lived access token. |
 | `LISTEN` | `:5540` | UDP address of the Matter node. |
 | `MDNS_INTERFACES` | empty (every interface) | Host interfaces the mDNS responder announces on (comma- or newline-separated), for a dual-homed host behind an mDNS reflector ([`docs/operations.md`](docs/operations.md), mDNS). |

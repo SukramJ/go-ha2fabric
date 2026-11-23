@@ -142,6 +142,25 @@ func (c *Config) Exposure() expose.Rule {
 	return expose.Rule{Assist: c.ExposeAssist, Include: c.Include, Exclude: c.Exclude, IncludeLabels: c.IncludeLabels, ExcludeLabels: c.ExcludeLabels}
 }
 
+// TokenInClear reports whether the token travels unencrypted to another
+// host: HA_URL is ws:// and its host is neither a loopback address nor
+// "localhost" nor the Supervisor's internal name (the add-on's hop). The
+// daemon warns about it and does not refuse it (owner decision 17 of the
+// 2026-11-23 review): Home Assistant serves plain HTTP by default, so
+// for many installations there is no wss:// endpoint to prefer.
+func (c *Config) TokenInClear() bool {
+	u, err := url.Parse(c.HAURL)
+	if err != nil || u.Scheme != "ws" {
+		return false
+	}
+	h := u.Hostname()
+	if h == "localhost" || h == "supervisor" {
+		return false
+	}
+	ip := net.ParseIP(h)
+	return ip == nil || !ip.IsLoopback()
+}
+
 // ValidationError aggregates every problem [Load] found.
 type ValidationError struct{ Issues []string }
 
