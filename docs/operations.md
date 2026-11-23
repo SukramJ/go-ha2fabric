@@ -273,7 +273,9 @@ The lines to know:
 `exclude_labels`) name Home Assistant labels. A value matches the label
 whose name equals it, ignoring case, else the label whose id it is; a value
 that matches neither is used as a label id as given, so it takes effect
-once such a label is created. Such a value is a warning: in the log
+once such a label is created. The values are split at commas and
+newlines, so a label whose name holds a comma is named by its id. Such a
+value is a warning: in the log
 (`bridge.label_unresolved`, when the set of unresolved values changes) and
 on the web UI's status page and above its selection list
 (`label_unresolved`, with the time it was first seen), until the label
@@ -421,7 +423,9 @@ only.
 `WEB_ADMIN=true` on a `WEB_LISTEN` that is not a loopback address
 (`0.0.0.0:8099`, for example) is refused at start (exit 2) unless
 `WEB_ALLOW` names the clients: either bind the UI to loopback
-(`127.0.0.1:8099`) and reach it through a proxy of one's own, or list the
+(`127.0.0.1:8099`; `localhost` is accepted by name, and the web UI
+refuses to serve when it resolves to an address that is not loopback) and
+reach it through a proxy of one's own, or list the
 administrators' addresses in `WEB_ALLOW`. The page is plain HTTP — the
 pairing code and the token mode's token cross the network unencrypted —
 and an address filter is not authentication: any host that has, or can

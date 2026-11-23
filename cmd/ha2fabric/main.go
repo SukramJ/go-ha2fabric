@@ -296,7 +296,10 @@ func nodeConfig(cfg *config.Config) *fabricui.NodeConfigView {
 func webOptions(cfg *config.Config, gate *supervisorGate, logger *slog.Logger, ui fabricui.Options) web.Options {
 	ui.Admin = admin(cfg, gate)
 	ui.AllowedHosts, ui.AllowHost = cfg.WebAllowedHosts, allowHost(cfg)
-	return web.Options{Listen: cfg.WebListen, Allow: cfg.WebAllow, Logger: logger, UI: ui}
+	// WEB_ADMIN without WEB_ALLOW was accepted for a loopback WEB_LISTEN
+	// by its text; the bound address must be loopback too.
+	loopback := cfg.WebAdmin && !cfg.Addon && len(cfg.WebAllow) == 0
+	return web.Options{Listen: cfg.WebListen, Allow: cfg.WebAllow, Loopback: loopback, Logger: logger, UI: ui}
 }
 
 // admin is the web UI's administrator check. In the add-on: a request of

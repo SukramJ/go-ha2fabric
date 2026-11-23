@@ -207,3 +207,22 @@ func TestIngressAdmin(t *testing.T) {
 		}
 	}
 }
+
+// TestRunLoopback (HR-P1-cfg-15): a server that must be on loopback —
+// WEB_ADMIN without WEB_ALLOW, accepted because WEB_LISTEN names
+// loopback, "localhost" by name — refuses an address that bound to
+// anything else, and serves one that bound to loopback.
+func TestRunLoopback(t *testing.T) {
+	err := mustNew(t, Options{Listen: "0.0.0.0:0", Loopback: true}).Run(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "loopback") {
+		t.Fatalf("a wildcard listener served: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- mustNew(t, Options{Listen: "127.0.0.1:0", Loopback: true}).Run(ctx) }()
+	time.Sleep(100 * time.Millisecond)
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatalf("a loopback listener: %v", err)
+	}
+}

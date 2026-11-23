@@ -73,7 +73,7 @@ modes are not mapped.
 | `camera` | bool | `false` | Serve cameras with a live stream (opt-in, not yet tested with Apple Home). The bridge relays the WebRTC signalling to Home Assistant (go2rtc) and also accepts Matter over TCP on its port. |
 | `include` | list | `[]` | Entity ids or globs always served. |
 | `exclude` | list | `[]` | Entity ids or globs never served. |
-| `include_labels` | list | `[]` | Home Assistant labels (name or id) whose entities are served. |
+| `include_labels` | list | `[]` | Home Assistant labels (name or id) whose entities are served. A label whose name holds a comma is named by its id. |
 | `exclude_labels` | list | `[]` | Home Assistant labels (name or id) whose entities are never served. |
 | `log_level` | list | `info` | `debug`, `info`, `warn` or `error`. |
 | `node_limit` | int | `8` | How many nodes the web UI may create beside this one (0 to 32; see Nodes). |

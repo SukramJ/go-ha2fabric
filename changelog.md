@@ -172,6 +172,12 @@ to reach it from the network, run the image with
   it on its port: the node is stopped and comes back, or, when it cannot
   be stopped, is kept for the next erase to reset. Status pages no longer
   wait for an erase.
+- `LABEL` must be UTF-8 text without control characters. With `WEB_ADMIN`
+  and no `WEB_ALLOW`, the web UI refuses to serve when `WEB_LISTEN`
+  (`localhost`, by name) bound an address that is not loopback. The
+  add-on's Supervisor check follows no redirect and takes no proxy from
+  the environment; the docs say that the Home Assistant connection does
+  take one (`HTTP_PROXY`).
 
 ## [0.6.3] - 2026-11-12
 
