@@ -43,3 +43,10 @@ merges.
 | 18 | Holding the public mediums | **Public now**: HR-P0-cfg-21, -cfg-22 and -ha-23 rest on conditions `README.md` and `addon/DOCS.md` already publish; only HR-P0-auth-20 stays held |
 | 19 | Other add-ons on the Supervisor's network (extends decision 11) | **Untrusted**: a co-installed add-on is not an administrator; the peer address alone is no credential (decision 13), and the add-on's listener is bound tighter if that is cheap (HR-P0-cfg-27) |
 | 20 | When the phase 0 fixes land | **All in phase 0's pull request**: one fix wave (at most two Opus implementers, the Fable read on the admin, configuration and token paths); the fuzz targets, every fix and the crash seeds in one pull request; `review/p0` is not pushed before the fuzz finds are fixed |
+
+## 2026-11-23, after phase 0's pre-merge read
+
+| # | Subject | Decision |
+| --- | --- | --- |
+| 21 | Publishing HR-P0-auth-20 (no tag carries the fix at the merge, decision 8) | **Neutral wording now, held until the tag**: code comments, docs and the squash message describe the admin check as it is, not the condition before it; the held reports stay unpublished until the `0.7.0` tag (the owner's release go with the live Ingress test) and are then published in a notes pull request. Replaces decision 13's "published with the phase 0 pull request" |
+| 22 | HR-P0-cfg-27, binding the add-on's listener tighter | **After the live test**: the listener stays on `0.0.0.0:8486` (the peer filter and the header check hold); the owner's live Ingress test checks the Supervisor's source and gateway address, then a follow-up issue binds it |
