@@ -26,3 +26,20 @@ go-fabric-ui's review are cited as "ui decision n"
 | 10 | Fuzz targets | **Standing**: every target written in phase 0 is committed and joins `make fuzz-smoke` (the CI job exists); a hit becomes a finding with its seed as the regression (replaces ui decision 9 here) |
 | 11 | Trust in the threat model | **Home Assistant trusted, its data not**: Core, the Supervisor and the token are trusted; entity data (names, attributes, camera offers, stills from integrations) is untrusted input; a commissioned Matter controller is a fabric administrator but reaches only the exposed entities' services; the LAN is untrusted (the web listener on the host network, the Matter port) |
 | 12 | Live Home Assistant | **Fixtures only**: Home Assistant facts from `home-assistant/core` at `2026.10.3`, cited, never run; tests on `hatest` and `testdata/ha/`. The live Ingress test stays the owner's release gate, outside the review |
+
+## 2026-11-23, after phase 0's verification
+
+Put as one wizard of eight questions, the recommendation first; the owner
+took every recommendation. The held row is named by ID only until its fix
+merges.
+
+| # | Subject | Decision |
+| --- | --- | --- |
+| 13 | HR-P0-auth-20 (held) | **The verifier's fix shape** (`held/phase-0-verify.md`), host-only; go-fabric-ui's contract is unchanged. Published with the phase 0 pull request |
+| 14 | HR-P0-cfg-21, the default passcode `20202021` | **A random passcode on first start** when `PASSCODE` is unset, kept beside the store as the registry nodes' are; the add-on option becomes optional without a default; an explicit `20202021` is honoured with a status warning and a log line. Behaviour change, `changelog.md` |
+| 15 | HR-P0-cfg-22, `WEB_ADMIN` off loopback without `WEB_ALLOW` | **Refused at start** (`config.Load`, exit 2, naming both remedies), no override switch; HR-P0-err-26 (an unparsable `Allow` entry turns the filter off) fixed in the same change; the docs say the page is plain HTTP and an address filter is not authentication |
+| 16 | HR-P0-leak-24, pairing codes in the log | **Only while the node has no fabric**; a commissioned node logs that the codes are on the administrator's pairing page |
+| 17 | HR-P0-ha-23 (low after verification), the token over `ws://` to another host | **A warning, not a refusal**: a start-up log line and a status warning when the scheme is `ws` and the host is neither loopback nor `supervisor`, a docs paragraph and a `wss://` note; with HR-P0-ha-31 the WebSocket dial no longer follows redirects |
+| 18 | Holding the public mediums | **Public now**: HR-P0-cfg-21, -cfg-22 and -ha-23 rest on conditions `README.md` and `addon/DOCS.md` already publish; only HR-P0-auth-20 stays held |
+| 19 | Other add-ons on the Supervisor's network (extends decision 11) | **Untrusted**: a co-installed add-on is not an administrator; the peer address alone is no credential (decision 13), and the add-on's listener is bound tighter if that is cheap (HR-P0-cfg-27) |
+| 20 | When the phase 0 fixes land | **All in phase 0's pull request**: one fix wave (at most two Opus implementers, the Fable read on the admin, configuration and token paths); the fuzz targets, every fix and the crash seeds in one pull request; `review/p0` is not pushed before the fuzz finds are fixed |

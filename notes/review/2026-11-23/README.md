@@ -242,4 +242,4 @@ fix.
 
 ## Open questions for the owner
 
-None open. Decided on 2026-11-23 as decisions 7–12 (`decisions.md`).
+None open. Decided on 2026-11-23 as decisions 7–20 (`decisions.md`).
