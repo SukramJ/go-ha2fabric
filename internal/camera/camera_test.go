@@ -357,6 +357,30 @@ func TestCandidatesBeforeSessionAreBounded(t *testing.T) {
 	}
 }
 
+// TestEventRefused (HR-P0-test-06): an event that does not decode is
+// logged as camera.event_refused and skipped; the relay goes on with the
+// next.
+func TestEventRefused(t *testing.T) {
+	up := &upstream{script: func(s *stream) {
+		s.push(map[string]any{"type": 5})
+		s.push(session("01HA"))
+		s.push(map[string]any{"type": "answer", "answer": "v=0 answer"})
+	}}
+	h, logs := newHost(t, up)
+	sig := &signaller{}
+	h.Attach(sig)
+	if _, err := h.ProvideOffer(context.Background(), offer(3)); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the answer after the refused event", func() bool { return len(sig.seen()) == 1 })
+	if sig.seen()[0] != "answer 3 v=0 answer" {
+		t.Fatalf("signals %q", sig.seen())
+	}
+	if l := logs.String(); !strings.Contains(l, "camera.event_refused") || !strings.Contains(l, "session=3") {
+		t.Fatalf("logs %q", l)
+	}
+}
+
 func TestHAErrorEndsTheSession(t *testing.T) {
 	up := &upstream{script: func(s *stream) {
 		s.push(session("01HA"))
