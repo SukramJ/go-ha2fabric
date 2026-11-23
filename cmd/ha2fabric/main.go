@@ -206,8 +206,8 @@ func admin(cfg *config.Config) func(*http.Request) bool {
 // addresses and WEB_ALLOWED_HOSTS: in the add-on every request the Ingress
 // proxy forwards, whose Host is the browser's — Home Assistant's own name,
 // which the add-on cannot know (core homeassistant/components/hassio/
-// ingress.py:268-272 at 2026.10.3, Supervisor supervisor/api/ingress.py
-// :400-427; notes/reads/read-2026-11-23-ingress-host-facts.md);
+// ingress.py:268-272 at 2026.10.3, Supervisor supervisor/api/ingress.py:
+// 400-427 at fe91b8db; notes/reads/read-2026-11-23-ingress-host-facts.md);
 // stand-alone none.
 func allowHost(cfg *config.Config) func(*http.Request) bool {
 	if cfg.Addon {

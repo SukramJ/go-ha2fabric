@@ -82,6 +82,7 @@ func TestRun(t *testing.T) {
 	env := config.MapEnv(map[string]string{
 		"HA_URL": srv.URL(), "HA_TOKEN": hatest.Token, "STORE_PATH": t.TempDir() + "/ha2fabric.db",
 		"LISTEN": freePort(t, "udp"), "WEB_LISTEN": webAddr, "LOG_LEVEL": "debug",
+		"WEB_ALLOWED_HOSTS": "bridge.test",
 	})
 	ctx, cancel := context.WithCancel(context.Background())
 	var logs safeBuffer
@@ -119,6 +120,20 @@ func TestRun(t *testing.T) {
 	if res.StatusCode != http.StatusForbidden {
 		t.Errorf("the selection answered %d without WEB_ADMIN", res.StatusCode)
 	}
+	// WEB_ALLOWED_HOSTS reaches go-fabric-ui's Host check: a listed name
+	// is served, another refused.
+	for host, want := range map[string]int{"bridge.test:8099": http.StatusOK, "other.test:8099": http.StatusForbidden} {
+		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+webAddr+"/api/v1/node/status", http.NoBody)
+		req.Host = host
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = res.Body.Close()
+		if res.StatusCode != want {
+			t.Errorf("Host %s: %d, want %d", host, res.StatusCode, want)
+		}
+	}
 	cancel()
 	if code := <-done; code != 0 {
 		t.Fatalf("exit %d\n%s", code, logs.String())
@@ -149,4 +164,17 @@ func (s *safeBuffer) String() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.b.String()
+}
+
+// TestRunRefusesAllowedHost: a WEB_ALLOWED_HOSTS entry go-fabric-ui would
+// refuse fails the configuration (exit 2) before any node starts.
+func TestRunRefusesAllowedHost(t *testing.T) {
+	env := config.MapEnv(map[string]string{
+		"HA_URL": "ws://127.0.0.1:1/api/websocket", "HA_TOKEN": "t", "STORE_PATH": t.TempDir() + "/ha2fabric.db",
+		"WEB_ALLOWED_HOSTS": "bridge.lan:8099",
+	})
+	var stderr strings.Builder
+	if code := run(context.Background(), nil, env, io.Discard, &stderr); code != 2 || !strings.Contains(stderr.String(), "WEB_ALLOWED_HOSTS") {
+		t.Fatalf("exit %d: %s", code, stderr.String())
+	}
 }

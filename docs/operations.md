@@ -327,9 +327,14 @@ addresses pass; a DNS name passes only when `WEB_ALLOWED_HOSTS` lists it
 forwards the browser's `Host` (Home Assistant's own name), and the daemon
 admits every request of the Ingress proxy whatever its name. A proxy of
 one's own in front of a stand-alone daemon either forwards the browser's
-`Host`, whose name then goes into `WEB_ALLOWED_HOSTS`, or replaces it with
-the daemon's address. An administrator's write must come from the page's
-own origin (`Origin` equal to the `Host`).
+`Host` or replaces it with the daemon's address — then the Host check is
+the proxy's, which must serve its own names only; the name the browser uses
+goes into `WEB_ALLOWED_HOSTS` in both cases, because an administrator's
+request is refused (403 `origin_not_allowed`) when its `Origin` names a
+host that is not listed. An administrator's request with an `Origin`
+passes only when the Origin names a host the check admits (`localhost`, an
+IP address, a listed name); in the add-on it must equal the request's
+`Host`.
 
 The selection page lists every candidate entity
 with entity id, name, domain, device, area, labels, Assist exposure and

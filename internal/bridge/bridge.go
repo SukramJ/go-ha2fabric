@@ -240,12 +240,17 @@ func (b *Bridge) Disconnected(error) {
 	b.setStatus(func(s *Status) { s.HAConnected = false })
 	b.enqueue(func(ctx context.Context) {
 		for _, g := range b.groups {
-			for _, d := range g.devices {
+			for i, d := range g.devices {
 				// A group's devices are top-level, never parts, so go-fabric's
 				// ErrNotBridged cannot come; any error stays a Debug line, as a
-				// reachability patch's does (apply).
+				// reachability patch's does (apply), with the endpoint's
+				// stable key (g.keys runs beside g.devices).
 				if err := d.SetReachable(ctx, false); err != nil {
-					b.log.Debug("bridge.unreachable", slog.String("error", err.Error()))
+					key := ""
+					if i < len(g.keys) {
+						key = g.keys[i].String()
+					}
+					b.log.Debug("bridge.unreachable", slog.String("key", key), slog.String("error", err.Error()))
 				}
 			}
 		}

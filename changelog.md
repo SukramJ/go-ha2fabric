@@ -36,7 +36,8 @@ The move to go-fabric `v0.25.0` under its new module path
   browser's. **Stand-alone without `WEB_ADMIN` the web UI is the status
   page only**: the selection, fabrics, endpoints, diagnostics, pairing and
   the Operation page are the administrator's (owner decision). An
-  administrator's write must carry the page's own `Origin`. The page's
+  administrator's request is refused when its `Origin` names a host the
+  check does not admit (in the add-on: any other than the page's own). The page's
   event streams end when the daemon stops.
 - go-hamapping `v0.4.12` → `v0.5.0`: a fan's percentage maps to its mode in
   three bands and off to 0 %, a climate entity's fan mode to FanControl's

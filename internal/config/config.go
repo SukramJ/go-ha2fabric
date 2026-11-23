@@ -319,6 +319,11 @@ func Load(args []string, env Env, out io.Writer) (*Config, error) {
 			add("WEB_ALLOW %q is not an IP address", a)
 		}
 	}
+	for _, h := range c.WebAllowedHosts {
+		if msg := allowedHost(h); msg != "" {
+			add("WEB_ALLOWED_HOSTS %q %s", h, msg)
+		}
+	}
 	if len(issues) > 0 {
 		return nil, &ValidationError{Issues: issues}
 	}
@@ -344,6 +349,27 @@ func hostPort(s string) error {
 		return fmt.Errorf("port must be 1..65535, got %q", port)
 	}
 	return nil
+}
+
+// allowedHost says what is wrong with a WEB_ALLOWED_HOSTS entry, or "":
+// go-fabric-ui's rules for Options.AllowedHosts (fabricui/host.go:101-121
+// at v0.13.0), checked here so a wrong value fails at start like every
+// other option instead of after the node opened its store. An IP address
+// needs no entry: the Host check admits every one.
+func allowedHost(h string) string {
+	switch {
+	case net.ParseIP(strings.Trim(h, "[]")) != nil:
+		return "is an IP address, which needs no entry"
+	case strings.Contains(h, "://"):
+		return "has a scheme; name the host only"
+	case strings.ContainsAny(h, ":[]"):
+		return "has a port; name the host only"
+	case strings.Contains(h, "/"):
+		return "has a path; name the host only"
+	case strings.Contains(h, "*"):
+		return "has a wildcard; name each host"
+	}
+	return ""
 }
 
 // splitInterfaces reads MDNS_INTERFACES: comma- or newline-separated (the
