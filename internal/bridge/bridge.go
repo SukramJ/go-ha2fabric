@@ -176,6 +176,11 @@ type Bridge struct {
 	// sync forgets it instead of removing it ([Bridge.noteRemoved]).
 	// Recorded under mu at the event, never through the droppable queue.
 	forget map[string]device.SourceKey
+	// removals counts the removals noted; removedAt is each forget's
+	// count. A sync whose read began before a removal may still plan the
+	// entity, so that forget is kept for the next sync (HR-P1-conc-93).
+	removals  uint64
+	removedAt map[string]uint64
 	// serving are the entity ids the last sync serves on an endpoint: a
 	// queued command runs only for one of them ([Bridge.command]).
 	serving map[string]bool
@@ -202,7 +207,7 @@ func New(n *node.Node, up Upstream, opts Options) *Bridge {
 		wake:   make(chan struct{}, 1),
 		cmds:   make(chan model.Command, 256),
 		groups: map[string]*group{}, owner: map[string]*group{}, known: map[string]bool{},
-		forget: map[string]device.SourceKey{}, ranges: map[string]sentRange{},
+		forget: map[string]device.SourceKey{}, removedAt: map[string]uint64{}, ranges: map[string]sentRange{},
 		states: map[string]*ha.State{},
 		synced: make(chan struct{}),
 	}
@@ -361,6 +366,26 @@ func (b *Bridge) noteRemoved(entityID string) {
 	defer b.mu.Unlock()
 	if k := plan.RemovedKey(b.last, entityID); k != nil {
 		b.forget[entityID] = k
+		b.removals++
+		b.removedAt[entityID] = b.removals
+	}
+}
+
+// keepStaleForgets records again, for the next sync, each forget that
+// Diff dropped because the plan still serves its key while the removal
+// was noted after this sync's read began: the snapshot may predate the
+// removal, so the entity is not known to be back. A forget noted before
+// the read is of an entity back in the registry, which keeps its endpoint.
+func (b *Bridge) keepStaleForgets(forget map[string]device.SourceKey, removedAt map[string]uint64, readFrom uint64, forgotten map[string]string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	for id, k := range forget {
+		if _, done := forgotten[k.String()]; done || removedAt[id] <= readFrom {
+			continue
+		}
+		if _, newer := b.forget[id]; !newer {
+			b.forget[id], b.removedAt[id] = k, removedAt[id]
+		}
 	}
 }
 
@@ -430,6 +455,9 @@ func (b *Bridge) sync(ctx context.Context) {
 	}
 	in := b.opts.Input()
 	in.Rule.LabelIDs = b.labelIDs
+	b.mu.Lock()
+	readFrom := b.removals
+	b.mu.Unlock()
 	snap, err := ha.ReadSnapshot(ctx, b.up, in.Rule.Assist)
 	if err != nil {
 		b.log.Error("bridge.sync_failed", slog.String("error", err.Error()))
@@ -487,10 +515,11 @@ func (b *Bridge) sync(ctx context.Context) {
 		planned = append(planned, g.built())
 	}
 	b.mu.Lock()
-	forget := b.forget
-	b.forget = map[string]device.SourceKey{}
+	forget, removedAt := b.forget, b.removedAt
+	b.forget, b.removedAt = map[string]device.SourceKey{}, map[string]uint64{}
 	b.mu.Unlock()
 	ch := plan.Diff(served, planned, forget)
+	b.keepStaleForgets(forget, removedAt, readFrom, ch.Forgotten)
 	// A batch is not a transaction (node.Partition.Batch): each operation
 	// applies or fails on its own, so each one's error is kept by its
 	// index, and what failed is not taken as served (settle).

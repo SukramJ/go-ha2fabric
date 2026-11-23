@@ -6,6 +6,7 @@ package bridge_test
 import (
 	"context"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	onoffdef "thingfabric.dev/go-fabric/cluster/spec/onoff"
@@ -170,5 +171,59 @@ func TestEntityMovedToAnotherDevice(t *testing.T) {
 	}
 	if again, ok := e.dev.EndpointOf(newKey); !ok || again == old {
 		t.Fatalf("the moved switch is on %d (was %d)", again, old)
+	}
+}
+
+// heldRead holds the first registry read after arm, once it has read.
+type heldRead struct {
+	bridge.Upstream
+	arm        atomic.Bool
+	held, hold chan struct{}
+}
+
+func (h *heldRead) ListEntities(ctx context.Context) ([]ha.EntityEntry, error) {
+	es, err := h.Upstream.ListEntities(ctx)
+	if h.arm.CompareAndSwap(true, false) {
+		h.held <- struct{}{}
+		<-h.hold
+	}
+	return es, err
+}
+
+// TestRemoveDuringSyncIsForgotten (HR-P1-conc-93): an entity removed
+// while a sync reads a snapshot that still has it is forgotten by the
+// next sync, not dropped with the stale one: re-added with its old
+// registry id, it gets a fresh number.
+func TestRemoveDuringSyncIsForgotten(t *testing.T) {
+	h := &heldRead{held: make(chan struct{}), hold: make(chan struct{})}
+	e := newEnv(t, expose.Rule{Assist: true}, func(s *setup) {
+		s.wrap = func(up bridge.Upstream) bridge.Upstream { h.Upstream = up; return h }
+	})
+	plug := e.mustEndpoint("switch.coffee")
+	h.arm.Store(true)
+	errc := make(chan error, 1)
+	go func() { errc <- e.br.Resync(e.ctx) }()
+	<-h.held // the snapshot has read the registry with the plug
+	e.ha.RemoveEntity("switch.coffee")
+	// The event comes before this answer on the one connection, so the
+	// bridge has recorded the removal when it returns.
+	if _, err := e.cl.GetConfig(e.ctx); err != nil {
+		t.Fatal(err)
+	}
+	close(h.hold)
+	if err := <-errc; err != nil {
+		t.Fatal(err)
+	}
+	e.eventually("the removal is synced", func() bool {
+		_, ok := e.endpoint("switch.coffee")
+		return !ok
+	})
+	e.ha.RestoreEntity("switch.coffee")
+	e.eventually("the re-added plug is back", func() bool {
+		_, ok := e.endpoint("switch.coffee")
+		return ok
+	})
+	if again, _ := e.endpoint("switch.coffee"); again == plug {
+		t.Fatalf("the re-added plug got its old number %d", plug)
 	}
 }
