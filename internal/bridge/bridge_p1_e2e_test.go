@@ -145,3 +145,30 @@ func TestExcludeLabelRenamed(t *testing.T) {
 		t.Fatalf("warnings after the removal %q", w)
 	}
 }
+
+// TestEntityMovedToAnotherDevice (HR-P1-test-38): an entity whose
+// registry device changes gets a new stable key, so a new endpoint; its
+// old key is no longer served.
+func TestEntityMovedToAnotherDevice(t *testing.T) {
+	e := newEnv(t, expose.Rule{Assist: true})
+	reg := e.regID("switch.coffee")
+	old := e.mustEndpoint("switch.coffee")
+	var oldKey string
+	for _, ep := range e.dev.Node().Aggregator().Endpoints() {
+		if k := ep.Spec().StableKey.String(); strings.HasSuffix(k, "/"+reg) {
+			oldKey = k
+		}
+	}
+	newKey := "ha:dev-hue-1/" + reg
+	if oldKey == "" || oldKey == newKey {
+		t.Fatalf("old key %q", oldKey)
+	}
+	e.ha.UpdateEntity("switch.coffee", map[string]any{"device_id": "dev-hue-1"})
+	e.eventually("the switch moved", func() bool { _, ok := e.dev.EndpointOf(newKey); return ok })
+	if e.served(oldKey) != nil {
+		t.Fatalf("the old key %s is still served", oldKey)
+	}
+	if again, ok := e.dev.EndpointOf(newKey); !ok || again == old {
+		t.Fatalf("the moved switch is on %d (was %d)", again, old)
+	}
+}

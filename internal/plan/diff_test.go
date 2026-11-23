@@ -119,6 +119,23 @@ func TestDiff(t *testing.T) {
 			replaced: []string{"dev-kitchen"},
 		},
 		{
+			// An entity moved to another device: its key changes (the
+			// device's UID is part of it), the old key is removed and keeps
+			// its stored number (HR-P1-bound-39, accepted), the new one is
+			// added.
+			name: "an entity moved to another device",
+			old:  served(kitchen, hall),
+			next: []*plan.Built[string]{
+				built("dev-kitchen", "s2", "dev-kitchen/light"),
+				built("dev-hall", "s2", "dev-hall/lock", "dev-hall/sensor"),
+			},
+			ops: []string{
+				"replace dev-kitchen/light dev-kitchen/light@s2", "remove dev-kitchen/sensor",
+				"replace dev-hall/lock dev-hall/lock@s2", "add dev-hall/sensor dev-hall/sensor@s2",
+			},
+			replaced: []string{"dev-kitchen", "dev-hall"},
+		},
+		{
 			name:    "two removed groups, in key order",
 			old:     served(kitchen, hall),
 			ops:     []string{"remove dev-hall/lock", "remove dev-kitchen/light", "remove dev-kitchen/sensor"},
