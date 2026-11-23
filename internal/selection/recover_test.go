@@ -87,6 +87,71 @@ func TestCorruptFallsBackToLastGood(t *testing.T) {
 	}
 }
 
+// TestRestoreLastsPastOneStart (HR-P1-err-91, decision 25): the
+// last-good copy read at one start is written back, so the next start
+// reads it as the file; and a missing file beside a last-good copy reads
+// the copy and says so.
+func TestRestoreLastsPastOneStart(t *testing.T) {
+	path := filepath.Join(t.TempDir(), fileName)
+	s, err := Open(path, quietLog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Set(map[string]Entry{"light.a": {Enabled: false}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Set(map[string]Entry{"light.b": {Enabled: false}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, path, `{trunc`)
+	if _, err := Open(path, quietLog); err != nil {
+		t.Fatal(err)
+	}
+	s2, err := Open(path, quietLog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := s2.Entries(); len(got) != 1 || got["light.a"].Enabled {
+		t.Fatalf("second start: entries %v", got)
+	}
+	if r, ok := s2.Recovered(); ok {
+		t.Fatalf("second start: recovered %+v", r)
+	}
+
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	s3, err := Open(path, quietLog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, ok := s3.Recovered()
+	if got := s3.Entries(); len(got) != 1 || !ok || r.Restored != path+BackupSuffix || !strings.Contains(r.Message(), "missing") {
+		t.Fatalf("missing file: entries %v, recovered %+v %v: %q", got, r, ok, r.Message())
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("missing file not written back: %v", err)
+	}
+}
+
+// TestNothingUnderstoodWarns (HR-P1-cfg-95): a file that parses but
+// carries nothing this version understands ({} or null) says that the
+// overrides started empty, not that they apply.
+func TestNothingUnderstoodWarns(t *testing.T) {
+	for _, body := range []string{`{}`, `null`, `{"version": 2}`} {
+		path := filepath.Join(t.TempDir(), fileName)
+		writeFile(t, path, body)
+		s, err := Open(path, quietLog)
+		if err != nil {
+			t.Fatal(err)
+		}
+		r, ok := s.Recovered()
+		if !ok || !strings.Contains(r.Message(), "exposed again") || strings.Contains(r.Message(), "apply") {
+			t.Fatalf("%s: recovered %+v %v: %q", body, r, ok, r.Message())
+		}
+	}
+}
+
 // TestCorruptBackupIsNotKept (HR-P1-err-06): a write over a file that
 // does not parse keeps the last-good copy rather than the damaged file.
 func TestCorruptBackupIsNotKept(t *testing.T) {

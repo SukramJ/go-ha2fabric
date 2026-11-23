@@ -54,10 +54,13 @@ and read at start; before each write the file it replaces is kept as
 restored backup, a downgrade) is read leniently: its entities in this
 shape apply, the rest is ignored, and the log (`selection.version`) and
 the status page (`selection_corrupt`) say so until the next start; saving
-the selection rewrites it as version 1. A file that does not parse is
-renamed to `selection.json.corrupt-<unix seconds>`, logged
-(`selection.corrupt`), and the last-good copy is read instead, which loses
-at most the last change. Only when that does not parse either does the
+the selection rewrites it as version 1; when nothing in it is understood
+(`{}`, `null`), the warning says the overrides started empty. A file that
+does not parse is renamed to `selection.json.corrupt-<unix seconds>`,
+logged (`selection.corrupt`), and the last-good copy is read instead and
+written back as `selection.json`, which loses at most the last change; a
+missing `selection.json` beside a last-good copy is restored the same way
+(`selection.missing`). Only when that does not parse either does the
 configured node start without overrides — and then entities turned off in
 the web UI are exposed again wherever `EXPOSE_ASSIST`, `INCLUDE` and the
 labels expose them; the status warning says so. A web UI node's rule is
@@ -259,6 +262,8 @@ The lines to know:
 | `bridge.forget` | info | An entity removed from Home Assistant's registry: its endpoint number is forgotten (`entity`, `key`); created again, it gets a fresh one. |
 | `selection.corrupt` | warn | `selection.json` did not parse and was moved aside (`moved_to`); `restored` names the last-good copy read instead, empty when none could be (Files); also on the web UI's status page. |
 | `selection.version` | warn | `selection.json` is of another version (`version`) and was read leniently (Files); also on the web UI's status page. |
+| `selection.missing` | warn | `selection.json` was missing beside its last-good copy; `restored` names the copy read and written back, empty when it could not be read (Files); also on the web UI's status page. |
+| `selection.restore_failed` | warn | The last-good copy read at start could not be written back as `selection.json` (`error`); the next start reads the copy again. |
 | `bridge.camera_disabled` | info | Once per start: exposed cameras skipped because `CAMERA` is off (`skipped`). |
 | `camera.session` / `camera.session_ended` | info | A controller opened or ended a camera session (`entity_id`, `session`). |
 | `camera.ha_error` | warn | Home Assistant reported an error for a session (`code`, `message`, e.g. `go2rtc_webrtc_offer_failed`); the session ends. |

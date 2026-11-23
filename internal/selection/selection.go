@@ -13,7 +13,8 @@
 // is kept as <file>.bak, the last-good copy. A file of another version is
 // read leniently (its entities in the known shape apply); a file that
 // does not parse is renamed aside and logged, and the last-good copy is
-// read instead — it loses at most the last change. Only when neither
+// read instead and written back as the file — it loses at most the last
+// change; so is a missing file beside a last-good copy. Only when neither
 // helps does the daemon start without overrides (decision 25 of the
 // 2026-11-23 review), rather than not at all.
 package selection
@@ -69,11 +70,17 @@ type Store struct {
 	recovered *Recovery
 }
 
-// Recovery is an overrides file that did not parse at [Open] and was
-// moved aside.
+// Recovery is an overrides file [Open] did not read as it is: one that
+// did not parse and was moved aside, one that was missing beside a
+// last-good copy, or one of another version.
 type Recovery struct {
 	// MovedTo is the path the file was renamed to.
 	MovedTo string
+	// Missing is a file that was not there while its last-good copy was.
+	Missing bool
+	// Empty is a file of another version of which nothing was understood
+	// ({} or null): no overrides apply.
+	Empty bool
 	// Err is why it did not parse.
 	Err string
 	// At is when it was moved.
@@ -87,22 +94,31 @@ type Recovery struct {
 // Message is the status page's text of the recovery: what was read, and
 // what it means for the entities the web UI turned off.
 func (r Recovery) Message() string {
+	const exposed = "the web UI's overrides started empty, so entities turned off there are exposed again where the configured rule exposes them"
 	switch {
+	case r.Missing && r.Restored != "":
+		return fmt.Sprintf("the overrides file was missing; the last-good copy %s was read instead and written back as the file, so the last change made in the web UI may be lost", r.Restored)
+	case r.Missing:
+		return fmt.Sprintf("the overrides file was missing and its last-good copy could not be read (%s): %s", r.Err, exposed)
+	case r.MovedTo == "" && r.Empty:
+		return fmt.Sprintf("the overrides file is version %d, not %d, and nothing in it was understood: %s", r.Version, Version, exposed)
 	case r.MovedTo == "":
 		return fmt.Sprintf("the overrides file is version %d, not %d: its overrides were read as this version understands them and apply; saving the selection rewrites it as version %d", r.Version, Version, Version)
 	case r.Restored != "":
-		return fmt.Sprintf("the overrides file did not parse (%s) and was moved to %s; the last-good copy %s was read instead, so the last change made in the web UI may be lost", r.Err, r.MovedTo, r.Restored)
+		return fmt.Sprintf("the overrides file did not parse (%s) and was moved to %s; the last-good copy %s was read instead and written back as the file, so the last change made in the web UI may be lost", r.Err, r.MovedTo, r.Restored)
 	default:
 		return fmt.Sprintf("the overrides file did not parse (%s) and was moved to %s, and no last-good copy could be read: the web UI's overrides started empty, so entities turned off there are exposed again where the configured rule exposes them", r.Err, r.MovedTo)
 	}
 }
 
-// Open reads the file at path; a missing file is no overrides. A file of
-// another version is read leniently and reported by [Store.Recovered]. A
-// file that does not parse is renamed to <path>.corrupt-<unix seconds>
-// and logged, and the last-good copy <path>.bak is read instead; when it
-// does not parse either, the store starts empty. Keys that are not entity
-// ids are dropped and names cut to MaxName.
+// Open reads the file at path; a missing file without a last-good copy is
+// no overrides. A file of another version is read leniently and reported
+// by [Store.Recovered]. A file that does not parse is renamed to
+// <path>.corrupt-<unix seconds> and logged, and the last-good copy
+// <path>.bak is read instead and written back as the file, so the next
+// start reads it too; a missing file beside a last-good copy alike. When
+// the copy does not parse either, the store starts empty. Keys that are
+// not entity ids are dropped and names cut to MaxName.
 func Open(path string, log *slog.Logger) (*Store, error) {
 	if log == nil {
 		log = slog.Default()
@@ -111,19 +127,19 @@ func Open(path string, log *slog.Logger) (*Store, error) {
 	if path == "" {
 		return s, nil
 	}
+	now := time.Now()
 	b, err := os.ReadFile(path) //nolint:gosec // the daemon's own file
 	if errors.Is(err, fs.ErrNotExist) {
-		return s, nil
+		return s.openMissing(now), nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("selection: %w", err)
 	}
-	now := time.Now()
 	f, err := parse(b)
 	if err == nil {
 		s.load(f.Entities)
 		if f.Version != Version {
-			s.recovered = &Recovery{Err: fmt.Sprintf("version %d, want %d", f.Version, Version), At: now, Version: f.Version}
+			s.recovered = &Recovery{Err: fmt.Sprintf("version %d, want %d", f.Version, Version), At: now, Version: f.Version, Empty: len(f.Entities) == 0}
 			log.Warn("selection.version", slog.String("file", path), slog.Int("version", f.Version), slog.Int("entries", len(s.entries)),
 				slog.String("hint", s.recovered.Message()))
 		}
@@ -136,13 +152,45 @@ func Open(path string, log *slog.Logger) (*Store, error) {
 	s.recovered = &Recovery{MovedTo: aside, Err: err.Error(), At: now}
 	if bb, berr := os.ReadFile(path + BackupSuffix); berr == nil { //nolint:gosec // the daemon's own file
 		if bf, perr := parse(bb); perr == nil {
-			s.load(bf.Entities)
-			s.recovered.Restored, s.recovered.Version = path+BackupSuffix, bf.Version
+			s.restore(bf, bb)
 		}
 	}
 	log.Warn("selection.corrupt", slog.String("file", path), slog.String("moved_to", aside), slog.String("error", err.Error()),
 		slog.String("restored", s.recovered.Restored), slog.String("hint", s.recovered.Message()))
 	return s, nil
+}
+
+// openMissing is [Open] of a missing file: no overrides, unless a
+// last-good copy is there — a write once happened, so the file was lost —
+// which is read and written back.
+func (s *Store) openMissing(now time.Time) *Store {
+	bb, err := os.ReadFile(s.path + BackupSuffix) //nolint:gosec // the daemon's own file
+	if errors.Is(err, fs.ErrNotExist) {
+		return s
+	}
+	s.recovered = &Recovery{Missing: true, At: now}
+	if err == nil {
+		var bf file
+		if bf, err = parse(bb); err == nil {
+			s.restore(bf, bb)
+		}
+	}
+	if err != nil {
+		s.recovered.Err = err.Error()
+	}
+	s.log.Warn("selection.missing", slog.String("file", s.path), slog.String("restored", s.recovered.Restored), slog.String("hint", s.recovered.Message()))
+	return s
+}
+
+// restore loads the last-good copy bf (read as b) and writes it back as
+// the file, so the next start reads it as the file; a failed write is
+// logged, and the next start falls back to the copy again.
+func (s *Store) restore(bf file, b []byte) {
+	s.load(bf.Entities)
+	s.recovered.Restored, s.recovered.Version = s.path+BackupSuffix, bf.Version
+	if err := atomicWrite(s.path, b); err != nil {
+		s.log.Warn("selection.restore_failed", slog.String("file", s.path), slog.String("error", err.Error()))
+	}
 }
 
 // parse reads a file's content leniently: any version, unknown fields
