@@ -450,10 +450,12 @@ The configured node's passcode is `PASSCODE` (the add-on's `passcode`
 option) or, unset, a random valid one drawn on the first start and kept in
 `passcode.json` beside the store (`ha2fabric.passcode_created` in the log),
 as the registry nodes get theirs. The public test value 20202021 — the
-default before 0.7.0, which an add-on installation of that time kept in its
-options — is honoured, with the log line `ha2fabric.passcode_test_value`
-and the status warning `passcode_test_value`: anyone in reach of the
-commissioning window can pair with it. The other defaults are public test
+default before 0.7.0, which add-on options saved before 0.7.0 keep — is
+honoured, with the log line `ha2fabric.passcode_test_value` and the status
+warning `passcode_test_value`: anyone in reach of the commissioning window
+can pair with it. An add-on installation that never saved its options has
+no `passcode` after the update and gets a random one, so an unpaired
+bridge's codes change; a paired bridge stays paired either way. The other defaults are public test
 values too: discriminator 3840, the CSA test vendor 0xFFF1 and product
 0x8001. The bridge carries go-fabric's test attestation chain; a
 controller may warn that it is an uncertified device and needs a

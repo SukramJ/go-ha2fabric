@@ -24,10 +24,12 @@ The move to go-fabric `v0.25.0` under its new module path
   `PASSCODE` (the add-on's `passcode` option, now optional without a
   default) the node draws a valid passcode on its first start and keeps it
   in `passcode.json` beside the store, as the web UI's nodes do. An
-  explicit `20202021`, the public test value and the old default — which an
-  add-on installation from before kept in its options — is honoured with
-  the log line `ha2fabric.passcode_test_value` and the status warning
-  `passcode_test_value`. A paired node keeps its fabrics.
+  explicit `20202021`, the public test value and the old default — which
+  add-on options saved before 0.7.0 keep — is honoured with the log line
+  `ha2fabric.passcode_test_value` and the status warning
+  `passcode_test_value`; an add-on installation that never saved its
+  options gets a random passcode with the update. A paired node stays
+  paired either way.
 - **In the add-on the web UI's administrator is a Home Assistant
   administrator**: the daemon reads the user's groups the Supervisor sets
   on each Ingress request (`X-Remote-User-Groups`, `system-admin`), which

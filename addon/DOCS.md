@@ -20,10 +20,12 @@ attestation chain, and a controller may warn when you pair it.
 4. In your controller's app, add an accessory and scan the QR code (or type
    the manual code). The code works while no controller has paired yet.
 5. The passcode is random unless you set the `passcode` option: the add-on
-   draws one on its first start and keeps it. An installation from before
-   0.7.0 kept the old default 20202021, a public test value; the status page
+   draws one on its first start and keeps it. Options saved before 0.7.0
+   keep the old default 20202021, a public test value; the status page
    warns about it (`passcode_test_value`) — remove the option for a random
-   one, or set your own.
+   one, or set your own. An installation whose options were never saved
+   gets a random passcode with the update. A paired bridge stays paired
+   either way.
 
 ## Which entities are served
 
