@@ -150,6 +150,10 @@ type Bridge struct {
 	// asks for an entity's ports, closed when no built device of the
 	// entity carries them any more.
 	hosts map[string]*camera.Host
+	// labelIDs are the label ids the rule's label values resolved to at
+	// the last sync (expose.Rule.LabelIDs): a renamed label keeps its
+	// inclusion or exclusion.
+	labelIDs map[string]string
 	// down is set once the endpoints were marked unreachable for an
 	// outage of Home Assistant, so the outage is logged once.
 	down bool
@@ -171,6 +175,8 @@ type Bridge struct {
 	// serving are the entity ids the last sync serves on an endpoint: a
 	// queued command runs only for one of them ([Bridge.command]).
 	serving map[string]bool
+	// viewLabelIDs is labelIDs for readers ([View]).
+	viewLabelIDs map[string]string
 	// ranges are the heat/cool ranges the command loop last sent, by
 	// entity id, until a state shows them ([Bridge.sentRangeLocked]).
 	ranges map[string]sentRange
@@ -404,6 +410,7 @@ func (b *Bridge) sync(ctx context.Context) {
 		return
 	}
 	in := b.opts.Input()
+	in.Rule.LabelIDs = b.labelIDs
 	snap, err := ha.ReadSnapshot(ctx, b.up, in.Rule.Assist)
 	if err != nil {
 		b.log.Error("bridge.sync_failed", slog.String("error", err.Error()))
@@ -416,7 +423,9 @@ func (b *Bridge) sync(ctx context.Context) {
 	// made for the devices the bridge builds, not for every camera.
 	all := plan.Candidates(snap, in)
 	b.logCameraOff(verdicts)
-	warnings, uiWarnings := b.warn(plan.Warnings(in, plan.Labels(snap)))
+	labels := plan.Labels(snap)
+	warnings, uiWarnings := b.warn(plan.Warnings(in, labels))
+	b.labelIDs = in.Rule.Resolutions(labels)
 
 	b.mu.Lock()
 	b.states = map[string]*ha.State{}
@@ -544,6 +553,7 @@ func (b *Bridge) sync(ctx context.Context) {
 	}
 	b.mu.Lock()
 	b.serving = serving
+	b.viewLabelIDs = b.labelIDs
 	b.verdicts = verdicts
 	b.last = snap
 	b.all = all
@@ -651,13 +661,16 @@ type View struct {
 	All map[string]*plan.Verdict
 	// Warnings are the sync's findings (plan.Warnings) with their age.
 	Warnings []Warning
+	// LabelIDs are the label ids the rule's label values resolved to
+	// (expose.Rule.LabelIDs), for a reader's own assessment.
+	LabelIDs map[string]string
 }
 
 // View returns the last sync's read model.
 func (b *Bridge) View() View {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	return View{Snapshot: b.last, Verdicts: slices.Clone(b.verdicts), All: b.all, Warnings: slices.Clone(b.warnings)}
+	return View{Snapshot: b.last, Verdicts: slices.Clone(b.verdicts), All: b.all, Warnings: slices.Clone(b.warnings), LabelIDs: maps.Clone(b.viewLabelIDs)}
 }
 
 // warn logs the configuration's warnings (plan.Warnings) when they

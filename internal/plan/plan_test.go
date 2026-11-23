@@ -184,6 +184,16 @@ func TestWarnings(t *testing.T) {
 	if got := plan.Warnings(plan.Input{Rule: expose.Rule{IncludeLabels: []string{"MATTER"}}}, labels); got != nil {
 		t.Fatalf("no finding %q", got)
 	}
+	// An exclude label that names nothing excludes nothing: the warning
+	// says so (HR-P1-cfg-34); one that follows a renamed label names it.
+	ex := plan.Warnings(plan.Input{Rule: expose.Rule{ExcludeLabels: []string{"Gone"}}}, labels)
+	if len(ex) != 1 || !strings.Contains(ex[0], `exclude label "Gone"`) || !strings.Contains(ex[0], "excludes nothing now") {
+		t.Fatalf("exclude warning %q", ex)
+	}
+	fw := plan.Warnings(plan.Input{Rule: expose.Rule{ExcludeLabels: []string{"Old"}, LabelIDs: map[string]string{"Old": "matter"}}}, labels)
+	if len(fw) != 1 || !strings.Contains(fw[0], `follows the label id "matter"`) || !strings.Contains(fw[0], `now named "Matter"`) {
+		t.Fatalf("followed warning %q", fw)
+	}
 }
 
 // TestRemovedKey: the key is the one go-hamapping gives the entity's

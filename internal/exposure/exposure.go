@@ -127,11 +127,13 @@ type view struct {
 	devs     map[string]*ha.DeviceEntry
 	areas    map[string]string
 	names    map[string]string
+	// labelIDs are the bridge's label memory (bridge.View.LabelIDs).
+	labelIDs map[string]string
 }
 
 func (p *Provider) view() *view {
 	m := p.m.View()
-	v := &view{snap: m.Snapshot, verdicts: m.Verdicts, all: m.All}
+	v := &view{snap: m.Snapshot, verdicts: m.Verdicts, all: m.All, labelIDs: m.LabelIDs}
 	v.reg, v.devs, v.areas = map[string]*ha.EntityEntry{}, map[string]*ha.DeviceEntry{}, map[string]string{}
 	if v.snap != nil {
 		for i := range v.snap.Entities {
@@ -232,9 +234,17 @@ func (v *view) check(updates []fabricui.Update) (map[string]fabricui.Item, error
 	return items, nil
 }
 
+// input is the node's plan input as the bridge's last sync read it: with
+// the label ids its label values resolved to before (a renamed label).
+func (p *Provider) input(v *view) plan.Input {
+	in := p.opts.Input()
+	in.Rule.LabelIDs = v.labelIDs
+	return in
+}
+
 // proposed is the current input with the updates applied: each one's
 // exposure as an override, and its name when it carries one.
-func (p *Provider) proposed(updates []fabricui.Update) plan.Input {
+func (p *Provider) proposed(v *view, updates []fabricui.Update) plan.Input {
 	enabled, names := map[string]bool{}, map[string]string{}
 	for _, u := range updates {
 		enabled[u.Key] = u.Enabled
@@ -242,7 +252,7 @@ func (p *Provider) proposed(updates []fabricui.Update) plan.Input {
 			names[u.Key] = strings.TrimSpace(*u.Name)
 		}
 	}
-	return p.opts.Input().With(enabled, names)
+	return p.input(v).With(enabled, names)
 }
 
 // Preview is the plan with the updates as overrides, through
@@ -255,7 +265,7 @@ func (p *Provider) Preview(_ context.Context, updates []fabricui.Update) ([]fabr
 	if err != nil {
 		return nil, err
 	}
-	in := p.proposed(updates)
+	in := p.proposed(v, updates)
 	after := &view{snap: v.snap, verdicts: plan.Dry(v.snap, in), all: v.all, reg: v.reg, devs: v.devs, areas: v.areas, names: in.Names}
 	touched := map[string]bool{}
 	for _, u := range updates {
@@ -290,7 +300,7 @@ func (p *Provider) Apply(_ context.Context, updates []fabricui.Update) (int, err
 		keys = append(keys, u.Key)
 	}
 	plain := map[string]bool{}
-	dry := plan.Dry(v.snap, p.opts.Input().Without(keys...))
+	dry := plan.Dry(v.snap, p.input(v).Without(keys...))
 	for i := range dry {
 		plain[dry[i].EntityID] = dry[i].Exposed
 	}

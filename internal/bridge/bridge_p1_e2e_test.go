@@ -119,3 +119,29 @@ func TestQueuedCommandOfUnexposedEntity(t *testing.T) {
 	e.noCall(mark, "switch.coffee")
 	e.eventually("the dropped command is counted", func() bool { return e.br.Status().CommandErrs == 1 })
 }
+
+// TestExcludeLabelRenamed (HR-P1-cfg-34): an exclude label configured by
+// its name keeps excluding after Home Assistant renames the label (the
+// rename keeps its label_id); the warning says the name is followed by
+// its id. Once the label is gone, the warning says the exclusion lapsed.
+func TestExcludeLabelRenamed(t *testing.T) {
+	e := newEnv(t, expose.Rule{Include: []string{"sensor.outdoor"}, ExcludeLabels: []string{"Matter"}})
+	if v := byID(e.br.Plan())["sensor.outdoor"]; v.Exposed {
+		t.Fatalf("not excluded: %+v", v)
+	}
+	synced := e.br.Status().LastSync
+	e.ha.UpdateLabel("matter", "Bridge")
+	e.eventually("the rename is synced", func() bool { return e.br.Status().LastSync.After(synced) })
+	if v := byID(e.br.Plan())["sensor.outdoor"]; v.Exposed || v.Source != expose.SourceExclude {
+		t.Fatalf("the renamed label no longer excludes: %+v", v)
+	}
+	if w := e.br.Status().Warnings; len(w) != 1 || !strings.Contains(w[0], `"Matter"`) || !strings.Contains(w[0], `"matter"`) {
+		t.Fatalf("warnings %q", w)
+	}
+	synced = e.br.Status().LastSync
+	e.ha.RemoveLabel("matter")
+	e.eventually("the removal is synced", func() bool { return e.br.Status().LastSync.After(synced) })
+	if w := e.br.Status().Warnings; len(w) != 1 || !strings.Contains(w[0], "excludes nothing") {
+		t.Fatalf("warnings after the removal %q", w)
+	}
+}
