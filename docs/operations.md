@@ -99,7 +99,9 @@ Assistant's Ingress requires that only its proxy reaches it
 ([add-on presentation, "Ingress"](https://developers.home-assistant.io/docs/apps/presentation#ingress):
 "Only connections from `172.30.32.2` must be allowed"), so the add-on sets
 `WEB_ALLOW=172.30.32.2` and the daemon refuses every other client with 403.
-Stand-alone, `WEB_ALLOW` takes any list of client addresses.
+In add-on mode (`SUPERVISOR_TOKEN` set) the daemon holds that itself:
+`WEB_ALLOW` defaults to `172.30.32.2`, and any other value is refused at
+start. Stand-alone, `WEB_ALLOW` takes any list of client addresses.
 
 ## mDNS
 

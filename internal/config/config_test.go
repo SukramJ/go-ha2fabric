@@ -340,3 +340,18 @@ func TestPasscodeUnset(t *testing.T) {
 		t.Fatalf("the test value: %+v %v", c, err)
 	}
 }
+
+// TestAddonWebAllow: in the add-on the client filter is the Ingress proxy:
+// WEB_ALLOW defaults to it and another value is refused (HR-P0-cfg-30).
+func TestAddonWebAllow(t *testing.T) {
+	store := []string{"--store-path", t.TempDir() + "/s.db"}
+	c, err := Load(store, MapEnv(map[string]string{SupervisorTokenEnv: "sup"}), io.Discard)
+	if err != nil || !slices.Equal(c.WebAllow, []string{IngressProxy}) {
+		t.Fatalf("default: %+v %v", c, err)
+	}
+	for _, allow := range []string{"192.168.1.2", "172.30.32.2,192.168.1.2"} {
+		if _, err := Load(store, MapEnv(map[string]string{SupervisorTokenEnv: "sup", "WEB_ALLOW": allow}), io.Discard); err == nil || !strings.Contains(err.Error(), "WEB_ALLOW") {
+			t.Errorf("%s: %v", allow, err)
+		}
+	}
+}

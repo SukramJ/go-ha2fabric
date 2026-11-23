@@ -115,8 +115,9 @@ type Config struct {
 	LogLevel slog.Level
 	// WebListen is the web UI's address; empty disables it.
 	WebListen string
-	// WebAllow restricts the web UI to these client addresses (the
-	// Ingress proxy's 172.30.32.2 in the add-on); empty allows every one.
+	// WebAllow restricts the web UI to these client addresses; empty
+	// allows every one. In the add-on it is the Ingress proxy's
+	// 172.30.32.2, the default there, and nothing else is accepted.
 	WebAllow []string
 	// WebAllowedHosts are the DNS names a stand-alone web UI answers under
 	// besides loopback names and IP addresses (WEB_ALLOWED_HOSTS, comma-
@@ -286,6 +287,11 @@ func Load(args []string, env Env, out io.Writer) (*Config, error) {
 	c.SelectionPath = filepath.Join(filepath.Dir(c.StorePath), SelectionFile)
 	c.WebListen = strings.TrimSpace(*web)
 	c.WebAllow = expose.Split(*allow)
+	if c.Addon && len(c.WebAllow) == 0 {
+		// The add-on's web UI serves the Ingress proxy only, whatever
+		// started the daemon; the admin check relies on it.
+		c.WebAllow = []string{IngressProxy}
+	}
 	c.WebAllowedHosts = expose.Split(*allowedHosts)
 
 	if c.Version {
@@ -365,6 +371,9 @@ func Load(args []string, env Env, out io.Writer) (*Config, error) {
 		if net.ParseIP(a) == nil {
 			add("WEB_ALLOW %q is not an IP address", a)
 		}
+	}
+	if c.Addon && !slices.Equal(c.WebAllow, []string{IngressProxy}) {
+		add("WEB_ALLOW in the add-on is the Ingress proxy %s only, got %q", IngressProxy, strings.Join(c.WebAllow, ","))
 	}
 	// WEB_ADMIN makes whoever reaches the port the administrator, over
 	// plain HTTP: off loopback only with WEB_ALLOW naming who that is.
