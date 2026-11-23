@@ -32,12 +32,18 @@ type Snapshot struct {
 	Exposed  Exposed
 }
 
-// ReadSnapshot reads the registries, the states, the configuration and —
+// ReadSnapshot reads the states, the registries, the configuration and —
 // when assist is set, the exposure rule following Assist — the exposure
 // list.
 func ReadSnapshot(ctx context.Context, src Source, assist bool) (*Snapshot, error) {
 	var s Snapshot
 	var err error
+	// The states first: an entity registered between the reads then has
+	// no state yet and stays out until its state_changed re-syncs, instead
+	// of being planned once without its registry entry (HR-P1-data-67).
+	if s.States, err = src.GetStates(ctx); err != nil {
+		return nil, fmt.Errorf("get_states: %w", err)
+	}
 	if s.Entities, err = src.ListEntities(ctx); err != nil {
 		return nil, fmt.Errorf("config/entity_registry/list: %w", err)
 	}
@@ -49,9 +55,6 @@ func ReadSnapshot(ctx context.Context, src Source, assist bool) (*Snapshot, erro
 	}
 	if s.Labels, err = src.ListLabels(ctx); err != nil {
 		return nil, fmt.Errorf("config/label_registry/list: %w", err)
-	}
-	if s.States, err = src.GetStates(ctx); err != nil {
-		return nil, fmt.Errorf("get_states: %w", err)
 	}
 	if s.Config, err = src.GetConfig(ctx); err != nil {
 		return nil, fmt.Errorf("get_config: %w", err)
