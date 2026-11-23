@@ -27,6 +27,7 @@ import (
 	"net"
 	"net/http"
 	"slices"
+	"strings"
 	"time"
 
 	fabricui "github.com/SukramJ/go-fabric-ui/fabricui"
@@ -133,16 +134,50 @@ func (s *Server) Run(ctx context.Context) error {
 	}
 }
 
-// From is an Admin that admits a request whose client address is ip: the
-// add-on's Ingress proxy, which has authenticated the Home Assistant user
-// before it forwards (go-fabric-ui docs/embedding.md, "Admin gate by the
-// host").
+// From is a predicate that admits a request whose client address is ip:
+// the add-on's Host check admits the Ingress proxy by it. It says who sent
+// the request, not who the user is: the proxy forwards every Home
+// Assistant user's request, so it is no administrator check by itself
+// ([IngressAdmin] is).
 func From(ip string) func(*http.Request) bool {
 	want := net.ParseIP(ip)
 	return func(r *http.Request) bool {
 		host, _, err := net.SplitHostPort(r.RemoteAddr)
 		got := net.ParseIP(host)
 		return err == nil && got != nil && want != nil && got.Equal(want)
+	}
+}
+
+// Ingress user headers: the Supervisor sets the Home Assistant user's
+// groups on every request it forwards through Ingress, comma-separated,
+// and drops a value the browser sent (supervisor/api/ingress.py:47-64,
+// :412-419, const.py:115, :625, :653-659 at fe91b8db; from Supervisor
+// 2026.10.4).
+const (
+	UserGroupsHeader = "X-Remote-User-Groups"
+	AdminGroup       = "system-admin"
+)
+
+// IngressAdmin is the add-on's Admin: a request from the Ingress proxy at
+// proxy whose user is a Home Assistant administrator — UserGroupsHeader
+// lists AdminGroup (an owner's groups include it). Without the header the
+// request is no administrator's. The header is trustworthy only on a
+// Supervisor that strips the browser's own value (2026.10.4 and later),
+// which the daemon checks before it uses this predicate.
+func IngressAdmin(proxy string) func(*http.Request) bool {
+	from := From(proxy)
+	return func(r *http.Request) bool {
+		if !from(r) {
+			return false
+		}
+		for _, v := range r.Header.Values(UserGroupsHeader) {
+			for g := range strings.SplitSeq(v, ",") {
+				if strings.TrimSpace(g) == AdminGroup {
+					return true
+				}
+			}
+		}
+		return false
 	}
 }
 

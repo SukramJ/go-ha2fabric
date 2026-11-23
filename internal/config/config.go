@@ -81,6 +81,10 @@ type Config struct {
 	// Addon is whether the daemon runs as an add-on (SUPERVISOR_TOKEN
 	// set).
 	Addon bool
+	// SupervisorToken is SUPERVISOR_TOKEN: in the add-on the daemon reads
+	// the Supervisor's version with it (cmd/ha2fabric supervisorGate). It
+	// is never logged or persisted.
+	SupervisorToken string
 
 	Listen string
 	// MDNSInterfaces restricts the nodes' mDNS responder to these host
@@ -258,6 +262,7 @@ func Load(args []string, env Env, out io.Writer) (*Config, error) {
 	c := &Config{DumpPlan: *dump, Version: *ver}
 	supervisor := get(SupervisorTokenEnv)
 	c.Addon = supervisor != ""
+	c.SupervisorToken = supervisor
 	c.HAToken = get("HA_TOKEN")
 	if c.HAToken == "" {
 		c.HAToken = supervisor

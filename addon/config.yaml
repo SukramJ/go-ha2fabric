@@ -42,6 +42,9 @@ backup: cold
 
 ingress: true
 ingress_port: 8486
+# Only Home Assistant administrators open the panel; the daemon also checks
+# the user's groups the Supervisor forwards (docs/operations.md, The web UI).
+panel_admin: true
 panel_icon: mdi:bridge
 panel_title: Fabric Bridge
 

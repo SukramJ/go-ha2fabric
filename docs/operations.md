@@ -196,6 +196,11 @@ The lines to know:
 | --- | --- | --- |
 | `ha2fabric.fabrics` | info | The fabrics the store holds, at start: `count`, and per fabric its index, vendor id and label. `count=0` means no controller has paired — or the store was lost; see Files. |
 | `ha2fabric.pairing` | info | At start and after an erase: the manual code and the QR payload while the node has no fabric; a paired node logs only `fabrics=<n>` and that the codes are on the administrator's pairing page. |
+| `ha2fabric.passcode_created` | info | Without `PASSCODE`, the configured node's random passcode was drawn and written to `passcode.json` (`file`); once, on the first start. |
+| `ha2fabric.passcode_test_value` | warn | `PASSCODE` is the public test value 20202021 (Pairing). |
+| `ha2fabric.token_in_clear` | warn | `HA_URL` is `ws://` to a host that is neither loopback nor the Supervisor (`host`; The token). |
+| `ha2fabric.supervisor` | info, warn | Add-on: the Supervisor's `version` and whether the web UI has an `admin` (2026.10.4 or later); at warn when it is older. |
+| `ha2fabric.supervisor_unreadable` | warn, then debug | Add-on: `GET /info` failed (`error`); retried every 30 s, the web UI is the status page only meanwhile. |
 | `ha2fabric.node_erased` | info | A node was erased in the web UI (`node=<key>` for a registry node): `fabrics_removed`, `elapsed`; the node comes back next, with `ha2fabric.fabrics count=0` and `ha2fabric.pairing`. At warn with `error` when the reset failed part-way. |
 | `ha2fabric.node_lost` | error | The node did not come back after an erase (`node=<key>` for a registry node). The daemon keeps running; the status page shows `node_erase_failed`. See Erase and factory reset. |
 | `ha2fabric.mdns_interface` | warn | At start, with `MDNS_INTERFACES` set: go-fabric's diagnosis of the list (`code`: `interface_not_found`, `interface_filtered`, `interface_no_addresses`; `node=<key>` for a registry node). See mDNS. |
@@ -333,9 +338,20 @@ go-fabric-ui's interface (`v0.13.0`) at `WEB_LISTEN`, in the add-on through
 Ingress. The administrator — who may write (change the selection, open a
 commissioning window, remove a fabric, erase a node) and read every page
 but the status: the selection, fabrics, endpoints, diagnostics, pairing
-with its code and the Operation page — is in the add-on the Ingress proxy
-(`172.30.32.2`), which has authenticated the Home Assistant user;
-stand-alone nobody, unless `WEB_ADMIN=true`, which selects the UI's token
+with its code and the Operation page — is in the add-on a Home Assistant
+administrator: a request of the Ingress proxy (`172.30.32.2`) whose
+`X-Remote-User-Groups`, which the Supervisor sets from the Home Assistant
+user and strips from the browser's request, lists `system-admin` (an
+owner's groups include it). The proxy forwards every user's request, so
+its address alone decides nothing; without the header the request is
+not an administrator's. The Supervisor sets that header from 2026.10.4: the
+add-on reads the Supervisor's version at start (`GET
+http://supervisor/info` with `SUPERVISOR_TOKEN`, `ha2fabric.supervisor`
+in the log) and, below 2026.10.4 or until it has read it, has no
+administrator — the status page only, with the warning
+`supervisor_too_old` or `supervisor_unknown`. The manifest sets
+`panel_admin: true`, so the panel is an administrator's as well.
+Stand-alone nobody, unless `WEB_ADMIN=true`, which selects the UI's token
 mode (every request carries a per-process token the page reads from
 `/api/v1/node/status`, so anyone who can reach the port is the
 administrator). Stand-alone without `WEB_ADMIN` the UI is the status page
@@ -387,8 +403,10 @@ as typed (its node label, at most 32 bytes), without the device name
 go-hamapping puts in front of an entity name otherwise. The status page
 lists the configuration's warnings: unresolved label values
 (`label_unresolved`), an overrides file moved aside at start
-(`selection_corrupt`) and the token sent unencrypted (`token_in_clear`,
-The token); under them the daemon's counters (`discards`,
+(`selection_corrupt`), the token sent unencrypted (`token_in_clear`,
+The token), the public test passcode (`passcode_test_value`, Pairing) and,
+in the add-on, a Supervisor too old or not read yet for an administrator
+(`supervisor_too_old`, `supervisor_unknown`); under them the daemon's counters (`discards`,
 Health).
 
 The Operation page shows the daemon's version and uptime, its recent log

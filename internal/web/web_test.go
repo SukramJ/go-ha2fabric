@@ -176,3 +176,34 @@ func TestRun(t *testing.T) {
 		t.Fatal("a bad address served")
 	}
 }
+
+// TestIngressAdmin: the add-on's administrator is a request of the
+// Ingress proxy whose user's groups hold system-admin; the proxy's
+// address alone is not enough.
+func TestIngressAdmin(t *testing.T) {
+	a := IngressAdmin("172.30.32.2")
+	for _, c := range []struct {
+		remote string
+		groups []string
+		want   bool
+	}{
+		{"172.30.32.2:4000", []string{"system-admin"}, true},
+		{"172.30.32.2:4000", []string{"system-users,system-admin"}, true},
+		{"172.30.32.2:4000", []string{"system-users", " system-admin "}, true},
+		{"172.30.32.2:4000", nil, false},
+		{"172.30.32.2:4000", []string{"system-users"}, false},
+		{"172.30.32.2:4000", []string{"system-admins"}, false},
+		{"172.30.32.2:4000", []string{""}, false},
+		{"192.168.1.20:4000", []string{"system-admin"}, false},
+		{"garbage", []string{"system-admin"}, false},
+	} {
+		req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+		req.RemoteAddr = c.remote
+		for _, g := range c.groups {
+			req.Header.Add(UserGroupsHeader, g)
+		}
+		if got := a(req); got != c.want {
+			t.Errorf("%s %q: %v, want %v", c.remote, c.groups, got, c.want)
+		}
+	}
+}

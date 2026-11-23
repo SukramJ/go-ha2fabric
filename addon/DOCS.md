@@ -129,6 +129,15 @@ administrator (its token is the Supervisor's, never logged or stored). It
 reads the entity, device, area and label registries, the states and the
 exposure list, and calls the services of the entities it serves, nothing else.
 
+The web UI's administrator pages — the selection, pairing with its code,
+fabrics, the node registry, erase and the log — are for Home Assistant
+administrators only: the add-on reads the user's groups the Supervisor
+passes on with every Ingress request. That needs **Supervisor 2026.10.4 or
+later**, which the add-on reads at start; on an older Supervisor, or until
+it has read the version, the web UI shows the status page only, with a
+warning (`supervisor_too_old`, `supervisor_unknown`). Any other Home
+Assistant user sees the status page only.
+
 ## More
 
 The daemon's [operations page](https://github.com/SukramJ/go-ha2fabric/blob/main/docs/operations.md)

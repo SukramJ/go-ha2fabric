@@ -85,7 +85,13 @@ func run(ctx context.Context, args []string, env config.Env, stdout, stderr io.W
 		return dumpPlan(ctx, client, input, stdout, logger)
 	}
 	logger.Info("ha2fabric.start", slog.String("version", version.String()), slog.String("ha_url", ha.LogURL(cfg.HAURL)), slog.Bool("addon", cfg.Addon), slog.Bool("camera", cfg.Camera))
-	host := startWarnings(cfg, logger, started)
+	startup := startWarnings(cfg, logger, started)
+	// In the add-on the web UI has an administrator only on a Supervisor
+	// that names the Ingress user's groups (supervisorGate).
+	var gate *supervisorGate
+	if cfg.Addon {
+		gate = newSupervisorGate(cfg.SupervisorToken, logger)
+	}
 
 	reg, err := nodes.Open(filepath.Dir(cfg.StorePath), logger)
 	if err != nil {
@@ -123,10 +129,13 @@ func run(ctx context.Context, args []string, env config.Env, stdout, stderr io.W
 
 	var wg sync.WaitGroup
 	wg.Go(func() { _ = client.Run(rctx, fan) })
+	if gate != nil {
+		wg.Go(func() { gate.run(rctx) })
+	}
 	webErr := make(chan error, 1)
 	if cfg.WebListen != "" {
 		ws, err := web.New(web.Options{Listen: cfg.WebListen, Allow: cfg.WebAllow, Logger: logger, UI: fabricui.Options{
-			Node: def.sw, Exposure: def.prov, Admin: admin(cfg), Reassemble: def.Resync, Events: def.events, Warnings: warnings(def, fl, host), Counters: counters(def, fl), Erase: def.erase, Logger: logger,
+			Node: def.sw, Exposure: def.prov, Admin: admin(cfg, gate), Reassemble: def.Resync, Events: def.events, Warnings: warnings(def, fl, hostWarnings(startup, gate)), Counters: counters(def, fl), Erase: def.erase, Logger: logger,
 			Operations: web.NewOperations(ring, version.Version, started),
 			Registry:   fl, NodeConfig: nodeConfig(cfg),
 			AllowedHosts: cfg.WebAllowedHosts, AllowHost: allowHost(cfg),
@@ -165,11 +174,23 @@ func run(ctx context.Context, args []string, env config.Env, stdout, stderr io.W
 // the configured node's findings and the registry nodes', which every
 // node's status page reports (a registry node's handler inherits the
 // default's, go-fabric-ui fabricui/handler.go:401 at v0.7.1).
-func warnings(def *served, fl *fleet, host []fabricui.Warning) func(context.Context) []fabricui.Warning {
+func warnings(def *served, fl *fleet, host func() []fabricui.Warning) func(context.Context) []fabricui.Warning {
 	return func(ctx context.Context) []fabricui.Warning {
-		out := slices.Clone(host)
+		out := host()
 		out = append(out, def.Warnings(ctx)...)
 		return append(out, fl.Warnings(ctx)...)
+	}
+}
+
+// hostWarnings are the start-up warnings and, in the add-on, the
+// Supervisor gate's.
+func hostWarnings(startup []fabricui.Warning, gate *supervisorGate) func() []fabricui.Warning {
+	return func() []fabricui.Warning {
+		out := slices.Clone(startup)
+		if gate != nil {
+			out = append(out, gate.Warnings()...)
+		}
+		return out
 	}
 }
 
@@ -205,14 +226,21 @@ func nodeConfig(cfg *config.Config) *fabricui.NodeConfigView {
 	}
 }
 
-// admin is the web UI's administrator check: in the add-on the Ingress
-// proxy, which has authenticated the Home Assistant user; stand-alone
-// the status page only unless WEB_ADMIN, which selects the UI's token mode
-// (nil).
-func admin(cfg *config.Config) func(*http.Request) bool {
+// admin is the web UI's administrator check. In the add-on: a request of
+// the Ingress proxy whose Home Assistant user is an administrator
+// (web.IngressAdmin: the user's groups, which the Supervisor sets), and
+// only once gate knows the Supervisor sets them (minSupervisor); the
+// proxy forwards every user's request, so its address alone decides
+// nothing. Stand-alone the status page only unless WEB_ADMIN, which
+// selects the UI's token mode (nil).
+func admin(cfg *config.Config, gate *supervisorGate) func(*http.Request) bool {
 	switch {
 	case cfg.Addon:
-		return web.From(config.IngressProxy)
+		if gate == nil {
+			return web.ReadOnly
+		}
+		ingress := web.IngressAdmin(config.IngressProxy)
+		return func(r *http.Request) bool { return gate.open() && ingress(r) }
 	case cfg.WebAdmin:
 		return nil
 	default:
