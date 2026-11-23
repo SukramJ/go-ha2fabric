@@ -32,20 +32,24 @@ set `WEB_ALLOW` or a loopback `WEB_LISTEN` before updating (Changed).
   `ha2fabric.passcode_test_value` and the status warning
   `passcode_test_value`; an add-on installation that never saved its
   options gets a random passcode with the update. A paired node stays
-  paired either way.
+  paired either way. A `passcode.json` that cannot be read or written does
+  not stop the daemon: the node runs on a random passcode for that start,
+  with the status warning `passcode_not_kept`.
 - **In the add-on the web UI's administrator is a Home Assistant
   administrator**: the daemon reads the user's groups the Supervisor sets
   on each Ingress request (`X-Remote-User-Groups`, `system-admin`), which
   needs Supervisor 2026.10.4 or later; the daemon reads the Supervisor's
-  version at start (`GET /info`). On an older Supervisor, or until the
-  version is read, the web UI is the status page only, with the warning
-  `supervisor_too_old` or `supervisor_unknown`. The manifest sets
+  version at start (`GET /info`). On an older Supervisor (a pre-release of
+  2026.10.4 counts as older), or until the version is read, the web UI is
+  the status page only, with the warning `supervisor_too_old` or
+  `supervisor_unknown`; below 2026.10.4 the daemon reads the version again
+  every 10 minutes, so an updated Supervisor needs no restart. The manifest sets
   `panel_admin: true`.
 - **Breaking:** `WEB_ADMIN=true` on a `WEB_LISTEN` that is not loopback
   (the image's `0.0.0.0:8099`) is refused at start without `WEB_ALLOW`
   (exit 2: the whole daemon, the bridge included, not only the web UI);
-  the docs say the
-  page is plain HTTP and an address filter is not authentication. A
+  the docs say the page is plain HTTP and an address filter is not
+  authentication. A
   `WEB_ALLOW` entry that is not an IP address fails the web UI instead of
   being dropped. In the add-on `WEB_ALLOW` defaults to the Ingress proxy
   and takes no other value.
@@ -53,10 +57,12 @@ set `WEB_ALLOW` or a loopback `WEB_LISTEN` before updating (Changed).
   node's `ha2fabric.pairing` line points to the pairing page.
 - `HA_URL` must parse as a `ws://` or `wss://` URL with a host (an IPv6
   address in brackets) and no user or password; the log shows it without
-  a query. The WebSocket handshake follows no redirect. With `ws://` to a
+  a query. Neither the WebSocket handshake nor the camera proxy's request
+  follows a redirect. With `ws://` to a
   host that is neither loopback nor the Supervisor the daemon logs
   `ha2fabric.token_in_clear` and shows the status warning `token_in_clear`.
-- `-h` no longer prints an environment `PASSCODE` as the flag's default.
+- `-h` no longer prints an environment `PASSCODE` or `HA_URL` as a flag's
+  default.
 
 - go-fabric `v0.22.2` → `v0.25.0`, now `thingfabric.dev/go-fabric`
   (repository `github.com/thingfabric/go-fabric`). The store's schema is
