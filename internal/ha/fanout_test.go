@@ -60,3 +60,48 @@ func TestFanout(t *testing.T) {
 		}
 	}
 }
+
+// TestFanoutConcurrent (HR-P1-test-70): Add and Remove racing Event —
+// the registry nodes joining and leaving a running connection — keep each
+// handler's order: Connected first, nothing after it was removed.
+func TestFanoutConcurrent(t *testing.T) {
+	f := &ha.Fanout{}
+	f.Connected("2026.10.3")
+	var wg sync.WaitGroup
+	stop := make(chan struct{})
+	wg.Go(func() {
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+				f.Event(ha.Event{EventType: "state_changed"})
+			}
+		}
+	})
+	logs := make([]*callLog, 50)
+	for i := range logs {
+		wg.Go(func() {
+			r := &callLog{}
+			logs[i] = r
+			f.Add(r)
+			f.Remove(r)
+		})
+	}
+	close(stop)
+	wg.Wait()
+	for i, r := range logs {
+		got := r.got()
+		n := len(got)
+		f.Event(ha.Event{EventType: "after"})
+		if len(r.got()) != n {
+			t.Fatalf("handler %d got an event after its Remove", i)
+		}
+		if n == 0 || got[0] != "connected 2026.10.3" {
+			t.Fatalf("handler %d began with %q", i, got[0])
+		}
+	}
+	if f.Len() != 0 {
+		t.Fatalf("%d handlers left", f.Len())
+	}
+}
