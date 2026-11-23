@@ -135,8 +135,9 @@ HA_URL=ws://homeassistant.local:8123/api/websocket HA_TOKEN=<token> ./ha2fabric
 ./ha2fabric --dump-plan     # what would be served, and why
 ```
 
-The pairing code is in the log (`ha2fabric.pairing`) and on the web UI
-(`WEB_LISTEN`, default `127.0.0.1:8099`).
+The pairing code is in the log (`ha2fabric.pairing`) until the first
+controller pairs, and on the web UI's pairing page (`WEB_LISTEN`, default
+`127.0.0.1:8099`, with `WEB_ADMIN`).
 
 ## Configuration
 

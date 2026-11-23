@@ -4,6 +4,7 @@
 package main
 
 import (
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -81,3 +82,16 @@ func TestPasscode(t *testing.T) {
 	d.stop()
 }
 
+
+// TestLogPairing: a node with a fabric, or whose fabrics could not be
+// read, logs no pairing code, only where to find it (HR-P0-leak-24); the
+// node without a fabric logs its codes (TestRun).
+func TestLogPairing(t *testing.T) {
+	for _, fabrics := range []int{1, 3, -1} {
+		var logs safeBuffer
+		logPairing(nil, fabrics, slog.New(slog.NewTextHandler(&logs, nil)))
+		if out := logs.String(); !strings.Contains(out, "msg=ha2fabric.pairing") || strings.Contains(out, "manual_code") || strings.Contains(out, "qr_payload") || !strings.Contains(out, "pairing page") {
+			t.Fatalf("fabrics %d: %s", fabrics, out)
+		}
+	}
+}

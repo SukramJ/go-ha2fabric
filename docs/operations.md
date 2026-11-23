@@ -195,7 +195,7 @@ The lines to know:
 | Message | Level | Meaning |
 | --- | --- | --- |
 | `ha2fabric.fabrics` | info | The fabrics the store holds, at start: `count`, and per fabric its index, vendor id and label. `count=0` means no controller has paired — or the store was lost; see Files. |
-| `ha2fabric.pairing` | info | The manual code and the QR payload, at start and after an erase. |
+| `ha2fabric.pairing` | info | At start and after an erase: the manual code and the QR payload while the node has no fabric; a paired node logs only `fabrics=<n>` and that the codes are on the administrator's pairing page. |
 | `ha2fabric.node_erased` | info | A node was erased in the web UI (`node=<key>` for a registry node): `fabrics_removed`, `elapsed`; the node comes back next, with `ha2fabric.fabrics count=0` and `ha2fabric.pairing`. At warn with `error` when the reset failed part-way. |
 | `ha2fabric.node_lost` | error | The node did not come back after an erase (`node=<key>` for a registry node). The daemon keeps running; the status page shows `node_erase_failed`. See Erase and factory reset. |
 | `ha2fabric.mdns_interface` | warn | At start, with `MDNS_INTERFACES` set: go-fabric's diagnosis of the list (`code`: `interface_not_found`, `interface_filtered`, `interface_no_addresses`; `node=<key>` for a registry node). See mDNS. |
@@ -413,8 +413,10 @@ once. The Home Assistant connection is in the log (`ha.connected`,
 
 ## Pairing
 
-The pairing code is in the log at start (`ha2fabric.pairing`), on the web
-UI's pairing page with its QR code (for an administrator). The node opens its commissioning window when no controller
+The pairing code is on the web UI's pairing page with its QR code (for an
+administrator), and in the log at start (`ha2fabric.pairing`) while the node
+has no fabric; a paired node does not log its codes, which then open
+nothing but the window that opens again once its last fabric goes. The node opens its commissioning window when no controller
 has paired; the first controller closes it. To pair a second ecosystem,
 open a pairing window from the first controller (its multi-admin sharing
 of the bridge), or from the web UI's pairing page, which opens one with
@@ -458,8 +460,8 @@ for all its fabrics, so a different scope is a different node.
   nothing until its entities are picked there. `EXPOSE_ASSIST`,
   `INCLUDE`, `EXCLUDE` and the label lists are the configured node's.
 - **Pairing**: each node has its own pairing page and codes, and opens
-  its commissioning window while no controller has paired it; its codes
-  are in the log at its start (`ha2fabric.pairing node=<key>`).
+  its commissioning window while no controller has paired it; until then
+  its codes are in the log at its start (`ha2fabric.pairing node=<key>`).
 - **Rename** changes the name in the selector and the status page, and
   the running node's `NodeLabel` (cut to 32 bytes), at once: the node
   persists it and reports it to its controllers' subscriptions (go-fabric
