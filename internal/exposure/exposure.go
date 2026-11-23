@@ -19,7 +19,7 @@ import (
 	"strings"
 
 	fabricui "github.com/SukramJ/go-fabric-ui/fabricui"
-	"github.com/SukramJ/go-fabric/eligibility"
+	"thingfabric.dev/go-fabric/eligibility"
 
 	"github.com/SukramJ/go-ha2fabric/internal/bridge"
 	"github.com/SukramJ/go-ha2fabric/internal/expose"

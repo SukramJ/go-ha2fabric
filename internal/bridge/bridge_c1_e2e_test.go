@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SukramJ/go-fabric/cluster/spec"
-	wcdef "github.com/SukramJ/go-fabric/cluster/spec/windowcovering"
-	"github.com/SukramJ/go-fabric/controller/client"
-	"github.com/SukramJ/go-fabric/fabrictest"
+	"thingfabric.dev/go-fabric/cluster/spec"
+	wcdef "thingfabric.dev/go-fabric/cluster/spec/windowcovering"
+	"thingfabric.dev/go-fabric/controller/client"
+	"thingfabric.dev/go-fabric/fabrictest"
 
 	"github.com/SukramJ/go-ha2fabric/internal/expose"
 	"github.com/SukramJ/go-ha2fabric/internal/ha"

@@ -7,7 +7,7 @@ import (
 	"maps"
 	"slices"
 
-	"github.com/SukramJ/go-fabric/device"
+	"thingfabric.dev/go-fabric/device"
 )
 
 // Built is one device group as the reconciler serves it: the signature

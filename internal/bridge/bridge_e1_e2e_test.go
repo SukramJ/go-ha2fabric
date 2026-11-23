@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SukramJ/go-fabric/clock"
-	onoffdef "github.com/SukramJ/go-fabric/cluster/spec/onoff"
-	"github.com/SukramJ/go-fabric/fabrictest"
+	"thingfabric.dev/go-fabric/clock"
+	onoffdef "thingfabric.dev/go-fabric/cluster/spec/onoff"
+	"thingfabric.dev/go-fabric/fabrictest"
 
 	"github.com/SukramJ/go-ha2fabric/internal/bridge"
 	"github.com/SukramJ/go-ha2fabric/internal/config"

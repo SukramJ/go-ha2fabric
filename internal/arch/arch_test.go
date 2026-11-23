@@ -30,7 +30,7 @@ import (
 
 const (
 	module   = "github.com/SukramJ/go-ha2fabric"
-	goFabric = "github.com/SukramJ/go-fabric/"
+	goFabric = "thingfabric.dev/go-fabric/"
 )
 
 // facade are the go-fabric packages the daemon may import.

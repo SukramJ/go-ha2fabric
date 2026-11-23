@@ -9,7 +9,7 @@ import (
 	"time"
 
 	fabricui "github.com/SukramJ/go-fabric-ui/fabricui"
-	"github.com/SukramJ/go-fabric/logring"
+	"thingfabric.dev/go-fabric/logring"
 )
 
 // NewLogger is the daemon's logger: go-fabric's log ring in front of the

@@ -18,8 +18,8 @@ import (
 	"testing"
 
 	fabricui "github.com/SukramJ/go-fabric-ui/fabricui"
-	bridgedbidef "github.com/SukramJ/go-fabric/cluster/spec/bridgeddevicebasicinformation"
-	"github.com/SukramJ/go-fabric/fabrictest"
+	bridgedbidef "thingfabric.dev/go-fabric/cluster/spec/bridgeddevicebasicinformation"
+	"thingfabric.dev/go-fabric/fabrictest"
 
 	"github.com/SukramJ/go-ha2fabric/internal/expose"
 	"github.com/SukramJ/go-ha2fabric/internal/exposure"

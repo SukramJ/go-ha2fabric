@@ -37,11 +37,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/SukramJ/go-fabric/device"
-	"github.com/SukramJ/go-fabric/eligibility"
-	"github.com/SukramJ/go-fabric/node"
 	hamapping "github.com/SukramJ/go-hamapping"
 	"github.com/SukramJ/go-hamqtt/model"
+	"thingfabric.dev/go-fabric/device"
+	"thingfabric.dev/go-fabric/eligibility"
+	"thingfabric.dev/go-fabric/node"
 
 	"github.com/SukramJ/go-ha2fabric/internal/adapt"
 	"github.com/SukramJ/go-ha2fabric/internal/camera"

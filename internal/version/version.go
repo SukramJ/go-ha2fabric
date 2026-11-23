@@ -26,7 +26,7 @@ var (
 
 // GoFabric is the version of the go-fabric module the binary is built
 // with.
-func GoFabric() string { return dep("github.com/SukramJ/go-fabric") }
+func GoFabric() string { return dep("thingfabric.dev/go-fabric") }
 
 // GoHamapping is the version of the go-hamapping module the binary is
 // built with.

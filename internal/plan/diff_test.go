@@ -9,7 +9,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/SukramJ/go-fabric/device"
+	"thingfabric.dev/go-fabric/device"
 
 	"github.com/SukramJ/go-ha2fabric/internal/plan"
 )
