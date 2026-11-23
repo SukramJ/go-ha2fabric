@@ -126,14 +126,18 @@ to reach it from the network, run the image with
   longer than a minute.
 - A token Home Assistant refuses (`auth_invalid`) is retried after five
   minutes, doubling to hourly, instead of every minute, with the log line
-  `ha.token_refused` and the status warning `ha_token_refused`; the daemon
+  `ha.token_refused` and the status warning `ha_token_refused`, which
+  clears as soon as Home Assistant accepts the token again; the daemon
   keeps running.
 - A camera offer whose controller gave up before Home Assistant answered no
   longer leaves Home Assistant's WebRTC session open until the connection
   drops: the subscription is ended once the answer arrives.
 - One registry or state entry with a field of an unexpected type (a name
   that is a number) no longer fails every sync: that entry is skipped and
-  logged once per list (`ha.entry_skipped`).
+  logged once per list (`ha.entry_skipped`). An entity whose entity or
+  device registry entry is skipped is not exposed until it reads again (its
+  hidden flag and labels are unknown), and a skipped label entry fails the
+  sync while `INCLUDE_LABELS` or `EXCLUDE_LABELS` name labels.
 - A command whose caller gave up while it was being written no longer
   closes the Home Assistant connection every node shares.
 - A camera holds at most 8 WebRTC sessions: a further offer ends the
@@ -150,11 +154,12 @@ to reach it from the network, run the image with
   error does.
 - An overrides file (`selection.json`) that does not parse no longer turns
   every entity hidden in the web UI back on: each write keeps the file it
-  replaces as `selection.json.bak`, which is read instead (losing at most
-  the last change); a file of another version is read leniently. Only
-  when neither helps does the configured node start without overrides,
-  and the status warning now says that entities turned off are exposed
-  again. Keys that are not entity ids are ignored, names cut to 256 bytes.
+  replaces as `selection.json.bak`, which is read instead and written back
+  (losing at most the last change), also when `selection.json` is missing;
+  a file of another version is read leniently. Only when neither helps —
+  or nothing in the file is understood — does the configured node start
+  without overrides, and the status warning now says that entities turned
+  off are exposed again. Keys that are not entity ids are ignored, names cut to 256 bytes.
 - A `nodes.json` or `passcode.json` that is there with a mode wider than
   0600 (a restored backup, a copy) is set to 0600 when read, and so is a
   copy moved aside as corrupt (`nodes.mode_tightened`).
@@ -165,7 +170,8 @@ to reach it from the network, run the image with
   Assistant connection, then the configured node and the web UI's nodes at
   once — and the add-on's manifest gives it 30 (`timeout: 30`; the
   Supervisor's default 10 could kill it inside a node's stop). An erase in
-  progress ends with the daemon; the web server's shutdown error is logged
+  progress may finish its reset for up to 20 of those seconds and does not
+  bring the node back; the web server's shutdown error is logged
   (`ha2fabric.web_stop`). A second signal ends the process at once; a
   signal during the start exits 0 instead of 1.
 - An erase whose reset fails without stopping the node no longer orphans
