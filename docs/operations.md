@@ -72,7 +72,12 @@ concern.
 parse or holds an invalid passcode is renamed to
 `passcode.json.corrupt-<unix seconds>`, logged (`nodes.passcode_corrupt`),
 and a new one is drawn; a paired node keeps its fabrics, since the passcode
-opens only the node's own window, which opens without a fabric.
+opens only the node's own window, which opens without a fabric. One that
+cannot be read, moved aside or written does not stop the daemon: the node
+runs on a random passcode for that start only, logged at error
+(`ha2fabric.passcode`) and shown as the status warning `passcode_not_kept`,
+so an unpaired node's codes change at the next start until the directory
+is fixed or `PASSCODE` set.
 
 The daemon stores nothing else: not the token, not Home Assistant's
 registry, not the states. Everything it knows about Home Assistant it reads
@@ -406,7 +411,8 @@ go-hamapping puts in front of an entity name otherwise. The status page
 lists the configuration's warnings: unresolved label values
 (`label_unresolved`), an overrides file moved aside at start
 (`selection_corrupt`), the token sent unencrypted (`token_in_clear`,
-The token), the public test passcode (`passcode_test_value`, Pairing) and,
+The token), the public test passcode (`passcode_test_value`, Pairing), a
+passcode that could not be kept (`passcode_not_kept`, Files) and,
 in the add-on, a Supervisor too old or not read yet for an administrator
 (`supervisor_too_old`, `supervisor_unknown`); under them the daemon's counters (`discards`,
 Health).

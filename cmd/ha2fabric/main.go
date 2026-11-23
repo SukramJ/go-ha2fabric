@@ -102,7 +102,19 @@ func run(ctx context.Context, args []string, env config.Env, stdout, stderr io.W
 		// No PASSCODE: the random one beside the store, as a registry
 		// node's (decision 14 of the 2026-11-23 review).
 		p, created, err := reg.ConfiguredPasscode()
-		if err != nil {
+		switch {
+		case errors.Is(err, nodes.ErrPasscodeNotKept):
+			// A paired node serves without its passcode: run on this
+			// start's and say so, rather than not start at all.
+			logger.Error("ha2fabric.passcode", slog.String("error", err.Error()),
+				slog.String("hint", "the configured node runs with a random passcode for this start only; fix the data directory, or set PASSCODE"))
+			startup = append(startup, fabricui.Warning{
+				Code:    warningPasscodeNotKept,
+				Message: "the configured node's passcode could not be kept (" + err.Error() + "): it is random for this start only, so an unpaired node's pairing codes change at the next start; fix the data directory, or set PASSCODE",
+				Since:   started,
+			})
+			created = false
+		case err != nil:
 			logger.Error("ha2fabric.passcode", slog.String("error", err.Error()))
 			return 1
 		}

@@ -20,6 +20,9 @@ const (
 	warningTokenInClear = "token_in_clear"
 	// warningPasscodeTestValue: PASSCODE is the public test value.
 	warningPasscodeTestValue = "passcode_test_value"
+	// warningPasscodeNotKept: PASSCODE is unset and passcode.json could
+	// not be read or written; the passcode is this start's only.
+	warningPasscodeNotKept = "passcode_not_kept"
 )
 
 // startWarnings are what the configuration holds that the daemon accepts

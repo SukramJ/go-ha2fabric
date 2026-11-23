@@ -21,6 +21,10 @@ import (
 // "created_at": "…"}, written 0600 and atomically like the registry.
 const PasscodeFile = "passcode.json"
 
+// ErrPasscodeNotKept is a passcode drawn for this start that could not be
+// kept in PasscodeFile.
+var ErrPasscodeNotKept = errors.New("nodes: the passcode could not be kept")
+
 // passcodeFile is PasscodeFile's form.
 type passcodeFile struct {
 	Passcode  uint32    `json:"passcode"`
@@ -34,16 +38,20 @@ type passcodeFile struct {
 // parse or holds an invalid passcode is renamed to
 // passcode.json.corrupt-<unix seconds>, logged, and a new one drawn: a
 // node with fabrics keeps them, and its own window, the only user of the
-// passcode, opens only without one.
+// passcode, opens only without one. A file that cannot be read, moved
+// aside or written still yields a drawn passcode, for this start only,
+// with an error that wraps [ErrPasscodeNotKept]: a paired node serves
+// without it, and the daemon reports it rather than not starting.
 func (r *Registry) ConfiguredPasscode() (p uint32, created bool, err error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	path := r.Path(PasscodeFile)
+	var keep error // why the drawn passcode cannot be kept
 	b, err := os.ReadFile(r.Path(PasscodeFile))
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
 	case err != nil:
-		return 0, false, fmt.Errorf("nodes: %w", err)
+		keep = err
 	default:
 		var f passcodeFile
 		perr := json.Unmarshal(b, &f)
@@ -54,7 +62,8 @@ func (r *Registry) ConfiguredPasscode() (p uint32, created bool, err error) {
 		}
 		moved := path + ".corrupt-" + strconv.FormatInt(r.now().Unix(), 10)
 		if rerr := os.Rename(path, moved); rerr != nil {
-			return 0, false, fmt.Errorf("nodes: %s is unusable (%w) and cannot be moved aside: %w", path, perr, rerr)
+			keep = fmt.Errorf("%s is unusable (%w) and cannot be moved aside: %w", path, perr, rerr)
+			break
 		}
 		r.log.Error("nodes.passcode_corrupt", slog.String("moved_to", moved), slog.String("error", perr.Error()),
 			slog.String("hint", "the configured node gets a new random passcode; a paired node keeps its fabrics, the new code is on the pairing page"))
@@ -62,8 +71,11 @@ func (r *Registry) ConfiguredPasscode() (p uint32, created bool, err error) {
 	if p, err = r.passcode(); err != nil {
 		return 0, false, err
 	}
-	if err := r.writeJSON(PasscodeFile, passcodeFile{Passcode: p, CreatedAt: r.now().UTC().Truncate(time.Second)}); err != nil {
-		return 0, false, err
+	if keep == nil {
+		keep = r.writeJSON(PasscodeFile, passcodeFile{Passcode: p, CreatedAt: r.now().UTC().Truncate(time.Second)})
+	}
+	if keep != nil {
+		return p, true, fmt.Errorf("%w: %w", ErrPasscodeNotKept, keep)
 	}
 	return p, true, nil
 }

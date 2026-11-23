@@ -95,3 +95,29 @@ func TestLogPairing(t *testing.T) {
 		}
 	}
 }
+
+// TestPasscodeNotKept: a passcode.json that cannot be read or written
+// does not stop the daemon; it runs on a random passcode for this start
+// and says so (HR-P0-cfg-54).
+func TestPasscodeNotKept(t *testing.T) {
+	srv := hatest.New(t)
+	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, nodes.PasscodeFile), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, nodes.PasscodeFile, "x"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	web := freePort(t, "tcp")
+	d := startDaemon(t, config.MapEnv(map[string]string{
+		"HA_URL": srv.URL(), "HA_TOKEN": hatest.Token, "STORE_PATH": filepath.Join(dir, "ha2fabric.db"),
+		"LISTEN": freePort(t, "udp"), "WEB_LISTEN": web,
+	}), web)
+	if st := d.status("/api/v1/node/status"); !st.warned(warningPasscodeNotKept, "") {
+		t.Fatalf("no %s: %+v", warningPasscodeNotKept, st)
+	}
+	if !strings.Contains(d.logs.String(), "msg=ha2fabric.passcode ") {
+		t.Fatalf("no log line\n%s", d.logs.String())
+	}
+	d.stop()
+}
