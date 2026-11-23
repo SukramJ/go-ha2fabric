@@ -129,6 +129,13 @@ type Bridge struct {
 	cmds chan model.Command
 
 	connected atomic.Bool
+	// owed is a sync the worker owes: work that did not fit the queue
+	// (an event, a Connected, a Disconnected, the debounce's sync). The
+	// worker runs it once the queue is drained, so the snapshot it reads
+	// is newer than every closure applied before it; a sync reads
+	// everything and marks every endpoint unreachable while Home
+	// Assistant is away, so nothing a dropped closure carried is lost.
+	owed atomic.Bool
 
 	// worker-owned
 	groups map[string]*group
@@ -137,16 +144,15 @@ type Bridge struct {
 	unit   string
 	warned string
 	since  map[string]time.Time
-	// forget is the stable key of every entity removed from Home
-	// Assistant's registry since the last sync, by entity id: the next
-	// sync forgets it instead of removing it ([Bridge.noteRemoved]).
-	forget map[string]device.SourceKey
 	// cameraLogged is set once the skipped cameras were logged.
 	cameraLogged bool
 	// hosts are the camera hosts by entity id: made when go-hamapping
 	// asks for an entity's ports, closed when no built device of the
 	// entity carries them any more.
 	hosts map[string]*camera.Host
+	// down is set once the endpoints were marked unreachable for an
+	// outage of Home Assistant, so the outage is logged once.
+	down bool
 
 	mu       sync.Mutex
 	states   map[string]*ha.State
@@ -157,6 +163,11 @@ type Bridge struct {
 	warnings []Warning
 	timer    *time.Timer
 	synced   chan struct{}
+	// forget is the stable key of every entity removed from Home
+	// Assistant's registry since the last sync, by entity id: the next
+	// sync forgets it instead of removing it ([Bridge.noteRemoved]).
+	// Recorded under mu at the event, never through the droppable queue.
+	forget map[string]device.SourceKey
 }
 
 // New returns the bridge of node n and upstream up. The node may be
@@ -205,18 +216,23 @@ func (b *Bridge) Run(ctx context.Context) error {
 			return nil
 		case fn := <-b.work:
 			fn(ctx)
+			if len(b.work) == 0 && b.owed.Swap(false) {
+				b.sync(ctx)
+			}
 		}
 	}
 }
 
 // enqueue hands work to the worker; it never blocks the caller (an
-// ha.Handler method on the client's goroutine).
+// ha.Handler method on the client's goroutine). Work that does not fit
+// is dropped and a sync is owed instead ([Bridge.owed]): only work a sync
+// covers goes through the queue.
 func (b *Bridge) enqueue(fn func(context.Context)) {
 	select {
 	case b.work <- fn:
 	default:
-		b.log.Error("bridge.queue_full", slog.String("hint", "Home Assistant sends faster than the bridge applies; a re-sync follows"))
-		b.resyncSoon()
+		b.owed.Store(true)
+		b.log.Error("bridge.queue_full", slog.String("hint", "Home Assistant sends faster than the bridge applies; a re-sync follows once the queue is drained"))
 	}
 }
 
@@ -232,30 +248,39 @@ func (b *Bridge) Connected(string) {
 }
 
 // Disconnected implements ha.Handler: while Home Assistant is away every
-// endpoint is unreachable (cookbook §6, "Upstream down").
+// endpoint is unreachable (cookbook §6, "Upstream down"). The marking is
+// the sync's while Home Assistant is not connected, so a dropped closure
+// leaves it owed, not lost.
 func (b *Bridge) Disconnected(error) {
 	if !b.connected.Swap(false) {
 		return
 	}
 	b.setStatus(func(s *Status) { s.HAConnected = false })
-	b.enqueue(func(ctx context.Context) {
-		for _, g := range b.groups {
-			for i, d := range g.devices {
-				// A group's devices are top-level, never parts, so go-fabric's
-				// ErrNotBridged cannot come; any error stays a Debug line, as a
-				// reachability patch's does (apply), with the endpoint's
-				// stable key (g.keys runs beside g.devices).
-				if err := d.SetReachable(ctx, false); err != nil {
-					key := ""
-					if i < len(g.keys) {
-						key = g.keys[i].String()
-					}
-					b.log.Debug("bridge.unreachable", slog.String("key", key), slog.String("error", err.Error()))
+	b.enqueue(func(ctx context.Context) { b.sync(ctx) })
+}
+
+// unreachable marks every served endpoint unreachable, and logs the
+// outage once.
+func (b *Bridge) unreachable(ctx context.Context) {
+	for _, g := range b.groups {
+		for i, d := range g.devices {
+			// A group's devices are top-level, never parts, so go-fabric's
+			// ErrNotBridged cannot come; any error stays a Debug line, as a
+			// reachability patch's does (apply), with the endpoint's
+			// stable key (g.keys runs beside g.devices).
+			if err := d.SetReachable(ctx, false); err != nil {
+				key := ""
+				if i < len(g.keys) {
+					key = g.keys[i].String()
 				}
+				b.log.Debug("bridge.unreachable", slog.String("key", key), slog.String("error", err.Error()))
 			}
 		}
+	}
+	if !b.down {
+		b.down = true
 		b.log.Warn("bridge.upstream_unusable", slog.String("hint", "every endpoint is unreachable until Home Assistant is back"))
-	})
+	}
 }
 
 // Event implements ha.Handler.
@@ -278,7 +303,7 @@ func (b *Bridge) Event(ev ha.Event) {
 			EntityID string `json:"entity_id"`
 		}
 		if err := json.Unmarshal(ev.Data, &u); err == nil && u.Action == "remove" && u.EntityID != "" {
-			b.enqueue(func(context.Context) { b.noteRemoved(u.EntityID) })
+			b.noteRemoved(u.EntityID)
 		}
 		b.resyncSoon()
 	case ha.EventDeviceRegistryUpdated, ha.EventLabelRegistryUpdated:
@@ -291,7 +316,8 @@ func (b *Bridge) Event(ev ha.Event) {
 
 // noteRemoved records the stable key of an entity removed from the
 // registry, read from the last snapshot (the new one no longer has its
-// entry), for the next sync to forget. It runs on the worker.
+// entry), for the next sync to forget. It runs on the client's goroutine,
+// under mu, so a full queue cannot drop it.
 //
 // Home Assistant keeps a removed entry's id in deleted_entities and gives
 // it back when the entity is created again
@@ -301,15 +327,14 @@ func (b *Bridge) Event(ev ha.Event) {
 // device would (node.Aggregator.Forget).
 func (b *Bridge) noteRemoved(entityID string) {
 	b.mu.Lock()
-	snap := b.last
-	b.mu.Unlock()
-	if k := plan.RemovedKey(snap, entityID); k != nil {
+	defer b.mu.Unlock()
+	if k := plan.RemovedKey(b.last, entityID); k != nil {
 		b.forget[entityID] = k
 	}
 }
 
 // resyncSoon schedules one sync after the debounce; events within it
-// coalesce.
+// coalesce. A full queue when it fires leaves the sync owed.
 func (b *Bridge) resyncSoon() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -320,6 +345,7 @@ func (b *Bridge) resyncSoon() {
 		select {
 		case b.work <- func(ctx context.Context) { b.sync(ctx) }:
 		default:
+			b.owed.Store(true)
 		}
 	})
 }
@@ -364,8 +390,11 @@ func (b *Bridge) logCameraOff(verdicts []plan.Verdict) {
 
 // sync reads everything and brings the Aggregator's set to it in one
 // batch: new devices added, changed ones replaced, vanished ones removed.
+// While Home Assistant is not connected it marks every endpoint
+// unreachable instead.
 func (b *Bridge) sync(ctx context.Context) {
 	if !b.up.Connected() {
+		b.unreachable(ctx)
 		return
 	}
 	in := b.opts.Input()
@@ -422,8 +451,11 @@ func (b *Bridge) sync(ctx context.Context) {
 		next[p.Key] = g
 		planned = append(planned, g.built())
 	}
-	ch := plan.Diff(served, planned, b.forget)
+	b.mu.Lock()
+	forget := b.forget
 	b.forget = map[string]device.SourceKey{}
+	b.mu.Unlock()
+	ch := plan.Diff(served, planned, forget)
 	err = b.n.Aggregator().Batch(ctx, func(bt *node.Batch) error {
 		errs := make([]error, 0, len(ch.Ops))
 		for _, op := range ch.Ops {
@@ -492,6 +524,7 @@ func (b *Bridge) sync(ctx context.Context) {
 	b.all = all
 	b.status.Warnings = warnings
 	b.warnings = uiWarnings
+	b.down = false
 	b.status.LastSync = time.Now()
 	b.status.SyncError = ""
 	b.status.Endpoints = endpoints
