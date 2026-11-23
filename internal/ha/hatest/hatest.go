@@ -17,6 +17,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -482,6 +483,20 @@ func (s *Server) UpdateLabel(labelID, name string) {
 	for _, l := range s.labels {
 		if l["label_id"] == labelID {
 			l["name"] = name
+		}
+	}
+	s.mu.Unlock()
+	s.fire(ha.EventLabelRegistryUpdated, map[string]any{"action": "update", "label_id": labelID})
+}
+
+// UpdateLabelFields merges changes into a label's registry entry and
+// fires label_registry_updated with action update; a test's way to give a
+// field a type the client does not expect.
+func (s *Server) UpdateLabelFields(labelID string, changes map[string]any) {
+	s.mu.Lock()
+	for _, l := range s.labels {
+		if l["label_id"] == labelID {
+			maps.Copy(l, changes)
 		}
 	}
 	s.mu.Unlock()

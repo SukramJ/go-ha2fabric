@@ -263,9 +263,9 @@ func TestClientAuthRefusedThenAccepted(t *testing.T) {
 	}
 }
 
-// TestListSkipsEntryThatDoesNotDecode (HR-P1-data-09): one registry
-// entry with a wrong-typed field costs that entry, not the list; the skip
-// is logged once.
+// TestListSkipsEntryThatDoesNotDecode (HR-P1-data-09, -data-90): one
+// registry entry with a wrong-typed field costs that entry, not the list,
+// and the list names it (ha.SkippedError); the skip is logged once.
 func TestListSkipsEntryThatDoesNotDecode(t *testing.T) {
 	srv := hatest.New(t)
 	var logs syncBuffer
@@ -283,13 +283,17 @@ func TestListSkipsEntryThatDoesNotDecode(t *testing.T) {
 	}
 	srv.UpdateDevice(devs[0].ID, map[string]any{"name": 7})
 	srv.UpdateEntity(ents[0].EntityID, map[string]any{"original_name": 5})
+	skippedIs := func(err error, id string) bool {
+		se, ok := errors.AsType[*ha.SkippedError](err)
+		return ok && slices.Equal(se.IDs, []string{id})
+	}
 	for range 2 {
 		got, err := c.ListDevices(ctx)
-		if err != nil || len(got) != len(devs)-1 || slices.ContainsFunc(got, func(d ha.DeviceEntry) bool { return d.ID == devs[0].ID }) {
+		if !skippedIs(err, devs[0].ID) || len(got) != len(devs)-1 || slices.ContainsFunc(got, func(d ha.DeviceEntry) bool { return d.ID == devs[0].ID }) {
 			t.Fatalf("devices after a bad entry: %d of %d, %v", len(got), len(devs), err)
 		}
 		gotE, err := c.ListEntities(ctx)
-		if err != nil || len(gotE) != len(ents)-1 {
+		if !skippedIs(err, ents[0].EntityID) || len(gotE) != len(ents)-1 {
 			t.Fatalf("entities after a bad entry: %d of %d, %v", len(gotE), len(ents), err)
 		}
 	}

@@ -617,33 +617,45 @@ func (c *Client) Call(ctx context.Context, cmd map[string]any, out any) error {
 
 // ListEntities is config/entity_registry/list
 // (homeassistant/components/config/entity_registry.py:39-64 at 2026.10.3).
+// Entries that do not decode come back as a [*SkippedError] with their
+// entity ids, beside the entries that did; one whose entity id cannot be
+// read fails the list.
 func (c *Client) ListEntities(ctx context.Context) ([]EntityEntry, error) {
-	return listOf[EntityEntry](ctx, c, "config/entity_registry/list")
+	return listOf[EntityEntry](ctx, c, "config/entity_registry/list", idOf("entity_id", true))
 }
 
 // ListDevices is config/device_registry/list
 // (homeassistant/components/config/device_registry.py:75-101 at 2026.10.3).
+// Entries that do not decode come back as a [*SkippedError] with their
+// ids, beside the entries that did; one whose id cannot be read fails the
+// list.
 func (c *Client) ListDevices(ctx context.Context) ([]DeviceEntry, error) {
-	return listOf[DeviceEntry](ctx, c, "config/device_registry/list")
+	return listOf[DeviceEntry](ctx, c, "config/device_registry/list", idOf("id", true))
 }
 
 // ListAreas is config/area_registry/list
 // (homeassistant/components/config/area_registry.py:23-37 at 2026.10.3).
+// An entry that does not decode is left out (an area is only a device's
+// location name).
 func (c *Client) ListAreas(ctx context.Context) ([]Area, error) {
-	return listOf[Area](ctx, c, "config/area_registry/list")
+	return listOf[Area](ctx, c, "config/area_registry/list", nil)
 }
 
 // ListLabels is config/label_registry/list, which needs no
 // administrator (homeassistant/components/config/label_registry.py:53-67
-// at 2026.10.3).
+// at 2026.10.3). Entries that do not decode come back as a
+// [*SkippedError] with their label ids where readable, beside the entries
+// that did.
 func (c *Client) ListLabels(ctx context.Context) ([]Label, error) {
-	return listOf[Label](ctx, c, "config/label_registry/list")
+	return listOf[Label](ctx, c, "config/label_registry/list", idOf("label_id", false))
 }
 
 // GetStates is get_states: every state the user may read
-// (websocket_api/commands.py:369-385 at 2026.10.3).
+// (websocket_api/commands.py:369-385 at 2026.10.3). A state that does not
+// decode is left out: its entity has no state for the sync and stays out
+// until its next state_changed.
 func (c *Client) GetStates(ctx context.Context) ([]State, error) {
-	return listOf[State](ctx, c, "get_states")
+	return listOf[State](ctx, c, "get_states", nil)
 }
 
 // GetConfig is get_config (websocket_api/commands.py:658-666 at
@@ -677,12 +689,51 @@ func (c *Client) CallService(ctx context.Context, sc ServiceCall) error {
 	return c.Call(ctx, cmd, nil)
 }
 
+// SkippedError is a registry list some of whose entries did not decode;
+// the list method returns it beside the entries that did. A sync judges
+// the entities it concerns rather than reading them without their entry
+// (HR-P1-data-90).
+type SkippedError struct {
+	// Command is the list command.
+	Command string
+	// IDs are the skipped entries' ids; a label's is empty when it could
+	// not be read either.
+	IDs []string
+	// Err is the first entry's decoding error.
+	Err error
+}
+
+func (e *SkippedError) Error() string {
+	return fmt.Sprintf("%s: %d entries did not decode: %v", e.Command, len(e.IDs), e.Err)
+}
+
+func (e *SkippedError) Unwrap() error { return e.Err }
+
+// idOf reads an entry's id from field for a skipped entry; strict fails
+// the list when it cannot be read, else the id is empty.
+func idOf(field string, strict bool) func(json.RawMessage) (string, error) {
+	return func(r json.RawMessage) (string, error) {
+		var m map[string]json.RawMessage
+		var id string
+		err := json.Unmarshal(r, &m)
+		if err == nil {
+			err = json.Unmarshal(m[field], &id)
+		}
+		if (err != nil || id == "") && strict {
+			return "", fmt.Errorf("an entry without a readable %s", field)
+		}
+		return id, nil
+	}
+}
+
 // listOf is a list command whose entries decode one by one: an entry
 // that does not decode (a registry's free-text field that an integration
 // set to a number, say — the registries validate few field types, see
-// DeviceEntry's Tuple) is skipped, and logged once per command, rather
-// than failing the list and with it every sync.
-func listOf[T any](ctx context.Context, c *Client, msgType string) ([]T, error) {
+// DeviceEntry's Tuple) is logged once per command rather than failing the
+// list and with it every sync. Without id it is left out; with id, its id
+// is read and returned in a [*SkippedError] beside the entries that
+// decoded, and an id that cannot be read fails the list.
+func listOf[T any](ctx context.Context, c *Client, msgType string, id func(json.RawMessage) (string, error)) ([]T, error) {
 	var raw []json.RawMessage
 	if err := c.Call(ctx, map[string]any{"type": msgType}, &raw); err != nil {
 		return nil, err
@@ -693,12 +744,20 @@ func listOf[T any](ctx context.Context, c *Client, msgType string) ([]T, error) 
 	out := make([]T, 0, len(raw))
 	skipped := 0
 	var first error
+	var ids []string
 	for _, r := range raw {
 		var v T
 		if err := json.Unmarshal(r, &v); err != nil {
 			skipped++
 			if first == nil {
 				first = err
+			}
+			if id != nil {
+				sid, ierr := id(r)
+				if ierr != nil {
+					return nil, fmt.Errorf("%w (%w)", ierr, err)
+				}
+				ids = append(ids, sid)
 			}
 			continue
 		}
@@ -718,6 +777,9 @@ func listOf[T any](ctx context.Context, c *Client, msgType string) ([]T, error) 
 		}
 		c.log.Log(ctx, level, "ha.entry_skipped", slog.String("command", msgType), slog.Int("skipped", skipped),
 			slog.Int("of", len(raw)), slog.String("error", first.Error()))
+	}
+	if ids != nil {
+		return out, &SkippedError{Command: msgType, IDs: ids, Err: first}
 	}
 	return out, nil
 }

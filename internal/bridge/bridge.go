@@ -459,6 +459,9 @@ func (b *Bridge) sync(ctx context.Context) {
 	readFrom := b.removals
 	b.mu.Unlock()
 	snap, err := ha.ReadSnapshot(ctx, b.up, in.Rule.Assist)
+	if err == nil {
+		err = plan.Check(snap, in)
+	}
 	if err != nil {
 		b.log.Error("bridge.sync_failed", slog.String("error", err.Error()))
 		b.setStatus(func(s *Status) { s.SyncError = err.Error() })

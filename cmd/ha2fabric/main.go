@@ -382,6 +382,9 @@ func dumpPlan(ctx context.Context, client *ha.Client, input func() plan.Input, o
 	}
 	in := input()
 	snap, err := ha.ReadSnapshot(ctx, client, in.Rule.Assist)
+	if err == nil {
+		err = plan.Check(snap, in)
+	}
 	if err != nil {
 		logger.Error("ha2fabric.dump_plan", slog.String("error", err.Error()))
 		return 1

@@ -215,10 +215,16 @@ Assistant refuses (`auth_invalid`) is retried after five minutes, doubling
 to hourly, and shown as the status warning `ha_token_refused` until an
 authentication succeeds (`ha.token_refused` in the log); the daemon keeps
 running and its nodes serve their last state. After each reconnect the
-daemon reads everything again, the states first. A registry or state entry
-that does not decode (a field of an unexpected type) is skipped, not the
-whole list: that entity is left out and `ha.entry_skipped` is logged once
-per list.
+daemon reads everything again, the states first. An entry that does not
+decode (a field of an unexpected type) costs that entry, not the whole
+list, and `ha.entry_skipped` is logged once per list. A state's entity
+stays out until its next state. An entity registry entry's entity, and
+every entity of a device registry entry, is not exposed while the entry
+does not decode — its hidden and disabled flags and its labels are
+unknown — and the web UI shows why; an entry whose id cannot be read
+fails the sync. A label registry entry that does not decode fails the
+sync while `INCLUDE_LABELS` or `EXCLUDE_LABELS` name labels (an exclude
+label would exclude nothing), and is left out otherwise; so is an area.
 
 ## Logs
 
@@ -248,7 +254,7 @@ The lines to know:
 | `ha2fabric.mdns_interface` | warn | At start, with `MDNS_INTERFACES` set: go-fabric's diagnosis of the list (`code`: `interface_not_found`, `interface_filtered`, `interface_no_addresses`; `node=<key>` for a registry node). See mDNS. |
 | `ha.connected` / `ha.disconnected` | info / warn | The Home Assistant connection. |
 | `ha.token_refused` | warn | Home Assistant refused the access token (`auth_invalid`); retried after `retry_in` (five minutes, doubling to an hour). Also the status warning `ha_token_refused`. |
-| `ha.entry_skipped` | warn, then debug | An entry of a list (`command`) did not decode and was skipped (`skipped` of `of`, the first `error`); at warn the first time per list. |
+| `ha.entry_skipped` | warn, then debug | An entry of a list (`command`) did not decode and was skipped (`skipped` of `of`, the first `error`); at warn the first time per list. What it means for the entities: What the daemon reads and writes. |
 | `bridge.synced` | info | A sync: candidates, devices, endpoints added, replaced, removed. |
 | `bridge.upstream_unusable` | warn | Home Assistant is away; every endpoint is unreachable. |
 | `bridge.build_failed` | warn | go-fabric refused a device go-hamapping planned; its entities have no endpoint (the plan says why). |
