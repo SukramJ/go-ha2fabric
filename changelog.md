@@ -11,6 +11,9 @@ All notable changes to this project are documented here. The format follows
 The move to go-fabric `v0.25.0` under its new module path
 `thingfabric.dev/go-fabric`, with go-fabric-ui `v0.13.0` and go-hamapping
 `v0.5.0`. **Back up before updating:** the store's upgrade is one-way.
+**Stand-alone with `WEB_ADMIN=true` on a listener that is not loopback
+(the image's default) and no `WEB_ALLOW`, the daemon no longer starts**:
+set `WEB_ALLOW` or a loopback `WEB_LISTEN` before updating (Changed).
 
 ### Added
 
@@ -38,8 +41,10 @@ The move to go-fabric `v0.25.0` under its new module path
   version is read, the web UI is the status page only, with the warning
   `supervisor_too_old` or `supervisor_unknown`. The manifest sets
   `panel_admin: true`.
-- `WEB_ADMIN=true` on a `WEB_LISTEN` that is not loopback (the image's
-  `0.0.0.0:8099`) is refused at start without `WEB_ALLOW`; the docs say the
+- **Breaking:** `WEB_ADMIN=true` on a `WEB_LISTEN` that is not loopback
+  (the image's `0.0.0.0:8099`) is refused at start without `WEB_ALLOW`
+  (exit 2: the whole daemon, the bridge included, not only the web UI);
+  the docs say the
   page is plain HTTP and an address filter is not authentication. A
   `WEB_ALLOW` entry that is not an IP address fails the web UI instead of
   being dropped. In the add-on `WEB_ALLOW` defaults to the Ingress proxy

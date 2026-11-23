@@ -372,7 +372,11 @@ administrators' addresses in `WEB_ALLOW`. The page is plain HTTP — the
 pairing code and the token mode's token cross the network unencrypted —
 and an address filter is not authentication: any host that has, or can
 take, a listed address is the administrator. `WEB_ALLOW` entries must be
-IP addresses; one that is not fails the start.
+IP addresses; one that is not fails the start. `WEB_ALLOW` sees the address
+the connection comes from: in a container on a bridge network with a
+published port (rather than `--network host`), that can be the bridge
+network's gateway for every client, and a `WEB_ALLOW` naming it then admits
+everyone who reaches the published port.
 
 Every request's `Host` is checked: loopback names (`localhost`) and IP
 addresses pass; a DNS name passes only when `WEB_ALLOWED_HOSTS` lists it
