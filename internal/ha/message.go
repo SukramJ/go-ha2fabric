@@ -129,6 +129,42 @@ type State struct {
 	Attributes  map[string]any `json:"attributes"`
 	LastChanged string         `json:"last_changed"`
 	LastUpdated string         `json:"last_updated"`
+	// Oversized is the size in bytes of a state over MaxStateBytes, whose
+	// attributes were dropped; 0 for a whole state.
+	Oversized int `json:"-"`
+}
+
+// MaxStateBytes bounds one state object as it decodes (HR-P2-bound-38,
+// decision 42). The read limit bounds a frame, not what it decodes to:
+// attributes of small values decode to many times their size, and the
+// bridge holds every state. A state over the bound keeps its id, its
+// state and its times; its attributes are dropped, and Oversized says
+// so; the client logs it (ha.state_oversized) and the plan can name it.
+const MaxStateBytes = 256 << 10
+
+// UnmarshalJSON decodes a state object, without its attributes when it
+// is over MaxStateBytes.
+func (s *State) UnmarshalJSON(b []byte) error {
+	type whole State
+	if len(b) <= MaxStateBytes {
+		var w whole
+		if err := json.Unmarshal(b, &w); err != nil {
+			return err
+		}
+		*s = State(w)
+		return nil
+	}
+	var head struct {
+		EntityID    string `json:"entity_id"`
+		State       string `json:"state"`
+		LastChanged string `json:"last_changed"`
+		LastUpdated string `json:"last_updated"`
+	}
+	if err := json.Unmarshal(b, &head); err != nil {
+		return err
+	}
+	*s = State{EntityID: head.EntityID, State: head.State, LastChanged: head.LastChanged, LastUpdated: head.LastUpdated, Oversized: len(b)}
+	return nil
 }
 
 // The two states that carry no value: homeassistant/const.py:303,313 at

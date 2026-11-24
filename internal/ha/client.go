@@ -124,6 +124,9 @@ type Client struct {
 	// (listOf).
 	skippedMu sync.Mutex
 	skipped   map[string]bool
+	// oversized holds the entities whose state over MaxStateBytes was
+	// logged (GetStates); guarded by skippedMu.
+	oversized map[string]bool
 }
 
 // New returns a client; [Client.Run] connects it.
@@ -653,9 +656,31 @@ func (c *Client) ListLabels(ctx context.Context) ([]Label, error) {
 // GetStates is get_states: every state the user may read
 // (websocket_api/commands.py:369-385 at 2026.10.3). A state that does not
 // decode is left out: its entity has no state for the sync and stays out
-// until its next state_changed.
+// until its next state_changed. A state over MaxStateBytes comes without
+// its attributes (State.Oversized) and is logged with its entity id, at
+// Warn the first time for each entity (HR-P2-bound-38).
 func (c *Client) GetStates(ctx context.Context) ([]State, error) {
-	return listOf[State](ctx, c, "get_states", nil)
+	states, err := listOf[State](ctx, c, "get_states", nil)
+	for i := range states {
+		st := &states[i]
+		if st.Oversized == 0 {
+			continue
+		}
+		c.skippedMu.Lock()
+		logged := c.oversized[st.EntityID]
+		if c.oversized == nil {
+			c.oversized = map[string]bool{}
+		}
+		c.oversized[st.EntityID] = true
+		c.skippedMu.Unlock()
+		level := slog.LevelWarn
+		if logged {
+			level = slog.LevelDebug
+		}
+		c.log.Log(ctx, level, "ha.state_oversized", slog.String("entity_id", st.EntityID), slog.Int("bytes", st.Oversized),
+			slog.Int("max", MaxStateBytes), slog.String("hint", "the entity's attributes were dropped"))
+	}
+	return states, err
 }
 
 // GetConfig is get_config (websocket_api/commands.py:658-666 at
