@@ -57,6 +57,10 @@ var services = map[string]map[string]string{
 	// climate/services.yaml:145-151 toggle (TURN_ON and TURN_OFF, which
 	// the row requires); row climate/air_conditioner.
 	"climate": {hamapping.MethodTurnOn: "turn_on", hamapping.MethodTurnOff: "turn_off", hamapping.MethodToggle: "toggle"},
+	// cover/services.py:72-82 open_cover_tilt, close_cover_tilt, no
+	// fields; row cover/window_covering (a tilt without SET_TILT_POSITION,
+	// HR-P2-adpt-33).
+	"cover": {hamapping.MethodOpenTilt: "open_cover_tilt", hamapping.MethodCloseTilt: "close_cover_tilt"},
 	// vacuum/services.py:104-121 start, pause, return_to_base, no fields;
 	// row vacuum/robotic_vacuum_cleaner (Resume starts again).
 	"vacuum": {hamapping.MethodPause: "pause", hamapping.MethodResume: "start", hamapping.MethodGoHome: "return_to_base"},

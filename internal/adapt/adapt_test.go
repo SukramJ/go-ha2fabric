@@ -255,6 +255,8 @@ func TestService(t *testing.T) {
 		{cmd("cover.a", "", "STOP"), nil, ha.ServiceCall{Domain: "cover", Service: "stop_cover", EntityID: "cover.a"}},
 		{cmd("cover.a", "set_position", "30"), nil, ha.ServiceCall{Domain: "cover", Service: "set_cover_position", EntityID: "cover.a", Data: map[string]any{"position": 30}}},
 		{cmd("cover.a", "tilt", "120"), nil, ha.ServiceCall{Domain: "cover", Service: "set_cover_tilt_position", EntityID: "cover.a", Data: map[string]any{"tilt_position": 100}}},
+		{cmd("cover.a", hamapping.MethodOpenTilt, "OPEN"), nil, ha.ServiceCall{Domain: "cover", Service: "open_cover_tilt", EntityID: "cover.a"}},
+		{cmd("cover.a", hamapping.MethodCloseTilt, "CLOSE"), nil, ha.ServiceCall{Domain: "cover", Service: "close_cover_tilt", EntityID: "cover.a"}},
 		{cmd("lock.a", "", "LOCK"), nil, ha.ServiceCall{Domain: "lock", Service: "lock", EntityID: "lock.a"}},
 		{cmd("lock.a", "", "UNLOCK"), nil, ha.ServiceCall{Domain: "lock", Service: "unlock", EntityID: "lock.a"}},
 		{cmd("climate.a", "mode", "heat_cool"), nil, ha.ServiceCall{Domain: "climate", Service: "set_hvac_mode", EntityID: "climate.a", Data: map[string]any{"hvac_mode": "heat_cool"}}},
