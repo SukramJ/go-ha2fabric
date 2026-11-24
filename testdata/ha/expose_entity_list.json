@@ -23,6 +23,12 @@
    "cover.position_blind": {
     "conversation": true
    },
+   "cover.tilt_blind": {
+    "conversation": true
+   },
+   "cover.tilt_slats": {
+    "conversation": true
+   },
    "climate.hall": {
     "conversation": true
    },

@@ -166,6 +166,43 @@
    }
   },
   {
+   "entity_id": "cover.tilt_blind",
+   "state": "open",
+   "attributes": {
+    "current_position": 60,
+    "current_tilt_position": 30,
+    "device_class": "blind",
+    "friendly_name": "Venetian blind",
+    "supported_features": 255
+   },
+   "last_changed": "2026-10-25T08:00:00.000000+00:00",
+   "last_reported": "2026-10-25T08:00:00.000000+00:00",
+   "last_updated": "2026-10-25T08:00:00.000000+00:00",
+   "context": {
+    "id": "01JB0000000000000000000303",
+    "parent_id": null,
+    "user_id": null
+   }
+  },
+  {
+   "entity_id": "cover.tilt_slats",
+   "state": "open",
+   "attributes": {
+    "current_tilt_position": 80,
+    "device_class": "blind",
+    "friendly_name": "Slat blind",
+    "supported_features": 240
+   },
+   "last_changed": "2026-10-25T08:00:00.000000+00:00",
+   "last_reported": "2026-10-25T08:00:00.000000+00:00",
+   "last_updated": "2026-10-25T08:00:00.000000+00:00",
+   "context": {
+    "id": "01JB0000000000000000000304",
+    "parent_id": null,
+    "user_id": null
+   }
+  },
+  {
    "entity_id": "climate.hall",
    "state": "heat",
    "attributes": {
