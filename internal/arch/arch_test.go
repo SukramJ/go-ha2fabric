@@ -68,20 +68,21 @@ var nodeFree = map[string]bool{"internal/plan": true}
 // module packages its entry lists.
 var layers = map[string][]string{
 	"internal/version":   {},
+	"internal/text":      {},
 	"internal/expose":    {},
-	"internal/selection": {},
+	"internal/selection": {"internal/text"},
 	"internal/ha":        {},
 	"internal/ha/hatest": {"internal/ha"},
-	"internal/adapt":     {"internal/ha"},
+	"internal/adapt":     {"internal/ha", "internal/text"},
 	"internal/camera":    {"internal/ha"},
-	"internal/config":    {"internal/expose", "internal/version"},
+	"internal/config":    {"internal/expose", "internal/text", "internal/version"},
 	"internal/plan":      {"internal/ha", "internal/adapt", "internal/expose"},
 	"internal/bridge":    {"internal/ha", "internal/adapt", "internal/camera", "internal/plan"},
 	"internal/exposure":  {"internal/bridge", "internal/plan", "internal/ha", "internal/expose", "internal/selection"},
-	"internal/nodes":     {},
+	"internal/nodes":     {"internal/text"},
 	"internal/web":       {},
 	"internal/arch":      {},
-	"cmd/ha2fabric":      {"internal/bridge", "internal/camera", "internal/config", "internal/expose", "internal/exposure", "internal/ha", "internal/nodes", "internal/plan", "internal/selection", "internal/version", "internal/web"},
+	"cmd/ha2fabric":      {"internal/bridge", "internal/camera", "internal/config", "internal/expose", "internal/exposure", "internal/ha", "internal/nodes", "internal/plan", "internal/selection", "internal/text", "internal/version", "internal/web"},
 }
 
 // testLayers widen layers for a package's tests. internal/bridge's end to

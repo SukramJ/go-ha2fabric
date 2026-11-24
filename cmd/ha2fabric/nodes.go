@@ -141,7 +141,7 @@ func (s *served) launch(base context.Context) (nodeRun, error) {
 	// The web UI's event stream observes the node itself (Node.Observe,
 	// go-fabric-ui v0.1.2); s.events carries the bridge's own.
 	br := bridge.New(n, s.client, bridge.Options{
-		Input: s.in, Logger: s.log, CameraUpstream: camera.HA(s.client),
+		Input: s.in, Logger: s.log, CameraUpstream: camera.HA(s.client), Snapshots: s.fan.Snapshots(s.client),
 		OnChange: func(exposure []string, endpoints bool) {
 			if len(exposure) > 0 {
 				s.events.Publish(fabricui.Event{Type: fabricui.EventExposureChanged, Data: fabricui.ExposureEvent{Keys: exposure}})
@@ -176,12 +176,35 @@ func (s *served) install(r nodeRun) {
 	}
 }
 
-// stopRun takes the bridge off the connection and ends its worker; the
-// node is the caller's to stop or reset. s.mu is held and a run exists.
-func (s *served) stopRun() {
+// errNotRunning is a reassemble's answer while a node has no run: between
+// an erase and its come-back, or after a come-back that failed.
+var errNotRunning = errors.New("the node is not running; its next start applies the selection")
+
+// stopRun takes the bridge off the connection and ends its worker, or
+// stops waiting for it when ctx ends; the node is the caller's to stop or
+// reset. s.mu is held and a run exists.
+func (s *served) stopRun(ctx context.Context) {
+	s.join(ctx, s.leave())
+}
+
+// leave takes the bridge off the connection and cancels its worker, and
+// returns the worker's end. s.mu is held and a run exists.
+func (s *served) leave() <-chan struct{} {
 	s.fan.Remove(s.br)
 	s.cancel()
-	<-s.done
+	return s.done
+}
+
+// join waits for a worker leave cancelled until ctx ends: a worker held
+// by a camera's sessions of controllers that went away does not hold the
+// stop or an erase past its budget (HR-P2-conc-60). The overrun is logged;
+// the worker ends on its own.
+func (s *served) join(ctx context.Context, done <-chan struct{}) {
+	select {
+	case <-done:
+	case <-ctx.Done():
+		s.log.Warn("ha2fabric.bridge_stop_overrun", slog.String("hint", "the bridge's worker did not end within the budget; the node is stopped without waiting for it"))
+	}
 }
 
 // View implements [exposure.Model]: the current bridge's, a zero view
@@ -195,13 +218,14 @@ func (s *served) View() bridge.View {
 	return s.br.View()
 }
 
-// Resync is the web UI's reassemble on the current bridge; without a run
-// there is nothing to rebuild, and the next run applies the selection.
+// Resync is the web UI's reassemble on the current bridge. Without a run
+// there is nothing to rebuild, and it says so (HR-P2-err-65): the next
+// run's first sync applies the stored selection.
 func (s *served) Resync(ctx context.Context) error {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	if s.br == nil {
-		return nil
+		return errNotRunning
 	}
 	return s.br.Resync(ctx)
 }
@@ -288,8 +312,9 @@ func (s *served) erase(context.Context) error { //nolint:contextcheck // detache
 	})()
 	s.mu.Lock()
 	n := s.n
+	var done <-chan struct{}
 	if n != nil {
-		s.stopRun()
+		done = s.leave()
 		s.discarded += s.br.Status().Discards
 		s.n, s.br, s.cancel, s.done = nil, nil, nil, nil
 		s.live.Store(false)
@@ -297,6 +322,11 @@ func (s *served) erase(context.Context) error { //nolint:contextcheck // detache
 		n = s.stale
 	}
 	s.mu.Unlock()
+	if done != nil {
+		// Outside s.mu, so the status pages keep answering while the worker
+		// ends (HR-P2-conc-60).
+		s.join(ectx, done) //nolint:contextcheck // the daemon's base, above
+	}
 	var rerr error
 	if n != nil {
 		// Logged before the come-back, whose fabrics line (count=0) and
@@ -439,7 +469,7 @@ func (s *served) close(ctx context.Context) error {
 		s.stale = nil
 	}
 	if s.n != nil {
-		s.stopRun()
+		s.stopRun(ctx)
 		errs = append(errs, stopNode(s.n, ctx))
 	}
 	return errors.Join(errs...)
@@ -691,6 +721,9 @@ func (f *fleet) Delete(ctx context.Context, key string) error {
 		if err := s.close(ctx); err != nil {
 			f.log.Warn("ha2fabric.node_stop", slog.String("node", key), slog.String("error", err.Error()))
 		}
+		// An exposure apply that took the node before the delete writes no
+		// selection file after its removal (HR-P2-conc-68).
+		s.sel.Close()
 		f.mu.Lock()
 		m.s = nil
 		f.mu.Unlock()

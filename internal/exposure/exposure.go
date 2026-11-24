@@ -336,6 +336,12 @@ const WarningLabelUnresolved = "label_unresolved"
 // selection.corrupt).
 const WarningSelectionCorrupt = "selection_corrupt"
 
+// WarningSyncFailed is the web UI's code of a sync with Home Assistant
+// that keeps failing, from its retry on: Home Assistant not read (the
+// log's bridge.sync_failed) or a batch go-fabric refused in part (the
+// log's bridge.batch). The endpoints stay as the last sync left them.
+const WarningSyncFailed = "sync_failed"
+
 // WarningNodeEraseFailed is the web UI's code of a node that did not
 // come back after an erase (the log's ha2fabric.node_lost); the daemon
 // sets it, the provider never does.
@@ -344,12 +350,20 @@ const WarningNodeEraseFailed = "node_erase_failed"
 // Warnings are the configuration's half-valid parts for the web UI's
 // status (fabricui.Options.Warnings): the label values of the last sync
 // that name no Home Assistant label, each since its first sighting in an
-// unbroken run of syncs, and an overrides file that was recovered at
-// start (selection.Recovery says how). The log carries the same findings.
+// unbroken run of syncs, a sync that keeps failing, and an overrides file
+// that was recovered at start (selection.Recovery says how). The log carries the same findings.
 func (p *Provider) Warnings(context.Context) []fabricui.Warning {
 	var out []fabricui.Warning
-	for _, w := range p.m.View().Warnings {
+	v := p.m.View()
+	for _, w := range v.Warnings {
 		out = append(out, fabricui.Warning{Code: WarningLabelUnresolved, Message: w.Message, Since: w.Since})
+	}
+	if f := v.SyncFailure; f != nil {
+		out = append(out, fabricui.Warning{
+			Code:    WarningSyncFailed,
+			Message: "the sync with Home Assistant keeps failing: " + f.Message + "; the endpoints stay as the last sync left them, and what failed is tried again",
+			Since:   f.Since,
+		})
 	}
 	if p.opts.Selection != nil {
 		if r, ok := p.opts.Selection.Recovered(); ok {

@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -106,5 +107,22 @@ func TestProviderBeforeSync(t *testing.T) {
 	}
 	if ws := p.Warnings(context.Background()); ws != nil {
 		t.Fatalf("warnings %+v", ws)
+	}
+}
+
+// TestProviderSyncFailed (HR-P2-err-61, HR-P2-bound-37): a sync that
+// keeps failing, whatever the cause, is a warning on the status page.
+func TestProviderSyncFailed(t *testing.T) {
+	since := time.Date(2026, 11, 24, 9, 0, 0, 0, time.UTC)
+	m := model{bridge.View{SyncFailure: &bridge.Warning{Message: "get_states: ha: connection dropped", Since: since}}}
+	p := New(m, Options{Input: func() plan.Input { return plan.Input{} }})
+	ws := p.Warnings(context.Background())
+	if len(ws) != 1 || ws[0].Code != WarningSyncFailed || !ws[0].Since.Equal(since) || !strings.Contains(ws[0].Message, "connection dropped") {
+		t.Fatalf("warnings %+v", ws)
+	}
+	// A failed batch counts too, and part of it may be applied
+	// (HR-P2-doc-92): the warning promises no "last sync that succeeded".
+	if strings.Contains(ws[0].Message, "succeeded") {
+		t.Errorf("warning %q", ws[0].Message)
 	}
 }

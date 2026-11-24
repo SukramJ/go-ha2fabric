@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log/slog"
 	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -21,6 +22,7 @@ import (
 	"thingfabric.dev/go-fabric/contract"
 
 	"github.com/SukramJ/go-ha2fabric/internal/camera"
+	"github.com/SukramJ/go-ha2fabric/internal/ha"
 )
 
 // boundedHost is newHost with the idle bounds of opts.
@@ -317,5 +319,82 @@ func TestEmptyAnswerEndsTheSession(t *testing.T) {
 	eventually(t, "the end", func() bool { return slices.Contains(sig.seen(), "end 5 0") })
 	if slices.ContainsFunc(sig.seen(), func(s string) bool { return len(s) > 6 && s[:6] == "answer" }) {
 		t.Fatalf("an empty answer was relayed: %q", sig.seen())
+	}
+}
+
+// TestHACandidatesAreBounded (HR-P2-bound-40): Home Assistant's side of
+// a session is held to the controller's bound — at most
+// MaxSessionCandidates candidates reach the controller, and the session
+// ends (ICE failed) at the next one; a candidate longer than
+// MaxCandidateBytes is refused, the session stays.
+func TestHACandidatesAreBounded(t *testing.T) {
+	up := &upstream{}
+	h := boundedHost(t, up, camera.Options{})
+	sig := &signaller{}
+	h.Attach(sig)
+	if _, err := h.ProvideOffer(context.Background(), offer(5)); err != nil {
+		t.Fatal(err)
+	}
+	st := up.stream(0)
+	st.push(session("ha-1"))
+	long := "candidate:" + strings.Repeat("A", camera.MaxCandidateBytes)
+	st.push(candidate(long, "0", 0))
+	for i := range camera.MaxSessionCandidates {
+		st.push(candidate(fmt.Sprintf("candidate:%d", i), "0", 0))
+	}
+	eventually(t, "the session's end", func() bool { return slices.Contains(sig.seen(), "end 5 0") })
+	cands := 0
+	for _, c := range sig.seen() {
+		if strings.HasPrefix(c, "candidate ") {
+			cands++
+			if strings.Contains(c, long) {
+				t.Fatal("a candidate over MaxCandidateBytes reached the controller")
+			}
+		}
+	}
+	if cands != camera.MaxSessionCandidates-1 {
+		t.Fatalf("%d of Home Assistant's candidates reached the controller, want %d", cands, camera.MaxSessionCandidates-1)
+	}
+	eventually(t, "the unsubscribe", func() bool { return st.unsubscribed() == 1 })
+}
+
+// TestIgnoredEventsDoNotKeepTheSession (HR-P2-bound-40): an event the
+// relay does not act on is no activity; the session reaches its idle
+// end.
+func TestIgnoredEventsDoNotKeepTheSession(t *testing.T) {
+	up := &upstream{}
+	h := boundedHost(t, up, camera.Options{IdleTimeout: 150 * time.Millisecond})
+	sig := &signaller{}
+	h.Attach(sig)
+	if _, err := h.ProvideOffer(context.Background(), offer(5)); err != nil {
+		t.Fatal(err)
+	}
+	st := up.stream(0)
+	for range 10 {
+		time.Sleep(50 * time.Millisecond)
+		st.push(map[string]any{"type": "noise"})
+	}
+	if !slices.Contains(sig.seen(), "end 5 12") {
+		t.Fatalf("ignored events kept the session from its idle end: %q", sig.seen())
+	}
+}
+
+// TestHAErrorTextIsCut (HR-P2-bound-39): Home Assistant's error event
+// is logged with its text cut to ha.MaxErrorText.
+func TestHAErrorTextIsCut(t *testing.T) {
+	long := strings.Repeat("x", 1<<20)
+	up := &upstream{script: func(s *stream) {
+		s.push(map[string]any{"type": "error", "code": "c" + long, "message": "m" + long})
+	}}
+	h, logs := newHost(t, up)
+	sig := &signaller{}
+	h.Attach(sig)
+	if _, err := h.ProvideOffer(context.Background(), offer(2)); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the end", func() bool { return len(sig.seen()) == 1 })
+	h.Close(context.Background())
+	if n := len(logs.String()); n > 4*ha.MaxErrorText+2048 || !strings.Contains(logs.String(), "camera.ha_error") {
+		t.Fatalf("the log holds %d bytes", n)
 	}
 }

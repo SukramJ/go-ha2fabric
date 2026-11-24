@@ -16,6 +16,7 @@ import (
 
 	"github.com/SukramJ/go-ha2fabric/internal/adapt"
 	"github.com/SukramJ/go-ha2fabric/internal/ha"
+	"github.com/SukramJ/go-ha2fabric/internal/text"
 )
 
 func state(id, s string, attrs map[string]any) *ha.State {
@@ -254,6 +255,8 @@ func TestService(t *testing.T) {
 		{cmd("cover.a", "", "STOP"), nil, ha.ServiceCall{Domain: "cover", Service: "stop_cover", EntityID: "cover.a"}},
 		{cmd("cover.a", "set_position", "30"), nil, ha.ServiceCall{Domain: "cover", Service: "set_cover_position", EntityID: "cover.a", Data: map[string]any{"position": 30}}},
 		{cmd("cover.a", "tilt", "120"), nil, ha.ServiceCall{Domain: "cover", Service: "set_cover_tilt_position", EntityID: "cover.a", Data: map[string]any{"tilt_position": 100}}},
+		{cmd("cover.a", hamapping.MethodOpenTilt, "OPEN"), nil, ha.ServiceCall{Domain: "cover", Service: "open_cover_tilt", EntityID: "cover.a"}},
+		{cmd("cover.a", hamapping.MethodCloseTilt, "CLOSE"), nil, ha.ServiceCall{Domain: "cover", Service: "close_cover_tilt", EntityID: "cover.a"}},
 		{cmd("lock.a", "", "LOCK"), nil, ha.ServiceCall{Domain: "lock", Service: "lock", EntityID: "lock.a"}},
 		{cmd("lock.a", "", "UNLOCK"), nil, ha.ServiceCall{Domain: "lock", Service: "unlock", EntityID: "lock.a"}},
 		{cmd("climate.a", "mode", "heat_cool"), nil, ha.ServiceCall{Domain: "climate", Service: "set_hvac_mode", EntityID: "climate.a", Data: map[string]any{"hvac_mode": "heat_cool"}}},
@@ -423,6 +426,101 @@ func TestServiceRangeNeverInverted(t *testing.T) {
 		}
 		if lo, hi := sc.Data["target_temp_low"], sc.Data["target_temp_high"]; lo != c.low || hi != c.high {
 			t.Errorf("%s %s: low %v high %v, want %v %v", c.method, c.payload, lo, hi, c.low, c.high)
+		}
+	}
+}
+
+// TestOptionNotTrimmed (HR-P2-data-32): a value go-hamapping takes from
+// the entity's own option list goes back to Home Assistant byte for
+// byte — "Eco " beside "Eco" is another option.
+func TestOptionNotTrimmed(t *testing.T) {
+	for _, c := range []struct {
+		id, method, key string
+	}{
+		{"select.a", hamapping.MethodSelectOption, "option"},
+		{"fan.a", hamapping.MethodPresetMode, "preset_mode"},
+		{"climate.a", hamapping.MethodFanMode, "fan_mode"},
+	} {
+		for _, opt := range []string{"Eco ", " Boost", "\tx\n"} {
+			sc, err := adapt.Service(cmd(c.id, c.method, opt), nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := sc.Data[c.key]; got != opt {
+				t.Errorf("%s: the controller chose %q, %s carries %q", c.id, opt, c.key, got)
+			}
+		}
+		if _, err := adapt.Service(cmd(c.id, c.method, "  "), nil); err == nil {
+			t.Errorf("%s: a blank option was sent", c.id)
+		}
+	}
+}
+
+// TestHostileText (HR-P2-data-31): Home Assistant's free text reaches the
+// model without control and bidirectional control characters — the
+// device's name, manufacturer, model, versions, serial and area, an own
+// device's name, and the entity's name from the registry, the
+// friendly_name or the web UI; the joiners stay. An option keeps its
+// bytes (it goes back to Home Assistant).
+func TestHostileText(t *testing.T) {
+	const bad = "A\x00B\nC\x1b[31m\u202eevil\u2066\u200e\u0085"
+	const clean = "AB C[31mevil"
+	areas := map[string]string{"k": "Kü\u202eche"}
+	d := adapt.Device(&ha.DeviceEntry{
+		ID: "d1", NameByUser: bad, Manufacturer: "V\x00\a" + bad, Model: bad, ModelID: bad,
+		SWVersion: bad, HWVersion: bad, SerialNumber: "S\r\n" + bad, AreaID: "k",
+	}, areas)
+	for what, got := range map[string]string{
+		"name": d.Name.Default, "manufacturer": d.Manufacturer, "model": d.Model, "model id": d.ModelID,
+		"sw version": d.SWVersion, "hw version": d.HWVersion, "serial": d.SerialNumber, "area": d.SuggestedArea,
+	} {
+		if !text.Safe(got) {
+			t.Errorf("device %s %q", what, got)
+		}
+	}
+	if d.Name.Default != clean || d.SerialNumber != "S  "+clean {
+		t.Errorf("device name %q, serial %q", d.Name.Default, d.SerialNumber)
+	}
+	if own := adapt.OwnDevice("light.a", bad); own.Name.Default != clean {
+		t.Errorf("own device %q", own.Name.Default)
+	}
+	st := state("select.a", "x", map[string]any{"friendly_name": bad, "options": []any{"Eco\u202e", "x"}})
+	dev := adapt.OwnDevice("select.a", "a")
+	for name, in := range map[string]adapt.Input{
+		"friendly_name": {EntityID: "select.a", State: st, Device: dev},
+		"registry name": {EntityID: "select.a", State: st, Device: dev, Registry: &ha.EntityEntry{Name: bad}},
+		"original_name": {EntityID: "select.a", State: st, Device: dev, Registry: &ha.EntityEntry{HasEntityName: true, OriginalName: bad}},
+		"web UI name":   {EntityID: "select.a", State: st, Device: dev, Name: bad},
+	} {
+		e := adapt.Entity(in)
+		if got := e.Description.Name.Default; got != clean {
+			t.Errorf("%s: entity name %q", name, got)
+		}
+		if e.Description.Options == nil || e.Description.Options.Codes[0] != "Eco\u202e" {
+			t.Errorf("%s: options %v", name, e.Description.Options)
+		}
+	}
+	if got := adapt.Device(&ha.DeviceEntry{ID: "d", Name: "Café \U0001F469\u200d\U0001F4BB"}, nil).Name.Default; got != "Café \U0001F469\u200d\U0001F4BB" {
+		t.Errorf("the joiner was dropped: %q", got)
+	}
+}
+
+// TestUnsafeOnlyRegistryName (HR-P2-data-94): a registry name made only
+// of unsafe characters cleans to "" and falls through to the entity's
+// other names, not to its device's (an empty name).
+func TestUnsafeOnlyRegistryName(t *testing.T) {
+	st := state("switch.a", "on", map[string]any{"friendly_name": "Kaffee"})
+	dev := adapt.OwnDevice("switch.a", "Küche")
+	for name, c := range map[string]struct {
+		reg  *ha.EntityEntry
+		want string
+	}{
+		"to friendly_name": {&ha.EntityEntry{Name: "\u202e\x00 "}, "Kaffee"},
+		"to original_name": {&ha.EntityEntry{Name: "\u2066\u2069", HasEntityName: true, OriginalName: "Maschine"}, "Maschine"},
+		"main feature":     {&ha.EntityEntry{Name: "\x1b", HasEntityName: true}, ""},
+	} {
+		if got := adapt.Entity(adapt.Input{EntityID: "switch.a", State: st, Device: dev, Registry: c.reg}).Description.Name.Default; got != c.want {
+			t.Errorf("%s: %q, want %q", name, got, c.want)
 		}
 	}
 }

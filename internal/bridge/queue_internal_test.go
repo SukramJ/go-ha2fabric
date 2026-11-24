@@ -185,6 +185,8 @@ func rangeBridge(t *testing.T) (*Bridge, *fakeUp) {
 	b := New(nil, up, Options{Logger: slog.New(slog.DiscardHandler), Input: func() plan.Input { return plan.Input{} }})
 	b.states["climate.a"] = &ha.State{EntityID: "climate.a", State: "heat_cool", Attributes: map[string]any{"target_temp_low": 18.0, "target_temp_high": 24.0}}
 	b.serving = map[string]bool{"climate.a": true}
+	// served: the bridge keeps a served entity's states only.
+	b.owner["climate.a"] = &group{Group: &plan.Group{Key: "a"}}
 	return b, up
 }
 
@@ -258,4 +260,23 @@ func TestRangeSetpointsInSequence(t *testing.T) {
 			t.Fatalf("after the state moved %v", got)
 		}
 	})
+}
+
+// TestStateChangedOversizedLogged (HR-P2-bound-38, the bridge half): a
+// state_changed whose new state was over ha.MaxStateBytes is logged
+// ha.state_oversized as the client logs get_states', at Warn the first
+// time for the entity and at Debug after.
+func TestStateChangedOversizedLogged(t *testing.T) {
+	b, _ := rangeBridge(t)
+	rec := &records{}
+	b.log = slog.New(rec)
+	big := func() ha.StateChanged {
+		return ha.StateChanged{EntityID: "climate.a", NewState: &ha.State{EntityID: "climate.a", State: "heat", Oversized: 300 << 10}}
+	}
+	b.stateChanged(t.Context(), big())
+	b.stateChanged(t.Context(), big())
+	recs := rec.named("ha.state_oversized")
+	if len(recs) != 2 || recs[0].Level != slog.LevelWarn || recs[1].Level != slog.LevelDebug {
+		t.Fatalf("ha.state_oversized lines %v", recs)
+	}
 }

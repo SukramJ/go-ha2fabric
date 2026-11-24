@@ -48,7 +48,6 @@ type Verdict struct {
 	Reason     string   `json:"reason,omitempty"`
 	DeviceType uint16   `json:"device_type,omitempty"`
 	Endpoint   uint16   `json:"endpoint,omitempty"`
-
 	// Full is go-hamapping's verdict in full (with the clusters), as the
 	// web UI shows it.
 	Full eligibility.Verdict `json:"-"`
@@ -203,6 +202,14 @@ func Assess(s *ha.Snapshot, in Input) ([]Verdict, []*Group) {
 			verdicts = append(verdicts, v)
 			continue
 		}
+		// A state over ha.MaxStateBytes came without the attributes its
+		// description is read from: mapped, it would be another device
+		// type (HR-P2-bound-90, decision 52).
+		if st.Oversized > 0 {
+			v.State, v.Reason = eligibility.StateUnmappable.String(), OversizedReason(st.Oversized)
+			verdicts = append(verdicts, v)
+			continue
+		}
 		var md *model.Device
 		var key string
 		if r != nil && r.DeviceID != "" && devs[r.DeviceID] != nil {
@@ -253,6 +260,14 @@ func Describe(e model.Entity) string {
 		D *model.Description
 	}{string(e.Platform()), e.Desc()})
 	return string(b)
+}
+
+// OversizedReason is the verdict reason of an exposed entity whose state
+// of n bytes was over ha.MaxStateBytes: it came without its attributes,
+// and the entity is unmappable until a state under the cap
+// (HR-P2-bound-38, HR-P2-bound-90; decisions 42 and 52).
+func OversizedReason(n int) string {
+	return fmt.Sprintf("state over %d KiB (%d bytes): its attributes were dropped, so it is not mapped until a state under the cap", ha.MaxStateBytes>>10, n)
 }
 
 // MergeVerdicts merges go-hamapping's verdicts mv into the candidates'.

@@ -24,6 +24,7 @@ import (
 	"github.com/SukramJ/go-hamqtt/model"
 
 	"github.com/SukramJ/go-ha2fabric/internal/ha"
+	"github.com/SukramJ/go-ha2fabric/internal/text"
 )
 
 // Identifier namespaces of the devices the adapter makes.
@@ -40,11 +41,12 @@ const (
 // name over the integration's), manufacturer, model, versions, serial,
 // configuration URL, area and identifiers
 // (helpers/device_registry.py:589-629 at 2026.10.3). Its first identifier
-// is the registry id, so its UID survives a rename.
+// is the registry id, so its UID survives a rename. Its free text is
+// cleaned (text.Clean): a controller shows it as it is (HR-P2-data-31).
 func Device(d *ha.DeviceEntry, areas map[string]string) *model.Device {
-	name := d.NameByUser
+	name := text.Clean(d.NameByUser)
 	if name == "" {
-		name = d.Name
+		name = text.Clean(d.Name)
 	}
 	ids := []model.Identifier{{Namespace: NamespaceDevice, Value: d.ID}}
 	for _, id := range d.Identifiers {
@@ -61,23 +63,23 @@ func Device(d *ha.DeviceEntry, areas map[string]string) *model.Device {
 	return &model.Device{
 		Identity:      model.Identity{IDs: ids, Connections: conns},
 		Name:          model.Localized{Default: name},
-		Manufacturer:  d.Manufacturer,
-		Model:         d.Model,
-		ModelID:       d.ModelID,
-		SWVersion:     d.SWVersion,
-		HWVersion:     d.HWVersion,
-		SerialNumber:  d.SerialNumber,
-		SuggestedArea: areas[d.AreaID],
+		Manufacturer:  text.Clean(d.Manufacturer),
+		Model:         text.Clean(d.Model),
+		ModelID:       text.Clean(d.ModelID),
+		SWVersion:     text.Clean(d.SWVersion),
+		HWVersion:     text.Clean(d.HWVersion),
+		SerialNumber:  text.Clean(d.SerialNumber),
+		SuggestedArea: text.Clean(areas[d.AreaID]),
 		ConfigURL:     d.ConfigurationURL,
 	}
 }
 
 // OwnDevice is the device of an entity without a registry device: one
-// device per entity, named as the entity.
+// device per entity, named as the entity (cleaned, as Device's).
 func OwnDevice(entityID, name string) *model.Device {
 	return &model.Device{
 		Identity: model.Identity{IDs: []model.Identifier{{Namespace: NamespaceEntity, Value: entityID}}},
-		Name:     model.Localized{Default: name},
+		Name:     model.Localized{Default: text.Clean(name)},
 	}
 }
 
@@ -123,8 +125,8 @@ func Entity(in Input) *model.Basic {
 		Unit:        model.Unit(str(attrs["unit_of_measurement"])),
 		Extra:       description(domain, attrs),
 	}
-	if in.Name != "" {
-		d.Name = model.Localized{Default: in.Name}
+	if n := text.Clean(in.Name); n != "" {
+		d.Name = model.Localized{Default: n}
 	}
 	if domain == "climate" || domain == "water_heater" {
 		// climate/__init__.py:296-316, water_heater/__init__.py:164-200
@@ -157,15 +159,19 @@ func Entity(in Input) *model.Basic {
 // integration's name for an entity with has_entity_name (empty for the
 // device's main feature, which go-hamapping names after the device), else
 // the friendly_name (helpers/entity_registry.py:369-403, helpers/entity.py
-// :1173).
+// :1173). It is cleaned, as Device's text; a registry name that cleans to
+// "" falls through to the others (HR-P2-data-94).
 func entityName(reg *ha.EntityEntry, attrs map[string]any) string {
+	if reg != nil {
+		if n := text.Clean(reg.Name); n != "" {
+			return n
+		}
+	}
 	switch {
-	case reg != nil && reg.Name != "":
-		return reg.Name
 	case reg != nil && reg.HasEntityName:
-		return reg.OriginalName
+		return text.Clean(reg.OriginalName)
 	default:
-		return str(attrs["friendly_name"])
+		return text.Clean(str(attrs["friendly_name"]))
 	}
 }
 

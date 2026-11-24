@@ -32,6 +32,8 @@ import (
 	"sync"
 	"time"
 	"unicode/utf8"
+
+	"github.com/SukramJ/go-ha2fabric/internal/text"
 )
 
 // Version is the file format's version.
@@ -68,6 +70,20 @@ type Store struct {
 	mu        sync.Mutex
 	entries   map[string]Entry
 	recovered *Recovery
+	closed    bool
+}
+
+// ErrClosed is [Store.Set]'s error after [Store.Close].
+var ErrClosed = errors.New("selection: the store is closed (its node was deleted)")
+
+// Close ends the store's writes: a Set in flight finishes first, every
+// later one fails with ErrClosed and writes nothing. A node's delete
+// closes it before it removes the node's files, so a web UI apply racing
+// the delete leaves no orphan file behind (HR-P2-conc-68).
+func (s *Store) Close() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.closed = true
 }
 
 // Recovery is an overrides file [Open] did not read as it is: one that
@@ -202,7 +218,8 @@ func parse(b []byte) (file, error) {
 }
 
 // load takes entries into the store: a key that is not an entity id is
-// dropped, a name cut to MaxName on a character boundary.
+// dropped, a name cut to MaxName on a character boundary and cleaned
+// (text.Clean).
 func (s *Store) load(entries map[string]Entry) {
 	dropped := 0
 	for id, e := range entries {
@@ -210,7 +227,7 @@ func (s *Store) load(entries map[string]Entry) {
 			dropped++
 			continue
 		}
-		e.Name = cut(e.Name, MaxName)
+		e.Name = text.Clean(cut(e.Name, MaxName))
 		s.entries[id] = e
 	}
 	if dropped > 0 {
@@ -293,8 +310,9 @@ func (s *Store) Names() map[string]string {
 
 // Set stores the given overrides over the current ones, drops the
 // overrides of remove, and writes the file; on a write error nothing
-// changes. A key that is not an entity id, or a name longer than MaxName,
-// is refused.
+// changes. A key that is not an entity id, a name longer than MaxName,
+// or one with a control or bidirectional control character (it becomes
+// a NodeLabel, text.Safe; HR-P2-data-31) is refused.
 func (s *Store) Set(updates map[string]Entry, remove []string) error {
 	for id, e := range updates {
 		if !EntityID(id) {
@@ -303,9 +321,15 @@ func (s *Store) Set(updates map[string]Entry, remove []string) error {
 		if len(e.Name) > MaxName {
 			return fmt.Errorf("selection: the name of %s is %d bytes, at most %d", id, len(e.Name), MaxName)
 		}
+		if !text.Safe(e.Name) {
+			return fmt.Errorf("selection: the name of %s, %q, carries a control or bidirectional control character", id, e.Name)
+		}
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.closed {
+		return ErrClosed
+	}
 	next := maps.Clone(s.entries)
 	for _, id := range remove {
 		delete(next, id)

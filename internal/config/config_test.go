@@ -374,10 +374,11 @@ func TestHelpHidesHAURL(t *testing.T) {
 	}
 }
 
-// TestLabelText (HR-P1-data-20): LABEL is valid UTF-8 without control
-// characters, as it becomes the node's NodeLabel.
+// TestLabelText (HR-P1-data-20, HR-P2-data-31): LABEL is valid UTF-8
+// without control and bidirectional control characters, as it becomes the
+// node's NodeLabel.
 func TestLabelText(t *testing.T) {
-	for _, l := range []string{"\xff\xfe", "Bridge\x07", "a\nb"} {
+	for _, l := range []string{"\xff\xfe", "Bridge\x07", "a\nb", "\u202eevil", "a\u2066b", "x\u200e"} {
 		_, err := Load(nil, MapEnv(map[string]string{"HA_URL": "ws://a", "HA_TOKEN": "t", "LABEL": l}), io.Discard)
 		if err == nil || !strings.Contains(err.Error(), "LABEL") {
 			t.Errorf("LABEL %q: %v", l, err)

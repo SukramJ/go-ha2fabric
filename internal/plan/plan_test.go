@@ -290,3 +290,42 @@ func TestAssessIgnoresInputOrder(t *testing.T) {
 		}
 	}
 }
+
+// TestOversizedUnmappable (HR-P2-bound-90, decision 52; extends
+// decision 42): a state over ha.MaxStateBytes came without its
+// attributes, so the entity is not mapped from the stripped state as
+// another device type: it is unmappable with the reason, in the
+// assessment and in the dry run, and no group carries it.
+func TestOversizedUnmappable(t *testing.T) {
+	hollow := map[string]bool{"light.kitchen": true, "climate.bedroom_ac": true}
+	s := snapshot(t)
+	for i := range s.States {
+		if hollow[s.States[i].EntityID] {
+			s.States[i].Attributes, s.States[i].Oversized = nil, 300<<10
+		}
+	}
+	in := plan.Input{Rule: expose.Rule{Assist: true}, Ports: camera.DryPorts}
+	verdicts, groups := plan.Assess(s, in)
+	for _, g := range groups {
+		for _, e := range g.Entities {
+			if hollow[e.Key()] {
+				t.Errorf("%s is planned in group %s from its stripped state", e.Key(), g.Key)
+			}
+		}
+	}
+	for _, list := range [][]plan.Verdict{verdicts, plan.Dry(s, in)} {
+		found := 0
+		for _, v := range list {
+			if !hollow[v.EntityID] {
+				continue
+			}
+			found++
+			if !v.Exposed || v.State != "unmappable" || v.DeviceType != 0 || !strings.HasPrefix(v.Reason, "state over 256 KiB") || !strings.Contains(v.Reason, "307200 bytes") {
+				t.Errorf("%s: exposed=%v %s dt=%#x %q", v.EntityID, v.Exposed, v.State, v.DeviceType, v.Reason)
+			}
+		}
+		if found != len(hollow) {
+			t.Fatalf("%d verdicts of %d", found, len(hollow))
+		}
+	}
+}

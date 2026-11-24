@@ -5,6 +5,7 @@ package selection
 
 import (
 	"bytes"
+	"errors"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -107,5 +108,52 @@ func TestUnreadableFile(t *testing.T) {
 	dir := t.TempDir()
 	if _, err := Open(dir, nil); err == nil {
 		t.Fatal("a directory opened as the file")
+	}
+}
+
+// TestNameText (HR-P2-data-31): a web UI name with a control or a
+// bidirectional control character is refused — it becomes a NodeLabel —
+// and one in the file is read without them; the joiners stay.
+func TestNameText(t *testing.T) {
+	path := filepath.Join(t.TempDir(), fileName)
+	s, err := Open(path, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"Desk\x1b[2J", "a\nb", "\u202eevil", "x\u2066y", "\xff"} {
+		if err := s.Set(map[string]Entry{"light.a": {Enabled: true, Name: name}}, nil); err == nil {
+			t.Errorf("the name %q was taken", name)
+		}
+	}
+	if err := s.Set(map[string]Entry{"light.a": {Enabled: true, Name: "Café \U0001F469\u200d\U0001F4BB"}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(`{"version":1,"entities":{"light.b":{"enabled":true,"name":"Lamp\u001b[31m\u202e"}}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s, err = Open(path, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := s.Names()["light.b"]; got != "Lamp[31m" {
+		t.Fatalf("a name read from the file: %q", got)
+	}
+}
+
+// TestClosedStoreWritesNothing (HR-P2-conc-68): after Close — a node's
+// delete, before its files are removed — a Set fails and writes no file,
+// so an apply racing the delete leaves no orphan file behind.
+func TestClosedStoreWritesNothing(t *testing.T) {
+	path := filepath.Join(t.TempDir(), fileName)
+	s, err := Open(path, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+	if err := s.Set(map[string]Entry{"light.a": {Enabled: true}}, nil); !errors.Is(err, ErrClosed) {
+		t.Fatalf("Set after Close: %v", err)
+	}
+	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("a closed store wrote its file: %v", err)
 	}
 }

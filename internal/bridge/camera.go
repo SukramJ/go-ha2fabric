@@ -14,6 +14,9 @@ import (
 	"github.com/SukramJ/go-ha2fabric/internal/camera"
 )
 
+// closeHost ends a camera host's sessions; a test's seam.
+var closeHost = (*camera.Host).Close
+
 // ports is go-hamapping's Options.Ports for the devices the bridge
 // builds: a camera entity's host, made on the first ask and kept per
 // entity id; nil for every other entity, and without CameraUpstream. The
@@ -55,7 +58,10 @@ func (b *Bridge) attachCameras(g *group, plan *hamapping.Plan, devs []*device.De
 }
 
 // closeCameras closes the hosts no built device carries any more: the
-// entity left the bridge, its row changed, or its build failed.
+// entity left the bridge, its row changed, or its build failed. The
+// closes run beside the worker (HR-P2-conc-60): a session of a controller
+// that went away can take its signal timeout to end, and the worker would
+// apply no state meanwhile. Run's end waits for them ([Bridge.closeAll]).
 func (b *Bridge) closeCameras(ctx context.Context) {
 	for id, h := range b.hosts {
 		kept := false
@@ -63,8 +69,20 @@ func (b *Bridge) closeCameras(ctx context.Context) {
 			kept = kept || g.cameras[id]
 		}
 		if !kept {
-			h.Close(ctx)
 			delete(b.hosts, id)
+			b.closing.Go(func() { closeHost(h, ctx) })
 		}
 	}
+}
+
+// closeAll closes every camera host at Run's end, in parallel, and waits
+// for every close, these and those a sync started. Each close returns at
+// ctx's end (camera.Host.Close); the stop's own deadline bounds the wait
+// for the worker (cmd/ha2fabric's stopRun).
+func (b *Bridge) closeAll(ctx context.Context) {
+	for id, h := range b.hosts {
+		delete(b.hosts, id)
+		b.closing.Go(func() { closeHost(h, ctx) })
+	}
+	b.closing.Wait()
 }

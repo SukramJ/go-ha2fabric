@@ -41,6 +41,10 @@ var (
 	// ErrDisconnected is a command whose connection dropped before its
 	// result arrived.
 	ErrDisconnected = errors.New("ha: connection dropped")
+	// ErrReadLimit is a message of Home Assistant over the read limit
+	// (Options.ReadLimit): the connection ends with it, and a command
+	// whose result it was fails with it beside ErrDisconnected.
+	ErrReadLimit = errors.New("ha: a message from Home Assistant exceeds the read limit")
 )
 
 // Defaults of [Options].
@@ -124,6 +128,9 @@ type Client struct {
 	// (listOf).
 	skippedMu sync.Mutex
 	skipped   map[string]bool
+	// oversized holds the entities whose state over MaxStateBytes was
+	// logged (GetStates); guarded by skippedMu.
+	oversized map[string]bool
 }
 
 // New returns a client; [Client.Run] connects it.
@@ -380,7 +387,7 @@ func (c *Client) auth(ctx context.Context, ws *websocket.Conn) (string, error) {
 	case TypeAuthOK:
 		return reply.HAVersion, nil
 	case TypeAuthInvalid:
-		return "", fmt.Errorf("%w: %s", ErrAuthInvalid, reply.Message)
+		return "", fmt.Errorf("%w: %s", ErrAuthInvalid, Excerpt(reply.Message))
 	default:
 		return "", fmt.Errorf("ha: expected auth_ok, got %q", reply.Type)
 	}
@@ -404,6 +411,10 @@ func (c *Client) read(ctx context.Context, s *session, h Handler) {
 	for {
 		_, b, err := s.ws.Read(ctx)
 		if err != nil {
+			if errors.Is(err, websocket.ErrMessageTooBig) {
+				// Named, so the sync's error says why (HR-P2-bound-37).
+				err = fmt.Errorf("%w of %d bytes: %w", ErrReadLimit, c.opts.ReadLimit, err)
+			}
 			s.fail(fmt.Errorf("ha: read: %w", err))
 			return
 		}
@@ -446,6 +457,16 @@ func (c *Client) read(ctx context.Context, s *session, h Handler) {
 			}
 		}
 	}
+}
+
+// dropped is the error of a command whose connection ended with cause:
+// ErrDisconnected, carrying the cause when there is one (a message over
+// the read limit, say).
+func dropped(cause error) error {
+	if cause == nil {
+		return ErrDisconnected
+	}
+	return fmt.Errorf("%w: %w", ErrDisconnected, cause)
 }
 
 // fail ends the session once and fails every pending command.
@@ -505,9 +526,10 @@ func (s *session) callWith(ctx context.Context, cmd map[string]any, sub bool, st
 	s.mu.Lock()
 	select {
 	case <-s.done:
+		err := s.err
 		s.mu.Unlock()
 		s.writeMu.Unlock()
-		return Message{}, ErrDisconnected
+		return Message{}, dropped(err)
 	default:
 	}
 	s.pending[id] = ch
@@ -535,7 +557,10 @@ func (s *session) callWith(ctx context.Context, cmd map[string]any, sub bool, st
 	select {
 	case m, ok := <-ch:
 		if !ok {
-			return Message{}, ErrDisconnected
+			s.mu.Lock()
+			err := s.err
+			s.mu.Unlock()
+			return Message{}, dropped(err)
 		}
 		if m.Type == TypePong {
 			return m, nil
@@ -653,9 +678,31 @@ func (c *Client) ListLabels(ctx context.Context) ([]Label, error) {
 // GetStates is get_states: every state the user may read
 // (websocket_api/commands.py:369-385 at 2026.10.3). A state that does not
 // decode is left out: its entity has no state for the sync and stays out
-// until its next state_changed.
+// until its next state_changed. A state over MaxStateBytes comes without
+// its attributes (State.Oversized) and is logged with its entity id, at
+// Warn the first time for each entity (HR-P2-bound-38).
 func (c *Client) GetStates(ctx context.Context) ([]State, error) {
-	return listOf[State](ctx, c, "get_states", nil)
+	states, err := listOf[State](ctx, c, "get_states", nil)
+	for i := range states {
+		st := &states[i]
+		if st.Oversized == 0 {
+			continue
+		}
+		c.skippedMu.Lock()
+		logged := c.oversized[st.EntityID]
+		if c.oversized == nil {
+			c.oversized = map[string]bool{}
+		}
+		c.oversized[st.EntityID] = true
+		c.skippedMu.Unlock()
+		level := slog.LevelWarn
+		if logged {
+			level = slog.LevelDebug
+		}
+		c.log.Log(ctx, level, "ha.state_oversized", slog.String("entity_id", st.EntityID), slog.Int("bytes", st.Oversized),
+			slog.Int("max", MaxStateBytes), slog.String("hint", "the entity's attributes were dropped"))
+	}
+	return states, err
 }
 
 // GetConfig is get_config (websocket_api/commands.py:658-666 at

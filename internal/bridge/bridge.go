@@ -66,7 +66,8 @@ type Options struct {
 	// (plan.Effective). Required.
 	Input func() plan.Input
 	// Debounce coalesces registry events into one re-sync; 0 is one
-	// second.
+	// second. A stream of events closer than it puts the sync off by at
+	// most maxWait debounces from the first ([Bridge.resyncSoon]).
 	Debounce time.Duration
 	// Logger is the bridge's logger; nil is slog.Default().
 	Logger *slog.Logger
@@ -74,6 +75,16 @@ type Options struct {
 	// changed the exposure (the entity ids whose decision moved) or the
 	// endpoints (added, replaced or removed devices).
 	OnChange func(exposure []string, endpoints bool)
+	// Retry is the first wait before a sync that failed while Home
+	// Assistant stays connected is tried again; it doubles with each
+	// failure up to maxRetry and starts again after a sync that succeeded
+	// (HR-P2-err-61). 0 is five seconds.
+	Retry time.Duration
+	// Snapshots is the connection's shared snapshot reader
+	// (ha.Fanout.Snapshots), so the nodes on one connection read Home
+	// Assistant once per event, not once each (HR-P2-bound-62); nil reads
+	// through the upstream alone.
+	Snapshots *ha.Snapshots
 	// CameraUpstream is Home Assistant's side of the camera relay
 	// (camera.HA of the client). Without it a camera has no host ports
 	// and go-hamapping skips its row.
@@ -120,10 +131,11 @@ func (g *group) built() *plan.Built[*device.Device] {
 // runs on one goroutine ([Bridge.Run]); controller commands run on
 // another, so a slow service call never holds an attribute report.
 type Bridge struct {
-	n    *node.Node
-	up   Upstream
-	opts Options
-	log  *slog.Logger
+	n     *node.Node
+	up    Upstream
+	snaps *ha.Snapshots
+	opts  Options
+	log   *slog.Logger
 
 	work chan func(context.Context)
 	cmds chan model.Command
@@ -136,6 +148,9 @@ type Bridge struct {
 	// everything and marks every endpoint unreachable while Home
 	// Assistant is away, so nothing a dropped closure carried is lost.
 	owed atomic.Bool
+	// drops are the logs of the work and the command queue's dropped
+	// items ([dropLog]).
+	drops struct{ work, cmds *dropLog }
 	// wake tells a waiting worker that a sync is owed: the failed send and
 	// the mark are two steps, so the worker can drain the queue between
 	// them and would otherwise wait with the sync owed (HR-P1-conc-96).
@@ -145,6 +160,13 @@ type Bridge struct {
 	groups map[string]*group
 	owner  map[string]*group
 	known  map[string]bool
+	// oversized holds the entities whose state_changed over
+	// ha.MaxStateBytes was logged at Warn (HR-P2-bound-38).
+	oversized map[string]bool
+	// hollow holds the exposed entities the last sync left unmappable
+	// for a state over ha.MaxStateBytes: a state under the cap re-syncs
+	// (HR-P2-bound-90, decision 52).
+	hollow map[string]bool
 	unit   string
 	warned string
 	since  map[string]time.Time
@@ -154,6 +176,8 @@ type Bridge struct {
 	// asks for an entity's ports, closed when no built device of the
 	// entity carries them any more.
 	hosts map[string]*camera.Host
+	// closing are the camera hosts' closes in flight ([Bridge.closeCameras]).
+	closing sync.WaitGroup
 	// labelIDs are the label ids the rule's label values resolved to at
 	// the last sync (expose.Rule.LabelIDs): a renamed label keeps its
 	// inclusion or exclusion.
@@ -161,8 +185,13 @@ type Bridge struct {
 	// down is set once the endpoints were marked unreachable for an
 	// outage of Home Assistant, so the outage is logged once.
 	down bool
+	// retry is the wait before the next retry of a failed sync, 0 after a
+	// sync that succeeded.
+	retry time.Duration
 
-	mu       sync.Mutex
+	mu sync.Mutex
+	// states are the served entities' current states: the snapshot's,
+	// then each state_changed's.
 	states   map[string]*ha.State
 	verdicts []plan.Verdict
 	last     *ha.Snapshot
@@ -170,7 +199,14 @@ type Bridge struct {
 	status   Status
 	warnings []Warning
 	timer    *time.Timer
-	synced   chan struct{}
+	// first is the first request the pending timer serves, zero while
+	// none is pending, and latest its latest: the sync's read begins after
+	// it. armed counts the timers armed, so a timer that fired while it
+	// was replaced does nothing ([Bridge.fire]).
+	first  time.Time
+	latest time.Time
+	armed  uint64
+	synced chan struct{}
 	// forget is the stable key of every entity removed from Home
 	// Assistant's registry since the last sync, by entity id: the next
 	// sync forgets it instead of removing it ([Bridge.noteRemoved]).
@@ -186,6 +222,12 @@ type Bridge struct {
 	serving map[string]bool
 	// viewLabelIDs is labelIDs for readers ([View]).
 	viewLabelIDs map[string]string
+	// failures counts the syncs that failed in a row while Home Assistant
+	// was connected, failure is the last one's error and failedSince the
+	// first one's time: from the second, a warning ([View.SyncFailure]).
+	failures    int
+	failure     string
+	failedSince time.Time
 	// ranges are the heat/cool ranges the command loop last sent, by
 	// entity id, until a state shows them ([Bridge.sentRangeLocked]).
 	ranges map[string]sentRange
@@ -197,12 +239,19 @@ func New(n *node.Node, up Upstream, opts Options) *Bridge {
 	if opts.Debounce <= 0 {
 		opts.Debounce = time.Second
 	}
+	if opts.Retry <= 0 {
+		opts.Retry = 5 * time.Second
+	}
 	log := opts.Logger
 	if log == nil {
 		log = slog.Default()
 	}
-	return &Bridge{
-		n: n, up: up, opts: opts, log: log,
+	snaps := opts.Snapshots
+	if snaps == nil {
+		snaps = ha.NewSnapshots(up)
+	}
+	b := &Bridge{
+		n: n, up: up, snaps: snaps, opts: opts, log: log,
 		work:   make(chan func(context.Context), 1024),
 		wake:   make(chan struct{}, 1),
 		cmds:   make(chan model.Command, 256),
@@ -211,6 +260,9 @@ func New(n *node.Node, up Upstream, opts Options) *Bridge {
 		states: map[string]*ha.State{},
 		synced: make(chan struct{}),
 	}
+	b.drops.work = &dropLog{log: log, msg: "bridge.queue_full", every: dropEvery, hint: "Home Assistant sends faster than the bridge applies; a re-sync follows once the queue is drained"}
+	b.drops.cmds = &dropLog{log: log, msg: "bridge.command_dropped", every: dropEvery, hint: "the command queue is full; the device shows Home Assistant's state again"}
+	return b
 }
 
 // Run serves the bridge until ctx ends: the worker and the command
@@ -231,19 +283,16 @@ func (b *Bridge) Run(ctx context.Context) error {
 			for _, g := range b.groups {
 				g.plan.Close()
 			}
-			for id, h := range b.hosts {
-				h.Close(ctx)
-				delete(b.hosts, id)
-			}
+			b.closeAll(ctx)
 			return nil
 		case fn := <-b.work:
 			fn(ctx)
 			if len(b.work) == 0 && b.owed.Swap(false) {
-				b.sync(ctx)
+				_ = b.sync(ctx, time.Now())
 			}
 		case <-b.wake:
 			if len(b.work) == 0 && b.owed.Swap(false) {
-				b.sync(ctx)
+				_ = b.sync(ctx, time.Now())
 			}
 		}
 	}
@@ -258,7 +307,7 @@ func (b *Bridge) enqueue(fn func(context.Context)) {
 	case b.work <- fn:
 	default:
 		b.owe()
-		b.log.Error("bridge.queue_full", slog.String("hint", "Home Assistant sends faster than the bridge applies; a re-sync follows once the queue is drained"))
+		b.drops.work.drop()
 	}
 }
 
@@ -280,7 +329,8 @@ func (b *Bridge) Synced() <-chan struct{} { return b.synced }
 func (b *Bridge) Connected(string) {
 	b.connected.Store(true)
 	b.setStatus(func(s *Status) { s.HAConnected = true })
-	b.enqueue(func(ctx context.Context) { b.sync(ctx) })
+	since := time.Now()
+	b.enqueue(func(ctx context.Context) { _ = b.sync(ctx, since) })
 }
 
 // Disconnected implements ha.Handler: while Home Assistant is away every
@@ -292,7 +342,7 @@ func (b *Bridge) Disconnected(error) {
 		return
 	}
 	b.setStatus(func(s *Status) { s.HAConnected = false })
-	b.enqueue(func(ctx context.Context) { b.sync(ctx) })
+	b.enqueue(func(ctx context.Context) { _ = b.sync(ctx, time.Now()) })
 }
 
 // unreachable marks every served endpoint unreachable, and logs the
@@ -389,21 +439,81 @@ func (b *Bridge) keepStaleForgets(forget map[string]device.SourceKey, removedAt 
 	}
 }
 
-// resyncSoon schedules one sync after the debounce; events within it
-// coalesce. A full queue when it fires leaves the sync owed.
+// maxRetry bounds the back-off of a failed sync's retry.
+const maxRetry = 5 * time.Minute
+
+// errNotConnected is a sync's answer while Home Assistant is away.
+var errNotConnected = errors.New("bridge: Home Assistant is not connected")
+
+// maxWait is how many debounces a stream of re-sync requests can put a
+// sync off, counted from the first request (HR-P2-data-30).
+const maxWait = 5
+
+// resyncSoon schedules one sync after the debounce; requests within it
+// coalesce, but a stream of them cannot put the sync off without end: it
+// runs at the latest maxWait debounces after the first request the timer
+// serves (HR-P2-data-30). A full queue when it fires leaves the sync owed.
 func (b *Bridge) resyncSoon() {
+	now := time.Now()
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	if b.first.IsZero() {
+		b.first = now
+	}
+	b.latest = now
+	at := now.Add(b.opts.Debounce)
+	if latest := b.first.Add(maxWait * b.opts.Debounce); at.After(latest) {
+		at = latest
+	}
+	b.armLocked(at)
+}
+
+// retryLater schedules the retry of a failed sync after its back-off,
+// unless a sync is pending already: that one is the retry.
+func (b *Bridge) retryLater() {
+	if b.retry == 0 {
+		b.retry = b.opts.Retry
+	}
+	wait := b.retry
+	b.retry = min(2*b.retry, max(maxRetry, b.opts.Retry))
+	now := time.Now()
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if !b.first.IsZero() {
+		return
+	}
+	b.first, b.latest = now, now.Add(wait)
+	b.armLocked(b.latest)
+}
+
+// armLocked arms the one sync timer to fire at at, in place of a pending
+// one. Called with mu held.
+func (b *Bridge) armLocked(at time.Time) {
 	if b.timer != nil {
 		b.timer.Stop()
 	}
-	b.timer = time.AfterFunc(b.opts.Debounce, func() {
-		select {
-		case b.work <- func(ctx context.Context) { b.sync(ctx) }:
-		default:
-			b.owe()
-		}
-	})
+	b.armed++
+	armed := b.armed
+	b.timer = time.AfterFunc(time.Until(at), func() { b.fire(armed) })
+}
+
+// fire is the sync timer's end: the sync it served goes to the worker.
+// A timer replaced after it fired does nothing; the one that replaced it
+// serves its requests.
+func (b *Bridge) fire(armed uint64) {
+	b.mu.Lock()
+	if armed != b.armed {
+		b.mu.Unlock()
+		return
+	}
+	b.first = time.Time{}
+	since := b.latest
+	b.mu.Unlock()
+	select {
+	case b.work <- func(ctx context.Context) { _ = b.sync(ctx, since) }:
+	default:
+		b.owe()
+	}
 }
 
 func (b *Bridge) setStatus(fn func(*Status)) {
@@ -447,25 +557,59 @@ func (b *Bridge) logCameraOff(verdicts []plan.Verdict) {
 // sync reads everything and brings the Aggregator's set to it in one
 // batch: new devices added, changed ones replaced, vanished ones removed.
 // While Home Assistant is not connected it marks every endpoint
-// unreachable instead.
-func (b *Bridge) sync(ctx context.Context) {
+// unreachable instead and returns errNotConnected. A read or a batch that
+// fails while Home Assistant stays connected is tried again after a
+// back-off (HR-P2-err-61); the error is the sync's. Its snapshot is a
+// read that began at or after since, the time of what the sync is for
+// ([ha.Snapshots]).
+func (b *Bridge) sync(ctx context.Context, since time.Time) error {
 	if !b.up.Connected() {
 		b.unreachable(ctx)
-		return
+		return errNotConnected
 	}
+	err := b.syncConnected(ctx, since)
+	switch {
+	case err == nil:
+		b.retry = 0
+		b.mu.Lock()
+		b.failures, b.failure, b.failedSince = 0, "", time.Time{}
+		b.mu.Unlock()
+	case ctx.Err() == nil:
+		b.mu.Lock()
+		if b.failures == 0 {
+			b.failedSince = time.Now()
+		}
+		b.failures++
+		b.failure = err.Error()
+		b.mu.Unlock()
+		if b.up.Connected() {
+			b.retryLater()
+		}
+	}
+	return err
+}
+
+// syncConnected is the sync while Home Assistant is connected.
+func (b *Bridge) syncConnected(ctx context.Context, since time.Time) error {
 	in := b.opts.Input()
 	in.Rule.LabelIDs = b.labelIDs
 	b.mu.Lock()
 	readFrom := b.removals
 	b.mu.Unlock()
-	snap, err := ha.ReadSnapshot(ctx, b.up, in.Rule.Assist)
+	snap, err := b.snaps.Read(ctx, since, in.Rule.Assist)
 	if err == nil {
 		err = plan.Check(snap, in)
 	}
 	if err != nil {
+		if ctx.Err() != nil {
+			// A stop, an erase or a delete ended the worker: no failure
+			// (HR-P2-err-67).
+			b.log.Debug("bridge.sync_cancelled", slog.String("error", err.Error()))
+			return err
+		}
 		b.log.Error("bridge.sync_failed", slog.String("error", err.Error()))
 		b.setStatus(func(s *Status) { s.SyncError = err.Error() })
-		return
+		return err
 	}
 	b.unit = snap.Config.TemperatureUnit()
 	verdicts, plannedGroups := plan.Assess(snap, in)
@@ -477,16 +621,17 @@ func (b *Bridge) sync(ctx context.Context) {
 	warnings, uiWarnings := b.warn(plan.Warnings(in, labels))
 	b.labelIDs = in.Rule.Resolutions(labels)
 
-	b.mu.Lock()
-	b.states = map[string]*ha.State{}
-	for i := range snap.States {
-		b.states[snap.States[i].EntityID] = &snap.States[i]
-		b.settleRangeLocked(snap.States[i].EntityID, &snap.States[i])
-	}
-	b.mu.Unlock()
 	b.known = map[string]bool{}
+	exposed := map[string]bool{}
 	for i := range verdicts {
 		b.known[verdicts[i].EntityID] = true
+		exposed[verdicts[i].EntityID] = verdicts[i].Exposed
+	}
+	b.hollow = map[string]bool{}
+	for i := range snap.States {
+		if st := &snap.States[i]; st.Oversized > 0 && exposed[st.EntityID] {
+			b.hollow[st.EntityID] = true
+		}
 	}
 	b.mu.Lock()
 	before := map[string]bool{}
@@ -564,6 +709,17 @@ func (b *Bridge) sync(ctx context.Context) {
 			b.owner[e.Key()] = g
 		}
 	}
+	// The states of the entities the bridge serves, pointing into the
+	// snapshot: every other state is the snapshot's alone (HR-P2-bound-38).
+	b.mu.Lock()
+	b.states = map[string]*ha.State{}
+	for i := range snap.States {
+		if id := snap.States[i].EntityID; b.owner[id] != nil {
+			b.states[id] = &snap.States[i]
+			b.settleRangeLocked(id, &snap.States[i])
+		}
+	}
+	b.mu.Unlock()
 	// Every state onto its device: values and reachability.
 	endpoints := 0
 	for _, g := range next {
@@ -593,13 +749,17 @@ func (b *Bridge) sync(ctx context.Context) {
 		}
 	}
 	slices.Sort(moved)
+	// Served is what the plan built: an entity go-fabric refused stays in
+	// its group without an endpoint (HR-P2-data-35, HR-P2-data-91).
 	serving := map[string]bool{}
 	for _, g := range next {
-		if len(g.devices) == 0 {
+		if len(g.devices) == 0 || g.plan == nil {
 			continue
 		}
 		for _, e := range g.Entities {
-			serving[e.Key()] = true
+			if g.plan.DeviceFor(e.Key()) != nil {
+				serving[e.Key()] = true
+			}
 		}
 	}
 	b.mu.Lock()
@@ -630,6 +790,7 @@ func (b *Bridge) sync(ctx context.Context) {
 	if b.opts.OnChange != nil && (len(moved) > 0 || changed) {
 		b.opts.OnChange(moved, changed)
 	}
+	return err
 }
 
 // settle takes back what the batch's failed operations did not apply
@@ -716,13 +877,22 @@ type View struct {
 	// LabelIDs are the label ids the rule's label values resolved to
 	// (expose.Rule.LabelIDs), for a reader's own assessment.
 	LabelIDs map[string]string
+	// SyncFailure, when set, is a sync that keeps failing while Home
+	// Assistant is connected, whatever the cause: the last error, since
+	// the first failure of the run. Nil after a sync that succeeded and
+	// while only one sync failed (its retry may still succeed).
+	SyncFailure *Warning
 }
 
 // View returns the last sync's read model.
 func (b *Bridge) View() View {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	return View{Snapshot: b.last, Verdicts: slices.Clone(b.verdicts), All: b.all, Warnings: slices.Clone(b.warnings), LabelIDs: maps.Clone(b.viewLabelIDs)}
+	v := View{Snapshot: b.last, Verdicts: slices.Clone(b.verdicts), All: b.all, Warnings: slices.Clone(b.warnings), LabelIDs: maps.Clone(b.viewLabelIDs)}
+	if b.failures >= 2 {
+		v.SyncFailure = &Warning{Message: b.failure, Since: b.failedSince}
+	}
+	return v
 }
 
 // warn logs the configuration's warnings (plan.Warnings) when they
@@ -755,16 +925,20 @@ func (b *Bridge) warn(found []string) ([]string, []Warning) {
 }
 
 // Resync reads Home Assistant again and brings the endpoints to it, and
-// returns when that sync has run: the web UI's reassemble.
+// returns when that sync has run: the web UI's reassemble. Its error is
+// the sync's, errNotConnected when Home Assistant went away before the
+// sync ran (HR-P2-err-65).
 func (b *Bridge) Resync(ctx context.Context) error {
 	if !b.up.Connected() {
-		return errors.New("bridge: Home Assistant is not connected")
+		return errNotConnected
 	}
 	done := make(chan struct{})
+	var err error
+	since := time.Now()
 	select {
 	case b.work <- func(ctx context.Context) {
 		defer close(done)
-		b.sync(ctx)
+		err = b.sync(ctx, since)
 	}:
 	case <-ctx.Done():
 		return ctx.Err()
@@ -774,38 +948,74 @@ func (b *Bridge) Resync(ctx context.Context) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	}
-	if e := b.Status().SyncError; e != "" {
-		return errors.New("bridge: " + e)
+	if errors.Is(err, errNotConnected) {
+		return err
+	}
+	if err != nil {
+		return fmt.Errorf("bridge: %w", err)
 	}
 	return nil
 }
 
-// build maps and builds one device's plan; a build failure leaves the
+// build maps and builds one device's plan. An endpoint go-fabric refuses
+// (go-hamapping's *BuildError) costs only its entity and the entities
+// riding on it: they are unmappable with the refusal as their reason, and
+// the device is mapped and built again without them, at most once per
+// entity (HR-P2-data-35, decision 40). Any other build failure leaves the
 // device without endpoints and says why in its verdicts.
 func (b *Bridge) build(ctx context.Context, p *plan.Group) (*group, []hamapping.Verdict) {
-	hp, mv := hamapping.Map(p.Device, p.Entities, plan.MapOptions(p.Regs, p.Names, b.ports))
-	g := &group{Group: p, plan: hp}
-	devs, err := hp.Build(ctx)
-	if err != nil {
+	entities := p.Entities
+	var refused []hamapping.Verdict
+	for {
+		hp, mv := hamapping.Map(p.Device, entities, plan.MapOptions(p.Regs, p.Names, b.ports))
+		g := &group{Group: p, plan: hp}
+		devs, err := hp.Build(ctx)
+		if err == nil {
+			mv = append(mv, refused...)
+			g.verdicts = mv
+			g.devices = devs
+			for i := range hp.Endpoints {
+				g.keys = append(g.keys, hp.Endpoints[i].Options.StableKey)
+			}
+			b.attachCameras(g, hp, devs)
+			hp.OnChange(b.onCommand)
+			hp.OnDiscard(b.onDiscard)
+			return g, mv
+		}
+		reason := "go-fabric refused the device: " + err.Error()
+		var be *hamapping.BuildError
+		if errors.As(err, &be) {
+			drop := map[string]bool{be.Key: true}
+			for _, k := range be.Riders {
+				drop[k] = true
+			}
+			rest := slices.DeleteFunc(slices.Clone(entities), func(e model.Entity) bool { return drop[e.Key()] })
+			if len(rest) < len(entities) {
+				b.log.Warn("bridge.build_refused", slog.String("device", p.Device.Name.Default), slog.String("entity", be.Key),
+					slog.Any("riders", be.Riders), slog.String("error", err.Error()))
+				for i := range mv {
+					if drop[mv[i].Key] {
+						mv[i].State = eligibility.StateUnmappable
+						mv[i].Reason = reason
+						refused = append(refused, mv[i])
+					}
+				}
+				hp.Close()
+				entities = rest
+				continue
+			}
+		}
 		b.log.Warn("bridge.build_failed", slog.String("device", p.Device.Name.Default), slog.String("error", err.Error()))
 		for i := range mv {
 			if mv[i].State != eligibility.StateUnmappable {
 				mv[i].State = eligibility.StateUnmappable
-				mv[i].Reason = "go-fabric refused the device: " + err.Error()
+				mv[i].Reason = reason
 			}
 		}
+		mv = append(mv, refused...)
 		g.verdicts = mv
 		return g, mv
 	}
-	g.verdicts = mv
-	g.devices = devs
-	for i := range hp.Endpoints {
-		g.keys = append(g.keys, hp.Endpoints[i].Options.StableKey)
-	}
-	b.attachCameras(g, hp, devs)
-	hp.OnChange(b.onCommand)
-	hp.OnDiscard(b.onDiscard)
-	return g, mv
 }
 
 // apply carries one entity's current state onto its device.
@@ -826,14 +1036,38 @@ func (b *Bridge) apply(ctx context.Context, g *group, id string) {
 	}
 }
 
+// logOversized logs a state_changed's state that came over
+// ha.MaxStateBytes without its attributes, as the client logs
+// get_states': at Warn the first time for the entity, at Debug after.
+func (b *Bridge) logOversized(ctx context.Context, st *ha.State) {
+	level := slog.LevelDebug
+	if !b.oversized[st.EntityID] {
+		if b.oversized == nil {
+			b.oversized = map[string]bool{}
+		}
+		b.oversized[st.EntityID] = true
+		level = slog.LevelWarn
+	}
+	b.log.Log(ctx, level, "ha.state_oversized", slog.String("entity_id", st.EntityID), slog.Int("bytes", st.Oversized),
+		slog.Int("max", ha.MaxStateBytes), slog.String("hint", "the entity's attributes were dropped"))
+}
+
 // stateChanged applies one state_changed: the value onto the device, or a
 // re-sync when the entity's description moved (a capability attribute
-// appeared) or the entity is new.
+// appeared), the entity is new, or its state crossed ha.MaxStateBytes
+// (an oversized entity is unmappable, HR-P2-bound-90). Only a served
+// entity's state is kept (HR-P2-bound-38): the next sync reads every
+// other one again.
 func (b *Bridge) stateChanged(ctx context.Context, sc ha.StateChanged) {
+	if sc.NewState != nil && sc.NewState.Oversized > 0 {
+		b.logOversized(ctx, sc.NewState)
+	}
+	g := b.owner[sc.EntityID]
 	b.mu.Lock()
-	if sc.NewState == nil {
+	switch {
+	case sc.NewState == nil:
 		delete(b.states, sc.EntityID)
-	} else {
+	case g != nil:
 		b.states[sc.EntityID] = sc.NewState
 		b.settleRangeLocked(sc.EntityID, sc.NewState)
 	}
@@ -842,8 +1076,16 @@ func (b *Bridge) stateChanged(ctx context.Context, sc ha.StateChanged) {
 		b.resyncSoon()
 		return
 	}
-	g := b.owner[sc.EntityID]
 	if g == nil {
+		if b.hollow[sc.EntityID] && sc.NewState.Oversized == 0 {
+			b.resyncSoon()
+		}
+		return
+	}
+	if sc.NewState.Oversized > 0 {
+		// Not applied: its attributes were dropped; the sync takes the
+		// endpoint away.
+		b.resyncSoon()
 		return
 	}
 	if g.Descs[sc.EntityID] != g.Describe(sc.EntityID, sc.NewState, b.unit) {

@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/SukramJ/go-ha2fabric/internal/text"
 )
 
 var quietLog = slog.New(slog.DiscardHandler)
@@ -45,7 +47,7 @@ func FuzzOpen(f *testing.F) {
 			return
 		}
 		for id, e := range s.Entries() {
-			if !EntityID(id) || len(e.Name) > MaxName {
+			if !EntityID(id) || len(e.Name) > MaxName || !text.Safe(e.Name) {
 				t.Fatalf("entry %q %+v", id, e)
 			}
 		}

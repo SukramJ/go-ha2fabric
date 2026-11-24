@@ -10,7 +10,7 @@ All notable changes to this project are documented here. The format follows
 
 The move to go-fabric `v0.25.0` under its new module path
 `thingfabric.dev/go-fabric`, with go-fabric-ui `v0.13.0` and go-hamapping
-`v0.5.0`. **Back up before updating:** the store's upgrade is one-way.
+`v0.7.0`. **Back up before updating:** the store's upgrade is one-way.
 **Stand-alone with `WEB_ADMIN=true` on a listener that is not loopback
 and no `WEB_ALLOW`, the daemon no longer starts**:
 set `WEB_ALLOW` or a loopback `WEB_LISTEN` before updating (Changed).
@@ -94,13 +94,22 @@ to reach it from the network, run the image with
   administrator's request is refused when its `Origin` names a host the
   check does not admit (in the add-on: any other than the page's own). The page's
   event streams end when the daemon stops.
-- go-hamapping `v0.4.12` → `v0.6.0`: a bridged endpoint's SerialNumber is
+- go-hamapping `v0.4.12` → `v0.7.0`: a bridged endpoint's SerialNumber is
   its Home Assistant device's `serial_number` (cut to 32 bytes; none when
   the device has none) — for a bridge already paired, the attribute
   appears where none was served; a fan's percentage maps to its mode in
   three bands and off to 0 %, a climate entity's fan mode to FanControl's
   percentage, an `auto` preset to a null percentage; labels and the vendor
-  are cut by UTF-8 bytes, the vendor name to 32.
+  are cut by UTF-8 bytes, the vendor name to 32. A cover with tilt is
+  served (before, go-fabric refused it and its device's other entities
+  with it, HR-P2-adpt-33): Type TiltBlindLift with the end product type its
+  device class allows; a tilt-only cover's open, close and position move
+  its tilt, and a tilt without `SET_TILT_POSITION` opens
+  (`open_cover_tilt`) at 0 % only and closes (`close_cover_tilt`)
+  otherwise, as a lift without `SET_POSITION` does. A select with 256 options and a thermostat whose `min_temp` is
+  above its `max_temp` are unmappable with a reason instead of refused by
+  the node (HR-P2-adpt-34, HR-P2-adpt-43); select labels that repeat are
+  numbered.
 
 ### Fixed
 
@@ -201,6 +210,65 @@ to reach it from the network, run the image with
   the label is renamed in Home Assistant, while the daemon runs; the warning
   of an exclude label that names no label says it excludes nothing now
   (HR-P1-cfg-34).
+- A stream of Home Assistant events closer than the one-second debounce
+  no longer puts the bridge's re-sync off without end: it runs at the
+  latest five seconds after the first event (HR-P2-data-30). A sync that
+  fails while Home Assistant stays connected is tried again after 5
+  seconds, doubling to 5 minutes (HR-P2-err-61); from the second failure
+  in a row the status page shows the warning `sync_failed` with the error
+  (HR-P2-bound-37). The web UI's reassemble reports a sync that did not
+  run, instead of a success (HR-P2-err-65). The nodes on the one Home
+  Assistant connection share one read of it per event instead of one each
+  (HR-P2-bound-62).
+- The bridge holds only its served entities' states beside the last
+  snapshot, not a second copy of every state (HR-P2-bound-38).
+- A stop or an erase no longer waits past its budget for a bridge whose
+  camera sessions do not end (`ha2fabric.bridge_stop_overrun`), an erase
+  no longer holds the status pages while it waits, and a sync no longer
+  waits for a camera's sessions to end (HR-P2-conc-60).
+- A controller's command that the full queue drops, or that has no
+  service, puts Home Assistant's state back on the device, as a failed
+  call does (HR-P2-err-63).
+- `bridge.queue_full` and `bridge.command_dropped` are one line per burst
+  and then a count every 10 seconds, not one Error line per dropped item
+  (HR-P2-bound-64). A sync or a command a stop cancels is no longer logged
+  as failed (HR-P2-err-67).
+- An entity go-fabric refuses no longer takes its Home Assistant device's
+  other entities off the bridge: it (with what rides on its endpoint) is
+  unmappable with go-fabric's reason, and the rest of the device is built
+  without it (`bridge.build_refused`) (HR-P2-data-35).
+- A camera's WebRTC sessions end together, within the stop's budget: a
+  controller that went away no longer holds the stop for ten seconds per
+  session (HR-P2-conc-60).
+- Camera: Home Assistant's ICE candidates are bounded as the
+  controller's are — 256 per session, 1 KiB each — and an event the
+  relay ignores no longer keeps a session from its idle end
+  (HR-P2-bound-40).
+- Home Assistant's names, manufacturers, models, versions and serials
+  reach the controllers without control and bidirectional control
+  characters; a web UI name, a node's label and `LABEL` carrying one are
+  refused; `--dump-plan` prints such a cell quoted (HR-P2-data-31, closes
+  HR-P1-data-36). A registry name made only of such characters falls back
+  to the entity's other names, and a node's label already in `nodes.json`
+  is used cleaned and logged (`nodes.label_refused`) (HR-P2-data-94).
+- A select's option, a fan's preset and a climate's fan mode go back to
+  Home Assistant untrimmed (HR-P2-data-32).
+- A state over 256 KiB is read without its attributes and logged
+  (`ha.state_oversized`, also for a `state_changed`), and its plan line
+  says so (HR-P2-bound-38).
+- An entity whose state is over 256 KiB is unmappable ("state over
+  256 KiB") until a state under the cap, which brings its endpoint back on
+  its number; it is no longer mapped from the state without attributes as
+  another device type (HR-P2-bound-90).
+- A message from Home Assistant over the read limit is named in the
+  sync's error, not only as a dropped connection (HR-P2-bound-37).
+- Home Assistant's error text is cut to 512 bytes in errors, the log and
+  the status (HR-P2-bound-39).
+- The add-on's Supervisor check reads the version every 10 minutes also
+  after it passed; a Supervisor downgraded below 2026.10.4 takes the web
+  UI's administrator away again (HR-P2-cfg-03).
+- A web UI apply racing a node's delete no longer writes the deleted
+  node's `selection-<key>.json` again (HR-P2-conc-68).
 
 ## [0.6.3] - 2026-11-12
 

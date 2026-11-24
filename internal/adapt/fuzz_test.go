@@ -12,12 +12,14 @@ import (
 
 	"github.com/SukramJ/go-ha2fabric/internal/adapt"
 	"github.com/SukramJ/go-ha2fabric/internal/ha"
+	"github.com/SukramJ/go-ha2fabric/internal/text"
 )
 
 // FuzzEntityState holds the translation of an entity's state and
 // attributes (hostile entity data from any integration) into go-hamqtt's
-// model against any value: Entity and State never panic, and the entity
-// keeps its id and domain.
+// model against any value: Entity and State never panic, the entity
+// keeps its id and domain, and its name and its device's carry no control
+// or bidirectional control character (HR-P2-data-31).
 func FuzzEntityState(f *testing.F) {
 	f.Add("light.a", "on", []byte(`{"brightness":180,"color_temp_kelvin":2702,"hs_color":[28.4,65.7],"xy_color":[0.5,0.4],"color_mode":"color_temp","supported_color_modes":["hs","color_temp"]}`))
 	f.Add("climate.a", "heat", []byte(`{"hvac_modes":["off","heat",7],"min_temp":"x","target_temp_low":null,"supported_features":1e30}`))
@@ -31,6 +33,12 @@ func FuzzEntityState(f *testing.F) {
 		e := adapt.Entity(adapt.Input{EntityID: id, State: st, Device: adapt.OwnDevice(id, id), TemperatureUnit: "°C"})
 		if e == nil || e.Key() != id || string(e.Platform()) != ha.Domain(id) {
 			t.Fatalf("Entity(%q) = %+v", id, e)
+		}
+		if n := e.Description.Name.Default; !text.Safe(n) {
+			t.Fatalf("Entity(%q) is named %q", id, n)
+		}
+		if d := adapt.Device(&ha.DeviceEntry{ID: id, Name: state, Manufacturer: state, SerialNumber: id}, nil); !text.Safe(d.Name.Default) || !text.Safe(d.Manufacturer) || !text.Safe(d.SerialNumber) {
+			t.Fatalf("Device of %q, %q: %+v", id, state, d)
 		}
 		_ = adapt.State(st)
 	})

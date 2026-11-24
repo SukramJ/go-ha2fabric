@@ -81,7 +81,7 @@ func TestSupervisorGate(t *testing.T) {
 	srv, calls := fakeSupervisor(t, "2026.10.4", 2)
 	g, logs := runGate(t, srv.URL, "sup-token")
 	eventually(t, "the gate opens", g.open)
-	if calls.Load() != 3 || len(g.Warnings()) != 0 || !strings.Contains(logs.String(), "ha2fabric.supervisor_unreadable") || strings.Contains(logs.String(), "sup-token") {
+	if calls.Load() < 3 || len(g.Warnings()) != 0 || !strings.Contains(logs.String(), "ha2fabric.supervisor_unreadable") || strings.Contains(logs.String(), "sup-token") {
 		t.Fatalf("calls %d, warnings %v\n%s", calls.Load(), g.Warnings(), logs.String())
 	}
 
@@ -123,6 +123,41 @@ func TestSupervisorGateRechecks(t *testing.T) {
 	eventually(t, "the gate shuts", func() bool { return gateState(g.state.Load()) == gateClosed })
 	if w := g.Warnings()[0]; g.open() || !strings.Contains(w.Message, `"latest"`) || !strings.Contains(w.Message, "does not parse") {
 		t.Fatalf("an unparsable version: %+v", w)
+	}
+}
+
+// TestSupervisorGateRecloses (HR-P2-cfg-03): an open gate keeps reading
+// the version; a downgrade below the floor closes it again, a read that
+// fails meanwhile does not.
+func TestSupervisorGateRecloses(t *testing.T) {
+	var version atomic.Value
+	version.Store("2026.10.4")
+	var failing atomic.Bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if failing.Load() {
+			http.Error(w, "restarting", http.StatusBadGateway)
+			return
+		}
+		_, _ = fmt.Fprintf(w, `{"result":"ok","data":{"supervisor":%q}}`, version.Load())
+	}))
+	t.Cleanup(srv.Close)
+	g, logs := runGate(t, srv.URL, "sup-token")
+	eventually(t, "the gate opens", g.open)
+	failing.Store(true)
+	eventually(t, "a failed read", func() bool { return strings.Count(logs.String(), "supervisor_unreadable") >= 2 })
+	if !g.open() {
+		t.Fatal("a failed read closed the open gate")
+	}
+	version.Store("2026.10.3")
+	failing.Store(false)
+	eventually(t, "the gate shuts after the downgrade", func() bool { return gateState(g.state.Load()) == gateClosed })
+	if w := g.Warnings(); len(w) != 1 || w[0].Code != warningSupervisorTooOld {
+		t.Fatalf("warnings after the downgrade: %+v", w)
+	}
+	version.Store("2026.11.0")
+	eventually(t, "the gate opens again", g.open)
+	if n := strings.Count(logs.String(), "admin=true"); n != 2 {
+		t.Fatalf("%d opening lines, want one per change\n%s", n, logs.String())
 	}
 }
 

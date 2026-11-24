@@ -60,8 +60,10 @@ const (
 // supervisorGate decides whether the add-on's web UI may have an
 // administrator at all: only on a Supervisor of minSupervisor or later.
 // Until its version is read, and below it, the UI is the status page
-// only, with a warning. run reads the version at start and again every
-// retry until it has one.
+// only, with a warning. run reads the version at start, again every retry
+// until it has one, and every recheck after: a Supervisor updated past
+// the floor opens the gate, one downgraded below it closes it again
+// (HR-P2-cfg-03).
 type supervisorGate struct {
 	url     string
 	token   string
@@ -110,9 +112,11 @@ func newSupervisorGate(token string, log *slog.Logger) *supervisorGate {
 // open reports whether the Supervisor is known to be recent enough.
 func (g *supervisorGate) open() bool { return gateState(g.state.Load()) == gateOpen }
 
-// run reads the Supervisor's version until the gate opens or ctx ends:
-// every retry while it cannot be read, and every recheck while the gate
-// is closed, so a Supervisor updated meanwhile opens it without a restart.
+// run reads the Supervisor's version until ctx ends: every retry while
+// it cannot be read, and every recheck once it has been read, so a
+// Supervisor updated meanwhile opens the gate and one downgraded closes
+// it, each without a restart. A read that fails after the gate opened
+// leaves it open (the Supervisor restarting is no downgrade).
 func (g *supervisorGate) run(ctx context.Context) {
 	for attempt := 0; ; attempt++ {
 		wait := g.retry
@@ -120,11 +124,17 @@ func (g *supervisorGate) run(ctx context.Context) {
 		switch {
 		case err == nil && atLeast(v, minSupervisor):
 			g.mu.Lock()
-			g.version, g.err, g.since = v, "", time.Now()
+			changed := gateState(g.state.Load()) != gateOpen || g.version != v
+			if changed {
+				g.since = time.Now()
+			}
+			g.version, g.err = v, ""
 			g.mu.Unlock()
 			g.state.Store(int32(gateOpen))
-			g.log.Info("ha2fabric.supervisor", slog.String("version", v), slog.Bool("admin", true))
-			return
+			if changed {
+				g.log.Info("ha2fabric.supervisor", slog.String("version", v), slog.Bool("admin", true))
+			}
+			wait = g.recheck
 		case err == nil:
 			g.mu.Lock()
 			changed := gateState(g.state.Load()) != gateClosed || g.version != v
@@ -142,7 +152,7 @@ func (g *supervisorGate) run(ctx context.Context) {
 		case ctx.Err() != nil:
 			return
 		default:
-			closed := gateState(g.state.Load()) == gateClosed
+			read := gateState(g.state.Load()) != gateUnknown
 			g.mu.Lock()
 			g.err = err.Error()
 			g.mu.Unlock()
@@ -150,7 +160,7 @@ func (g *supervisorGate) run(ctx context.Context) {
 			if attempt == 0 {
 				level = slog.LevelWarn
 			}
-			if closed {
+			if read {
 				wait = g.recheck
 			}
 			g.log.Log(ctx, level, "ha2fabric.supervisor_unreadable", slog.String("error", err.Error()), slog.Duration("retry_in", wait),

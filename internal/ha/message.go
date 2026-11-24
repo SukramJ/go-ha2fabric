@@ -8,7 +8,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
+	"unicode/utf8"
 )
 
 // The message types of the WebSocket API this client speaks. Home
@@ -63,7 +65,29 @@ type Error struct {
 	Message string `json:"message"`
 }
 
-func (e *Error) Error() string { return "home assistant: " + e.Code + ": " + e.Message }
+// Error is the code and the message, each an Excerpt: the message is an
+// integration's exception text, of any length (HR-P2-bound-39).
+func (e *Error) Error() string {
+	return "home assistant: " + Excerpt(e.Code) + ": " + Excerpt(e.Message)
+}
+
+// MaxErrorText bounds a text of Home Assistant in an error or a log
+// record: an integration's exception text reaches the log ring, stderr
+// and the status, and a controller can repeat the command that fails.
+const MaxErrorText = 512
+
+// Excerpt is s cut to MaxErrorText bytes on a character boundary, with
+// the number of bytes left out.
+func Excerpt(s string) string {
+	if len(s) <= MaxErrorText {
+		return s
+	}
+	cut := MaxErrorText
+	for cut > 0 && !utf8.RuneStart(s[cut]) {
+		cut--
+	}
+	return s[:cut] + "… (" + strconv.Itoa(len(s)-cut) + " more bytes)"
+}
 
 // ErrFrame is the error of a frame that is not a message.
 var ErrFrame = errors.New("ha: frame is not a WebSocket API message")
@@ -129,6 +153,42 @@ type State struct {
 	Attributes  map[string]any `json:"attributes"`
 	LastChanged string         `json:"last_changed"`
 	LastUpdated string         `json:"last_updated"`
+	// Oversized is the size in bytes of a state over MaxStateBytes, whose
+	// attributes were dropped; 0 for a whole state.
+	Oversized int `json:"-"`
+}
+
+// MaxStateBytes bounds one state object as it decodes (HR-P2-bound-38,
+// decision 42). The read limit bounds a frame, not what it decodes to:
+// attributes of small values decode to many times their size, and the
+// bridge holds every state. A state over the bound keeps its id, its
+// state and its times; its attributes are dropped, and Oversized says
+// so; the client logs it (ha.state_oversized) and the plan can name it.
+const MaxStateBytes = 256 << 10
+
+// UnmarshalJSON decodes a state object, without its attributes when it
+// is over MaxStateBytes.
+func (s *State) UnmarshalJSON(b []byte) error {
+	type whole State
+	if len(b) <= MaxStateBytes {
+		var w whole
+		if err := json.Unmarshal(b, &w); err != nil {
+			return err
+		}
+		*s = State(w)
+		return nil
+	}
+	var head struct {
+		EntityID    string `json:"entity_id"`
+		State       string `json:"state"`
+		LastChanged string `json:"last_changed"`
+		LastUpdated string `json:"last_updated"`
+	}
+	if err := json.Unmarshal(b, &head); err != nil {
+		return err
+	}
+	*s = State{EntityID: head.EntityID, State: head.State, LastChanged: head.LastChanged, LastUpdated: head.LastUpdated, Oversized: len(b)}
+	return nil
 }
 
 // The two states that carry no value: homeassistant/const.py:303,313 at
