@@ -119,6 +119,14 @@ const MaxPendingCandidates = 64
 // restarts.
 const MaxSessionCandidates = 256
 
+// MaxCandidateBytes bounds one of Home Assistant's ICE candidates on its
+// way to the controller (HR-P2-bound-40). A candidate line is a
+// foundation, a component, a transport, a priority, an address, a port,
+// a type and a few extensions (RFC 8839 section 5.1) — a real one is
+// under 300 bytes; a longer one is refused and logged, the session
+// stays.
+const MaxCandidateBytes = 1024
+
 // MaxSessions bounds a camera's WebRTC sessions. Each is a session of
 // Home Assistant's WebRTC provider (a go2rtc consumer, a peer connection)
 // and a relay here; go-fabric's kit bounds only the id space (65 535).
@@ -203,7 +211,8 @@ type Options struct {
 	// is 10 s.
 	SignalTimeout time.Duration
 	// IdleTimeout ends a session without a controller command or a Home
-	// Assistant event for so long; 0 is DefaultIdleTimeout.
+	// Assistant event the relay acts on for so long; 0 is
+	// DefaultIdleTimeout.
 	IdleTimeout time.Duration
 	// EvictIdle is how long a session must have been idle to make room
 	// for a new offer at MaxSessions; 0 is DefaultEvictIdle.
@@ -244,8 +253,10 @@ type session struct {
 	// sent counts the controller's candidates, queued or sent, against
 	// MaxSessionCandidates.
 	sent int
+	// got counts Home Assistant's candidates against MaxSessionCandidates.
+	got int
 	// last is the time of the last controller command or Home Assistant
-	// event; idle ends the session IdleTimeout after it.
+	// event the relay acts on; idle ends the session IdleTimeout after it.
 	last time.Time
 	idle *time.Timer
 }
@@ -679,7 +690,6 @@ func (h *Host) relay(ctx context.Context, ss *session) {
 			h.log.Warn("camera.event_refused", slog.Int("session", int(ss.id)), slog.String("error", err.Error()))
 			continue
 		}
-		h.touch(ss)
 		if !h.event(ctx, ss, ev) {
 			return
 		}
@@ -692,10 +702,13 @@ func (h *Host) relay(ctx context.Context, ss *session) {
 	}
 }
 
-// event handles one event; false ends the relay.
+// event handles one event; false ends the relay. Only an event it acts
+// on is activity: one it ignores or refuses does not put off the
+// session's idle end (HR-P2-bound-40).
 func (h *Host) event(ctx context.Context, ss *session, ev ha.WebRTCEvent) bool {
 	switch ev.Type {
 	case ha.WebRTCSession:
+		h.touch(ss)
 		h.mu.Lock()
 		ss.haID = ev.SessionID
 		pending := ss.pending
@@ -717,6 +730,7 @@ func (h *Host) event(ctx context.Context, ss *session, ev ha.WebRTCEvent) bool {
 			h.end(ctx, ss, ReasonICEFailed)
 			return false
 		}
+		h.touch(ss)
 		return h.signal(ctx, ss, "Answer", func(ctx context.Context, s Signaller) error { return s.Answer(ctx, ss.id, ev.Answer) })
 	case ha.WebRTCCandidate:
 		if ev.Candidate == nil || ev.Candidate.Candidate == "" {
@@ -724,11 +738,28 @@ func (h *Host) event(ctx context.Context, ss *session, ev ha.WebRTCEvent) bool {
 			// 89-92 at 0.3.0) has no counterpart in ICECandidates.
 			return true
 		}
+		// Home Assistant's side is held to the controller's bound
+		// (HR-P2-bound-40): MaxSessionCandidates per session, refused or
+		// relayed, and MaxCandidateBytes per candidate.
+		h.mu.Lock()
+		ss.got++
+		got := ss.got
+		h.mu.Unlock()
+		if got > MaxSessionCandidates {
+			h.log.Warn("camera.candidates_exceeded", slog.Int("session", int(ss.id)), slog.Int("max", MaxSessionCandidates))
+			h.end(ctx, ss, ReasonICEFailed)
+			return false
+		}
+		if n := len(ev.Candidate.Candidate); n > MaxCandidateBytes {
+			h.log.Warn("camera.candidate_refused", slog.Int("session", int(ss.id)), slog.Int("bytes", n), slog.Int("max", MaxCandidateBytes))
+			return true
+		}
 		c, ok := fromHA(*ev.Candidate)
 		if !ok {
 			h.log.Warn("camera.candidate_refused", slog.Int("session", int(ss.id)), slog.Int("sdp_mline_index", *ev.Candidate.SdpMLineIndex))
 			return true
 		}
+		h.touch(ss)
 		return h.signal(ctx, ss, "IceCandidates", func(ctx context.Context, s Signaller) error {
 			return s.IceCandidates(ctx, ss.id, []gfcamera.ProviderICECandidate{c})
 		})
