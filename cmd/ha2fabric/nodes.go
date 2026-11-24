@@ -721,6 +721,9 @@ func (f *fleet) Delete(ctx context.Context, key string) error {
 		if err := s.close(ctx); err != nil {
 			f.log.Warn("ha2fabric.node_stop", slog.String("node", key), slog.String("error", err.Error()))
 		}
+		// An exposure apply that took the node before the delete writes no
+		// selection file after its removal (HR-P2-conc-68).
+		s.sel.Close()
 		f.mu.Lock()
 		m.s = nil
 		f.mu.Unlock()

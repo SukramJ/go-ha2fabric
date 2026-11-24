@@ -70,6 +70,20 @@ type Store struct {
 	mu        sync.Mutex
 	entries   map[string]Entry
 	recovered *Recovery
+	closed    bool
+}
+
+// ErrClosed is [Store.Set]'s error after [Store.Close].
+var ErrClosed = errors.New("selection: the store is closed (its node was deleted)")
+
+// Close ends the store's writes: a Set in flight finishes first, every
+// later one fails with ErrClosed and writes nothing. A node's delete
+// closes it before it removes the node's files, so a web UI apply racing
+// the delete leaves no orphan file behind (HR-P2-conc-68).
+func (s *Store) Close() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.closed = true
 }
 
 // Recovery is an overrides file [Open] did not read as it is: one that
@@ -313,6 +327,9 @@ func (s *Store) Set(updates map[string]Entry, remove []string) error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.closed {
+		return ErrClosed
+	}
 	next := maps.Clone(s.entries)
 	for _, id := range remove {
 		delete(next, id)
