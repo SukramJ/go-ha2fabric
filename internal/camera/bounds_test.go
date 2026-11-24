@@ -22,6 +22,7 @@ import (
 	"thingfabric.dev/go-fabric/contract"
 
 	"github.com/SukramJ/go-ha2fabric/internal/camera"
+	"github.com/SukramJ/go-ha2fabric/internal/ha"
 )
 
 // boundedHost is newHost with the idle bounds of opts.
@@ -375,5 +376,25 @@ func TestIgnoredEventsDoNotKeepTheSession(t *testing.T) {
 	}
 	if !slices.Contains(sig.seen(), "end 5 12") {
 		t.Fatalf("ignored events kept the session from its idle end: %q", sig.seen())
+	}
+}
+
+// TestHAErrorTextIsCut (HR-P2-bound-39): Home Assistant's error event
+// is logged with its text cut to ha.MaxErrorText.
+func TestHAErrorTextIsCut(t *testing.T) {
+	long := strings.Repeat("x", 1<<20)
+	up := &upstream{script: func(s *stream) {
+		s.push(map[string]any{"type": "error", "code": "c" + long, "message": "m" + long})
+	}}
+	h, logs := newHost(t, up)
+	sig := &signaller{}
+	h.Attach(sig)
+	if _, err := h.ProvideOffer(context.Background(), offer(2)); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the end", func() bool { return len(sig.seen()) == 1 })
+	h.Close(context.Background())
+	if n := len(logs.String()); n > 4*ha.MaxErrorText+2048 || !strings.Contains(logs.String(), "camera.ha_error") {
+		t.Fatalf("the log holds %d bytes", n)
 	}
 }

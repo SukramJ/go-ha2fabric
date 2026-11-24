@@ -764,7 +764,7 @@ func (h *Host) event(ctx context.Context, ss *session, ev ha.WebRTCEvent) bool {
 			return s.IceCandidates(ctx, ss.id, []gfcamera.ProviderICECandidate{c})
 		})
 	case ha.WebRTCError:
-		h.log.Warn("camera.ha_error", slog.Int("session", int(ss.id)), slog.String("code", ev.Code), slog.String("message", ev.Message))
+		h.log.Warn("camera.ha_error", slog.Int("session", int(ss.id)), slog.String("code", ha.Excerpt(ev.Code)), slog.String("message", ha.Excerpt(ev.Message)))
 		h.end(ctx, ss, ReasonICEFailed)
 		return false
 	default:

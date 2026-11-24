@@ -387,7 +387,7 @@ func (c *Client) auth(ctx context.Context, ws *websocket.Conn) (string, error) {
 	case TypeAuthOK:
 		return reply.HAVersion, nil
 	case TypeAuthInvalid:
-		return "", fmt.Errorf("%w: %s", ErrAuthInvalid, reply.Message)
+		return "", fmt.Errorf("%w: %s", ErrAuthInvalid, Excerpt(reply.Message))
 	default:
 		return "", fmt.Errorf("ha: expected auth_ok, got %q", reply.Type)
 	}
