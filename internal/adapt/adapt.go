@@ -159,11 +159,15 @@ func Entity(in Input) *model.Basic {
 // integration's name for an entity with has_entity_name (empty for the
 // device's main feature, which go-hamapping names after the device), else
 // the friendly_name (helpers/entity_registry.py:369-403, helpers/entity.py
-// :1173). It is cleaned, as Device's text.
+// :1173). It is cleaned, as Device's text; a registry name that cleans to
+// "" falls through to the others (HR-P2-data-94).
 func entityName(reg *ha.EntityEntry, attrs map[string]any) string {
+	if reg != nil {
+		if n := text.Clean(reg.Name); n != "" {
+			return n
+		}
+	}
 	switch {
-	case reg != nil && reg.Name != "":
-		return text.Clean(reg.Name)
 	case reg != nil && reg.HasEntityName:
 		return text.Clean(reg.OriginalName)
 	default:

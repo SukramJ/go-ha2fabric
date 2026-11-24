@@ -143,6 +143,17 @@ func Open(dir string, log *slog.Logger) (*Registry, error) {
 			slog.String("hint", "the daemon starts with the configured node only; the nodes' stores stay on disk, restore the file to bring them back"))
 		return r, nil
 	}
+	// A label an older version wrote unchecked is refused as a label the
+	// web UI sets (checkLabel), but not fatally: the node keeps running
+	// with it cleaned (HR-P2-data-94).
+	for i := range f.Nodes {
+		n := &f.Nodes[i]
+		if err := checkLabel(n.Label); err != nil {
+			n.Label = text.Clean(n.Label)
+			log.Warn("nodes.label_refused", slog.String("node", n.Key), slog.String("label", n.Label),
+				slog.String("hint", "the label carried a control or bidirectional control character and is used cleaned; rename the node in the web UI to keep it"))
+		}
+	}
 	r.nodes = f.Nodes
 	return r, nil
 }

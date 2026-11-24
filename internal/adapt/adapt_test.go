@@ -504,3 +504,23 @@ func TestHostileText(t *testing.T) {
 		t.Errorf("the joiner was dropped: %q", got)
 	}
 }
+
+// TestUnsafeOnlyRegistryName (HR-P2-data-94): a registry name made only
+// of unsafe characters cleans to "" and falls through to the entity's
+// other names, not to its device's (an empty name).
+func TestUnsafeOnlyRegistryName(t *testing.T) {
+	st := state("switch.a", "on", map[string]any{"friendly_name": "Kaffee"})
+	dev := adapt.OwnDevice("switch.a", "Küche")
+	for name, c := range map[string]struct {
+		reg  *ha.EntityEntry
+		want string
+	}{
+		"to friendly_name": {&ha.EntityEntry{Name: "\u202e\x00 "}, "Kaffee"},
+		"to original_name": {&ha.EntityEntry{Name: "\u2066\u2069", HasEntityName: true, OriginalName: "Maschine"}, "Maschine"},
+		"main feature":     {&ha.EntityEntry{Name: "\x1b", HasEntityName: true}, ""},
+	} {
+		if got := adapt.Entity(adapt.Input{EntityID: "switch.a", State: st, Device: dev, Registry: c.reg}).Description.Name.Default; got != c.want {
+			t.Errorf("%s: %q, want %q", name, got, c.want)
+		}
+	}
+}

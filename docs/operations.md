@@ -82,6 +82,9 @@ new node takes a key whose files exist, so restoring the file brings them
 back. A `nodes.json` or `passcode.json` that is there with a wider mode —
 restored from a backup, copied from another host — is set to 0600 when it
 is read, and so is one moved aside as corrupt (`nodes.mode_tightened`).
+A node label in `nodes.json` with a control or bidirectional control character —
+written by an older version — is used without those characters and logged
+(`nodes.label_refused`); the node starts.
 On Windows, which has no POSIX file modes, the ACL of the data
 directory protects it, as it does the store: that is the service's
 concern.
@@ -264,6 +267,7 @@ The lines to know:
 | `ha2fabric.supervisor_unreadable` | warn, then debug | Add-on: `GET /info` failed (`error`); retried every 30 s, every 10 minutes once a version was read; until a version is read the web UI is the status page only, and a gate that passed stays open. |
 | `ha2fabric.node_erased` | info | A node was erased in the web UI (`node=<key>` for a registry node): `fabrics_removed`, `elapsed`; the node comes back next, with `ha2fabric.fabrics count=0` and `ha2fabric.pairing`. At warn with `error` when the reset failed part-way. |
 | `ha2fabric.node_limit` | warn | At start: `nodes.json` holds more nodes (`nodes`) than `NODE_LIMIT` (`limit`) allows; all start, the web UI creates no more (Nodes). |
+| `nodes.label_refused` | warn | A node's label in `nodes.json` (`node`) carries a control or bidirectional control character; the node runs with it cleaned (`label`) until it is renamed in the web UI (Files). |
 | `nodes.mode_tightened` | warn | `nodes.json` or `passcode.json` (`file`) had a mode wider than 0600 (`was`) and was set to 0600 (Files). |
 | `ha2fabric.stop_budget` | warn | At stop: the web server or the Home Assistant connection did not end within the budget; the nodes stop anyway (Erase and factory reset). |
 | `ha2fabric.web_stop` | warn | At stop: the web server's shutdown failed (`error`), e.g. a request still open at its deadline. |

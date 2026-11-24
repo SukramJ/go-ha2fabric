@@ -248,7 +248,9 @@ to reach it from the network, run the image with
   reach the controllers without control and bidirectional control
   characters; a web UI name, a node's label and `LABEL` carrying one are
   refused; `--dump-plan` prints such a cell quoted (HR-P2-data-31, closes
-  HR-P1-data-36).
+  HR-P1-data-36). A registry name made only of such characters falls back
+  to the entity's other names, and a node's label already in `nodes.json`
+  is used cleaned and logged (`nodes.label_refused`) (HR-P2-data-94).
 - A select's option, a fan's preset and a climate's fan mode go back to
   Home Assistant untrimmed (HR-P2-data-32).
 - A state over 256 KiB is read without its attributes and logged

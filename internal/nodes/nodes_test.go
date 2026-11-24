@@ -343,3 +343,27 @@ func TestLabelText(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// TestLabelCheckedAtLoad (HR-P2-data-94): a label in nodes.json that is
+// not text.Safe — written by an older version — is refused at load: the
+// node keeps running with the label cleaned, and the refusal is logged
+// (nodes.label_refused), not fatal.
+func TestLabelCheckedAtLoad(t *testing.T) {
+	dir := t.TempDir()
+	body := `{"nodes":[{"key":"a","label":"Alexa‮\u0007 Küche","listen":":5541","passcode":34567890},{"key":"b","label":"Google","listen":":5542","passcode":34567890}]}`
+	if err := os.WriteFile(filepath.Join(dir, nodes.File), []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	r, err := nodes.Open(dir, slog.New(slog.NewTextHandler(&buf, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := r.Nodes()
+	if len(got) != 2 || got[0].Label != "Alexa Küche" || got[1].Label != "Google" {
+		t.Fatalf("nodes %+v", got)
+	}
+	if log := buf.String(); strings.Count(log, "nodes.label_refused") != 1 || !strings.Contains(log, "node=a") {
+		t.Fatalf("log %q", log)
+	}
+}
