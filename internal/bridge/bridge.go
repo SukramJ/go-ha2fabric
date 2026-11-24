@@ -169,6 +169,8 @@ type Bridge struct {
 	// asks for an entity's ports, closed when no built device of the
 	// entity carries them any more.
 	hosts map[string]*camera.Host
+	// closing are the camera hosts' closes in flight ([Bridge.closeCameras]).
+	closing sync.WaitGroup
 	// labelIDs are the label ids the rule's label values resolved to at
 	// the last sync (expose.Rule.LabelIDs): a renamed label keeps its
 	// inclusion or exclusion.
@@ -274,10 +276,7 @@ func (b *Bridge) Run(ctx context.Context) error {
 			for _, g := range b.groups {
 				g.plan.Close()
 			}
-			for id, h := range b.hosts {
-				h.Close(ctx)
-				delete(b.hosts, id)
-			}
+			b.closeAll(ctx)
 			return nil
 		case fn := <-b.work:
 			fn(ctx)

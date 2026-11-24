@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SukramJ/go-ha2fabric/internal/camera"
 	"github.com/SukramJ/go-ha2fabric/internal/ha"
 
 	"github.com/SukramJ/go-ha2fabric/internal/plan"
@@ -279,4 +280,37 @@ func TestCommandDroppedLogsASummary(t *testing.T) {
 	if n := dropped(rec.named("bridge.command_dropped")); n != 10 {
 		t.Fatalf("the lines count %d dropped commands, want 10", n)
 	}
+}
+
+// TestCameraCloseOffTheSync (HR-P2-conc-60): a camera host that left the
+// bridge is closed beside the worker, so a session of a controller that
+// went away does not hold the sync, and with it every state; Run's end
+// waits for the close.
+func TestCameraCloseOffTheSync(t *testing.T) {
+	release, closing := make(chan struct{}), make(chan struct{}, 1)
+	defer func(f func(*camera.Host, context.Context)) { closeHost = f }(closeHost)
+	closeHost = func(*camera.Host, context.Context) { closing <- struct{}{}; <-release }
+	up := &fakeUp{}
+	b := New(nil, up, Options{Logger: slog.New(slog.DiscardHandler), Input: func() plan.Input { return plan.Input{} }})
+	b.hosts = map[string]*camera.Host{"camera.gone": camera.New("camera.gone", nil, camera.Options{})}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { b.closeCameras(ctx); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		close(release)
+		t.Fatal("the sync waited for a camera host's close")
+	}
+	<-closing
+	ran := make(chan struct{})
+	go func() { _ = b.Run(ctx); close(ran) }()
+	cancel()
+	select {
+	case <-ran:
+		t.Fatal("Run ended before the camera host's close")
+	case <-time.After(50 * time.Millisecond):
+	}
+	close(release)
+	<-ran
 }
