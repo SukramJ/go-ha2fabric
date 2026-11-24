@@ -44,10 +44,10 @@ import (
 	"sync"
 	"time"
 
-	fabricui "github.com/SukramJ/go-fabric-ui/fabricui"
+	fabricui "thingfabric.dev/go-fabric-ui/fabricui"
 	"thingfabric.dev/go-fabric/node"
 
-	"github.com/SukramJ/go-ha2fabric/internal/text"
+	"thingfabric.dev/go-ha2fabric/internal/text"
 )
 
 // File is the registry's file name, beside the store.

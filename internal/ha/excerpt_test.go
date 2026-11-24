@@ -8,7 +8,7 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"github.com/SukramJ/go-ha2fabric/internal/ha"
+	"thingfabric.dev/go-ha2fabric/internal/ha"
 )
 
 // TestErrorTextIsCut (HR-P2-bound-39): Home Assistant's error text — an

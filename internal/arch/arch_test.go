@@ -29,7 +29,7 @@ import (
 )
 
 const (
-	module   = "github.com/SukramJ/go-ha2fabric"
+	module   = "thingfabric.dev/go-ha2fabric"
 	goFabric = "thingfabric.dev/go-fabric/"
 )
 
@@ -105,7 +105,7 @@ var thirdParty = []string{
 	"github.com/SukramJ/go-hamqtt/model",
 	"github.com/SukramJ/go-ha-catalog",
 	"github.com/coder/websocket",
-	"github.com/SukramJ/go-fabric-ui/fabricui",
+	"thingfabric.dev/go-fabric-ui/fabricui",
 }
 
 // restricted are third-party imports only some packages may make:
@@ -115,7 +115,7 @@ var thirdParty = []string{
 // (nodes.go reservedKeys, fabricui.DefaultNodeKey). A package's tests may
 // compose the stack.
 var restricted = map[string][]string{
-	"github.com/SukramJ/go-fabric-ui/fabricui": {"internal/web", "internal/exposure", "internal/nodes", "cmd/ha2fabric"},
+	"thingfabric.dev/go-fabric-ui/fabricui": {"internal/web", "internal/exposure", "internal/nodes", "cmd/ha2fabric"},
 }
 
 func isDef(rel string) bool {
@@ -274,7 +274,7 @@ func TestGuardRefuses(t *testing.T) {
 	}
 	// go-fabric-ui is the web UI's: the provider, the handler and the
 	// composition root, and tests that compose the stack.
-	const ui = "github.com/SukramJ/go-fabric-ui/fabricui"
+	const ui = "thingfabric.dev/go-fabric-ui/fabricui"
 	for _, pkg := range []string{"internal/bridge", "internal/plan", "internal/adapt"} {
 		if allowedThirdParty(pkg, ui, false) {
 			t.Errorf("%s may not import go-fabric-ui", pkg)

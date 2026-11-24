@@ -14,10 +14,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SukramJ/go-ha2fabric/internal/config"
-	"github.com/SukramJ/go-ha2fabric/internal/ha/hatest"
-	"github.com/SukramJ/go-ha2fabric/internal/plan"
-	"github.com/SukramJ/go-ha2fabric/internal/text"
+	"thingfabric.dev/go-ha2fabric/internal/config"
+	"thingfabric.dev/go-ha2fabric/internal/ha/hatest"
+	"thingfabric.dev/go-ha2fabric/internal/plan"
+	"thingfabric.dev/go-ha2fabric/internal/text"
 )
 
 func TestVersionHelpAndBadConfig(t *testing.T) {

@@ -17,7 +17,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	fabricui "github.com/SukramJ/go-fabric-ui/fabricui"
+	fabricui "thingfabric.dev/go-fabric-ui/fabricui"
 )
 
 // supervisorInfoURL is the Supervisor's GET /info, which an add-on's

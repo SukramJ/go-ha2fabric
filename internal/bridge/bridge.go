@@ -43,10 +43,10 @@ import (
 	"thingfabric.dev/go-fabric/eligibility"
 	"thingfabric.dev/go-fabric/node"
 
-	"github.com/SukramJ/go-ha2fabric/internal/adapt"
-	"github.com/SukramJ/go-ha2fabric/internal/camera"
-	"github.com/SukramJ/go-ha2fabric/internal/ha"
-	"github.com/SukramJ/go-ha2fabric/internal/plan"
+	"thingfabric.dev/go-ha2fabric/internal/adapt"
+	"thingfabric.dev/go-ha2fabric/internal/camera"
+	"thingfabric.dev/go-ha2fabric/internal/ha"
+	"thingfabric.dev/go-ha2fabric/internal/plan"
 )
 
 // Upstream is the Home Assistant side the bridge reads and calls: the

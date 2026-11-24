@@ -6,7 +6,7 @@ package text_test
 import (
 	"testing"
 
-	"github.com/SukramJ/go-ha2fabric/internal/text"
+	"thingfabric.dev/go-ha2fabric/internal/text"
 )
 
 func TestClean(t *testing.T) {

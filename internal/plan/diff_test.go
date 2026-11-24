@@ -11,7 +11,7 @@ import (
 
 	"thingfabric.dev/go-fabric/device"
 
-	"github.com/SukramJ/go-ha2fabric/internal/plan"
+	"thingfabric.dev/go-ha2fabric/internal/plan"
 )
 
 // built is a group as the reconciler serves it; each key's endpoint is

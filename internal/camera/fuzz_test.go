@@ -16,7 +16,7 @@ import (
 	csdef "thingfabric.dev/go-fabric/cluster/spec/cameraavstreammanagement"
 	wpdef "thingfabric.dev/go-fabric/cluster/spec/webrtctransportprovider"
 
-	"github.com/SukramJ/go-ha2fabric/internal/ha"
+	"thingfabric.dev/go-ha2fabric/internal/ha"
 )
 
 // FuzzCandidateFromHA holds the translation of Home Assistant's candidate

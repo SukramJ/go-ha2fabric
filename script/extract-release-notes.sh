@@ -30,7 +30,7 @@ prev=$(awk -v ver="$VERSION" '
 	index($0, "## [" ver "]") == 1 { insec=1; next }
 	insec && /^## \[[0-9]/ { sub(/^## \[/, ""); sub(/\].*$/, ""); print; exit }
 ' "$CHANGELOG")
-repo="${GITHUB_REPOSITORY:-SukramJ/go-ha2fabric}"
+repo="${GITHUB_REPOSITORY:-thingfabric/go-ha2fabric}"
 printf '%s\n' "$body"
 if [ -n "$prev" ]; then
 	printf '\n**Full Changelog**: https://github.com/%s/compare/v%s...v%s\n' "$repo" "$prev" "$VERSION"

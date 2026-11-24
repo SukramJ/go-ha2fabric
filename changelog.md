@@ -9,8 +9,13 @@ All notable changes to this project are documented here. The format follows
 ## [0.7.0] - 2026-11-23
 
 The move to go-fabric `v0.25.0` under its new module path
-`thingfabric.dev/go-fabric`, with go-fabric-ui `v0.13.0` and go-hamapping
-`v0.7.0`. **Back up before updating:** the store's upgrade is one-way.
+`thingfabric.dev/go-fabric`, with go-fabric-ui `v0.14.0` (now
+`thingfabric.dev/go-fabric-ui`) and go-hamapping `v0.7.0`; the project moved
+to `github.com/thingfabric/go-ha2fabric`. **Back up before updating:** the
+store's upgrade is one-way.
+**The images and the add-on repository moved**: pull
+`ghcr.io/thingfabric/go-ha2fabric`, and in Home Assistant add the add-on
+repository `https://github.com/thingfabric/go-ha2fabric` (Changed).
 **Stand-alone with `WEB_ADMIN=true` on a listener that is not loopback
 and no `WEB_ALLOW`, the daemon no longer starts**:
 set `WEB_ALLOW` or a loopback `WEB_LISTEN` before updating (Changed).
@@ -26,6 +31,14 @@ to reach it from the network, run the image with
 
 ### Changed
 
+- **The project moved to the thingfabric organisation.** The repository is
+  `github.com/thingfabric/go-ha2fabric` (the old URLs redirect) and the
+  module path `thingfabric.dev/go-ha2fabric`. Breaking for anyone who pulls
+  an image or added the add-on repository by its old address: the images
+  are `ghcr.io/thingfabric/go-ha2fabric` and
+  `ghcr.io/thingfabric/go-ha2fabric-addon-{arch}` (no `0.7.0` is published
+  under `ghcr.io/sukramj/`), and the add-on repository to add in Home
+  Assistant is `https://github.com/thingfabric/go-ha2fabric`.
 - **The configured node's passcode is random unless set.** Without
   `PASSCODE` (the add-on's `passcode` option, now optional without a
   default) the node draws a valid passcode on its first start and keeps it
@@ -86,7 +99,10 @@ to reach it from the network, run the image with
   Aggregator explicitly (`DT`), rather than the first bridged device's type
   go-fabric would infer. GeneralCommissioning's `LocationCapability` is
   IndoorOutdoor, go-fabric's new default (was Indoor).
-- go-fabric-ui `v0.9.2` → `v0.13.0`. Every request's `Host` is checked; the
+- go-fabric-ui `v0.9.2` → `v0.14.0`, now `thingfabric.dev/go-fabric-ui`
+  (repository `github.com/thingfabric/go-fabric-ui`); a problem's `type`
+  URI is `https://thingfabric.dev/go-fabric-ui/problems#problem-<code>`,
+  its `code` is unchanged. Every request's `Host` is checked; the
   add-on admits every request of the Ingress proxy, whose `Host` is the
   browser's. **Stand-alone without `WEB_ADMIN` the web UI is the status
   page only**: the selection, fabrics, endpoints, diagnostics, pairing and
@@ -975,7 +991,7 @@ The first release: the daemon and its Home Assistant add-on (brief H2).
 The bridge carries the CSA test vendor and go-fabric's test attestation
 chain: it is uncertified, and a controller may warn when pairing it.
 
-[Unreleased]: https://github.com/SukramJ/go-ha2fabric/compare/v0.2.1...HEAD
-[0.2.1]: https://github.com/SukramJ/go-ha2fabric/releases/tag/v0.2.1
-[0.2.0]: https://github.com/SukramJ/go-ha2fabric/releases/tag/v0.2.0
-[0.1.0]: https://github.com/SukramJ/go-ha2fabric/releases/tag/v0.1.0
+[Unreleased]: https://github.com/thingfabric/go-ha2fabric/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/thingfabric/go-ha2fabric/releases/tag/v0.2.1
+[0.2.0]: https://github.com/thingfabric/go-ha2fabric/releases/tag/v0.2.0
+[0.1.0]: https://github.com/thingfabric/go-ha2fabric/releases/tag/v0.1.0

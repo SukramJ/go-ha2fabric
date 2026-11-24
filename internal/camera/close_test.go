@@ -11,7 +11,7 @@ import (
 
 	gfcamera "thingfabric.dev/go-fabric/cluster/camera"
 
-	"github.com/SukramJ/go-ha2fabric/internal/camera"
+	"thingfabric.dev/go-ha2fabric/internal/camera"
 )
 
 // goneController is a signaller whose controller went away: every

@@ -17,8 +17,8 @@ import (
 
 	"thingfabric.dev/go-fabric/node"
 
-	"github.com/SukramJ/go-ha2fabric/internal/config"
-	"github.com/SukramJ/go-ha2fabric/internal/ha/hatest"
+	"thingfabric.dev/go-ha2fabric/internal/config"
+	"thingfabric.dev/go-ha2fabric/internal/ha/hatest"
 )
 
 // TestRunWebListenFails: a web listener that cannot bind ends the daemon

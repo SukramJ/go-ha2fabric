@@ -24,8 +24,8 @@ import (
 
 	"thingfabric.dev/go-fabric/node"
 
-	"github.com/SukramJ/go-ha2fabric/internal/expose"
-	"github.com/SukramJ/go-ha2fabric/internal/text"
+	"thingfabric.dev/go-ha2fabric/internal/expose"
+	"thingfabric.dev/go-ha2fabric/internal/text"
 )
 
 // The Supervisor's WebSocket proxy to Core and the token it puts in an
@@ -467,7 +467,7 @@ func loopback(hostPort string) bool {
 
 // allowedHost says what is wrong with a WEB_ALLOWED_HOSTS entry, or "":
 // go-fabric-ui's rules for Options.AllowedHosts (fabricui/host.go:101-121
-// at v0.13.0), checked here so a wrong value fails at start like every
+// at v0.14.0), checked here so a wrong value fails at start like every
 // other option instead of after the node opened its store. An IP address
 // needs no entry: the Host check admits every one.
 func allowedHost(h string) string {

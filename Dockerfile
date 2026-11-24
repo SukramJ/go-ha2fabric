@@ -5,7 +5,7 @@
 #
 #   docker run --network host -v ha2fabric:/data \
 #     -e HA_URL=ws://homeassistant.local:8123/api/websocket -e HA_TOKEN=... \
-#     ghcr.io/sukramj/go-ha2fabric
+#     ghcr.io/thingfabric/go-ha2fabric
 #
 # The web UI listens on the binary's default, 127.0.0.1:8099 (decision 27 of
 # the 2026-11-23 review); to reach it from the network set WEB_LISTEN, with
@@ -24,9 +24,9 @@ ARG BUILD_DATE=unknown
 ENV CGO_ENABLED=0
 RUN go build -trimpath \
       -ldflags="-s -w \
-        -X github.com/SukramJ/go-ha2fabric/internal/version.Version=${VERSION} \
-        -X github.com/SukramJ/go-ha2fabric/internal/version.Commit=${COMMIT} \
-        -X github.com/SukramJ/go-ha2fabric/internal/version.BuildDate=${BUILD_DATE}" \
+        -X thingfabric.dev/go-ha2fabric/internal/version.Version=${VERSION} \
+        -X thingfabric.dev/go-ha2fabric/internal/version.Commit=${COMMIT} \
+        -X thingfabric.dev/go-ha2fabric/internal/version.BuildDate=${BUILD_DATE}" \
       -o /out/ha2fabric ./cmd/ha2fabric && \
     mkdir -p /out/data
 

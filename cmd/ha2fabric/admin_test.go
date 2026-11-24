@@ -15,10 +15,10 @@ import (
 	"strings"
 	"testing"
 
-	fabricui "github.com/SukramJ/go-fabric-ui/fabricui"
+	fabricui "thingfabric.dev/go-fabric-ui/fabricui"
 
-	"github.com/SukramJ/go-ha2fabric/internal/config"
-	"github.com/SukramJ/go-ha2fabric/internal/web"
+	"thingfabric.dev/go-ha2fabric/internal/config"
+	"thingfabric.dev/go-ha2fabric/internal/web"
 )
 
 // adminRoutes are go-fabric-ui's administrator operations, read from its
@@ -27,7 +27,7 @@ import (
 // itself. A path parameter takes a sample value.
 func adminRoutes(t *testing.T) []string {
 	t.Helper()
-	out, err := exec.Command("go", "list", "-m", "-f", "{{.Dir}}", "github.com/SukramJ/go-fabric-ui").Output()
+	out, err := exec.Command("go", "list", "-m", "-f", "{{.Dir}}", "thingfabric.dev/go-fabric-ui").Output()
 	if err != nil {
 		t.Fatalf("go list go-fabric-ui: %v", err)
 	}

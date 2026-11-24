@@ -15,18 +15,18 @@ import (
 	"time"
 	"unicode/utf8"
 
-	fabricui "github.com/SukramJ/go-fabric-ui/fabricui"
+	fabricui "thingfabric.dev/go-fabric-ui/fabricui"
 	"thingfabric.dev/go-fabric/node"
 
-	"github.com/SukramJ/go-ha2fabric/internal/bridge"
-	"github.com/SukramJ/go-ha2fabric/internal/camera"
-	"github.com/SukramJ/go-ha2fabric/internal/config"
-	"github.com/SukramJ/go-ha2fabric/internal/expose"
-	"github.com/SukramJ/go-ha2fabric/internal/exposure"
-	"github.com/SukramJ/go-ha2fabric/internal/ha"
-	"github.com/SukramJ/go-ha2fabric/internal/nodes"
-	"github.com/SukramJ/go-ha2fabric/internal/plan"
-	"github.com/SukramJ/go-ha2fabric/internal/selection"
+	"thingfabric.dev/go-ha2fabric/internal/bridge"
+	"thingfabric.dev/go-ha2fabric/internal/camera"
+	"thingfabric.dev/go-ha2fabric/internal/config"
+	"thingfabric.dev/go-ha2fabric/internal/expose"
+	"thingfabric.dev/go-ha2fabric/internal/exposure"
+	"thingfabric.dev/go-ha2fabric/internal/ha"
+	"thingfabric.dev/go-ha2fabric/internal/nodes"
+	"thingfabric.dev/go-ha2fabric/internal/plan"
+	"thingfabric.dev/go-ha2fabric/internal/selection"
 )
 
 // served is one node the daemon serves, the owner that outlives its run:
@@ -429,7 +429,7 @@ func logMDNSInterfaces(n *node.Node, names []string, logger *slog.Logger) {
 // the administrator's pairing page (decision 16 of the 2026-11-23 review).
 // The log is also the ring behind go-fabric-ui's Operations port, which
 // states that nothing it returns carries a passcode (fabricui/
-// operations.go:25-26 at v0.13.0): the codes reach it only before the
+// operations.go:25-26 at v0.14.0): the codes reach it only before the
 // first pairing.
 func logPairing(n *node.Node, fabrics int, logger *slog.Logger) {
 	if fabrics != 0 {

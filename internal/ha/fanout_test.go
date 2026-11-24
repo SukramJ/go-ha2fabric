@@ -9,7 +9,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/SukramJ/go-ha2fabric/internal/ha"
+	"thingfabric.dev/go-ha2fabric/internal/ha"
 )
 
 // callLog is a Handler that records its calls.

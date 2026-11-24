@@ -12,8 +12,8 @@ import (
 	"github.com/SukramJ/go-hamapping"
 	"github.com/SukramJ/go-hamqtt/model"
 
-	"github.com/SukramJ/go-ha2fabric/internal/adapt"
-	"github.com/SukramJ/go-ha2fabric/internal/ha"
+	"thingfabric.dev/go-ha2fabric/internal/adapt"
+	"thingfabric.dev/go-ha2fabric/internal/ha"
 )
 
 // commandTimeout bounds one call_service; Home Assistant answers a

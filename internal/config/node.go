@@ -10,7 +10,7 @@ import (
 	"thingfabric.dev/go-fabric/device"
 	"thingfabric.dev/go-fabric/node"
 
-	"github.com/SukramJ/go-ha2fabric/internal/version"
+	"thingfabric.dev/go-ha2fabric/internal/version"
 )
 
 // Product identity the node reports in BasicInformation.

@@ -8,7 +8,7 @@ import (
 	"log/slog"
 	"time"
 
-	fabricui "github.com/SukramJ/go-fabric-ui/fabricui"
+	fabricui "thingfabric.dev/go-fabric-ui/fabricui"
 	"thingfabric.dev/go-fabric/logring"
 )
 

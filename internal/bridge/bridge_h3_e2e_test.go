@@ -17,13 +17,13 @@ import (
 	"sync"
 	"testing"
 
-	fabricui "github.com/SukramJ/go-fabric-ui/fabricui"
+	fabricui "thingfabric.dev/go-fabric-ui/fabricui"
 	bridgedbidef "thingfabric.dev/go-fabric/cluster/spec/bridgeddevicebasicinformation"
 	"thingfabric.dev/go-fabric/fabrictest"
 
-	"github.com/SukramJ/go-ha2fabric/internal/expose"
-	"github.com/SukramJ/go-ha2fabric/internal/exposure"
-	"github.com/SukramJ/go-ha2fabric/internal/selection"
+	"thingfabric.dev/go-ha2fabric/internal/expose"
+	"thingfabric.dev/go-ha2fabric/internal/exposure"
+	"thingfabric.dev/go-ha2fabric/internal/selection"
 )
 
 // TestLabels: a device label exposes its entities, an entity label its

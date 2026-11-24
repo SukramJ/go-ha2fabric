@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SukramJ/go-ha2fabric/internal/ha"
+	"thingfabric.dev/go-ha2fabric/internal/ha"
 )
 
 // failing is a Source whose read number fail fails; every other read
