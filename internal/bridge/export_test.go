@@ -27,3 +27,14 @@ func Serving(b *Bridge, id string) bool {
 
 // RunCommand runs one queued command as the command loop does.
 func RunCommand(ctx context.Context, b *Bridge, c model.Command) { b.command(ctx, c) }
+
+// FillCommands queues c until the command queue is full.
+func FillCommands(b *Bridge, c model.Command) {
+	for {
+		select {
+		case b.cmds <- c:
+		default:
+			return
+		}
+	}
+}
