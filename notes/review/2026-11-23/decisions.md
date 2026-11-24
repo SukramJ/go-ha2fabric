@@ -117,3 +117,4 @@ read of phase 2 are by Opus.
 | 49 | Cover rows outside C8: `stop_tilt`, window covers as Rollershade, `PositionAwareLift` always | **go-hamapping issues** #43, #44, decided after the owner's live tests (with go-hamapping #15); HR-P2-adpt-43's remaining shapes → #45 |
 | 50 | When the `sync_failed` warning shows | **From the second failure in a row**; the first is retried silently after 5 s |
 | 51 | A `READ_LIMIT` option | **No**: the 256 KiB cap per state (decision 42) keeps `get_states` far below 64 MiB, and the sync error now names the limit |
+| 52 | HR-P2-bound-90 (pre-merge read): an entity whose state exceeds the 256 KiB cap is mapped from its stripped state as another device type | **Unmappable with a reason** in `plan.Assess` ("state over 256 KiB"); no change of device type, the operator sees the reason; extends decision 42 |

@@ -115,3 +115,19 @@ Report `notes/review/2026-11-23/phase-2-fix-round2.md`.
 | changelog / docs | F2's lines from `phase-2-fix-F2.md` ("Changelog lines", "Docs lines") into `changelog.md` and `docs/operations.md`; decision 48–51 where a page states them |
 
 Then the whole guard set of `CLAUDE.md` (the coordinator runs it).
+
+## Round 3 — after the pre-merge read
+
+One Opus implementer, review worktree, branch `review/p2`. Common rules as
+above. Findings in `notes/review/2026-11-23/phase-2-premerge.md` (probes in
+its appendix or `…/scratchpad/PM/src`). Report
+`notes/review/2026-11-23/phase-2-fix-round3.md`.
+
+| Row | What |
+| --- | --- |
+| bound-90 (medium) | decision 52: an entity whose state is `Oversized` is unmappable in `plan.Assess` with the reason "state over 256 KiB"; the endpoint is removed, not re-typed; red test from the probe (a fixture climate and light over the cap) |
+| data-91 | the served set after data-35 is built from what the plan built (`DeviceFor(key) != nil`); a command queued for a refused entity is dropped by the HR-P1-conc-33 guard |
+| doc-92 | `docs/operations.md:274` and the `sync_failed` warning text say what the code does for a failed batch (logged as `bridge.batch`, may have partly applied) — or log the batch failure as `bridge.sync_failed` too; pick the smaller true change |
+| doc-93 | `docs/operations.md:212`: one read per connection, shared by its nodes |
+| data-94 | a registry name that cleans to "" falls back to the entity's other names, not to the device's; labels in `nodes.json` checked when loaded (refused labels logged, not fatal) |
+| test-95 | err-63's test asserts the attribute is back, not only that an apply was queued |
