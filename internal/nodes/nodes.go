@@ -46,6 +46,8 @@ import (
 
 	fabricui "github.com/SukramJ/go-fabric-ui/fabricui"
 	"thingfabric.dev/go-fabric/node"
+
+	"github.com/SukramJ/go-ha2fabric/internal/text"
 )
 
 // File is the registry's file name, beside the store.
@@ -221,6 +223,9 @@ type Configured struct {
 // with c.TCP); the key is the label's slug, with -2, -3, … when a node,
 // a reserved name or a file on disk has it.
 func (r *Registry) Allocate(label string, c Configured) (Node, error) {
+	if err := checkLabel(label); err != nil {
+		return Node{}, err
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	n := Node{Label: label, CreatedAt: r.now().UTC().Truncate(time.Second)}
@@ -440,6 +445,9 @@ func (r *Registry) Add(n Node) error {
 
 // Rename sets the label of key and writes the file.
 func (r *Registry) Rename(key, label string) error {
+	if err := checkLabel(label); err != nil {
+		return err
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	i := slices.IndexFunc(r.nodes, func(x Node) bool { return x.Key == key })
@@ -452,6 +460,16 @@ func (r *Registry) Rename(key, label string) error {
 		return err
 	}
 	r.nodes = next
+	return nil
+}
+
+// checkLabel refuses a label that is not text.Safe: it becomes the
+// node's NodeLabel, which a controller shows as it is (HR-P2-data-31, as
+// config's LABEL).
+func checkLabel(label string) error {
+	if !text.Safe(label) {
+		return fmt.Errorf("%w: nodes: the label %q carries a control or bidirectional control character", fabricui.ErrInvalidArgument, label)
+	}
 	return nil
 }
 

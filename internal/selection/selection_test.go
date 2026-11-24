@@ -109,3 +109,32 @@ func TestUnreadableFile(t *testing.T) {
 		t.Fatal("a directory opened as the file")
 	}
 }
+
+// TestNameText (HR-P2-data-31): a web UI name with a control or a
+// bidirectional control character is refused — it becomes a NodeLabel —
+// and one in the file is read without them; the joiners stay.
+func TestNameText(t *testing.T) {
+	path := filepath.Join(t.TempDir(), fileName)
+	s, err := Open(path, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"Desk\x1b[2J", "a\nb", "‮evil", "x⁦y", "\xff"} {
+		if err := s.Set(map[string]Entry{"light.a": {Enabled: true, Name: name}}, nil); err == nil {
+			t.Errorf("the name %q was taken", name)
+		}
+	}
+	if err := s.Set(map[string]Entry{"light.a": {Enabled: true, Name: "Café \U0001F469‍\U0001F4BB"}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(`{"version":1,"entities":{"light.b":{"enabled":true,"name":"Lamp\u001b[31m‮"}}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s, err = Open(path, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := s.Names()["light.b"]; got != "Lamp[31m" {
+		t.Fatalf("a name read from the file: %q", got)
+	}
+}

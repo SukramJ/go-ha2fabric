@@ -25,6 +25,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -39,6 +40,7 @@ import (
 	"github.com/SukramJ/go-ha2fabric/internal/nodes"
 	"github.com/SukramJ/go-ha2fabric/internal/plan"
 	"github.com/SukramJ/go-ha2fabric/internal/selection"
+	"github.com/SukramJ/go-ha2fabric/internal/text"
 	"github.com/SukramJ/go-ha2fabric/internal/version"
 	"github.com/SukramJ/go-ha2fabric/internal/web"
 )
@@ -389,24 +391,42 @@ func dumpPlan(ctx context.Context, client *ha.Client, input func() plan.Input, o
 		logger.Error("ha2fabric.dump_plan", slog.String("error", err.Error()))
 		return 1
 	}
-	var buf bytes.Buffer
-	tw := tabwriter.NewWriter(&buf, 2, 4, 2, ' ', 0)
-	_, _ = fmt.Fprintln(tw, "ENTITY\tDEVICE\tLABELS\tEXPOSED\tSOURCE\tWHY\tROW\tVERDICT\tREASON")
 	for _, l := range in.Rule.Unresolved(plan.Labels(snap)) {
 		logger.Warn("ha2fabric.label_unresolved", slog.String("label", l))
 	}
-	verdicts := plan.Dry(snap, in)
+	var buf bytes.Buffer
+	writePlan(&buf, plan.Dry(snap, in))
+	if _, err := out.Write(buf.Bytes()); err != nil && !errors.Is(err, io.ErrClosedPipe) {
+		return 1
+	}
+	return 0
+}
+
+// writePlan prints the verdicts as --dump-plan's table. Its cells carry
+// Home Assistant's text (a device's name, a label's, a refusal naming
+// either), so a cell that is not text.Safe is printed quoted (%q): an
+// escape sequence does not run in the operator's terminal
+// (HR-P2-data-31).
+func writePlan(w io.Writer, verdicts []plan.Verdict) {
+	tw := tabwriter.NewWriter(w, 2, 4, 2, ' ', 0)
+	_, _ = fmt.Fprintln(tw, "ENTITY\tDEVICE\tLABELS\tEXPOSED\tSOURCE\tWHY\tROW\tVERDICT\tREASON")
 	for i := range verdicts {
 		v := &verdicts[i]
 		exposed := "no"
 		if v.Exposed {
 			exposed = "yes"
 		}
-		_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", v.EntityID, v.Device, strings.Join(v.Labels, ","), exposed, v.Source, v.ExposeReason, v.Row, v.State, v.Reason)
+		_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", cell(v.EntityID), cell(v.Device), cell(strings.Join(v.Labels, ",")),
+			exposed, cell(v.Source), cell(v.ExposeReason), cell(v.Row), cell(v.State), cell(v.Reason))
 	}
 	_ = tw.Flush()
-	if _, err := out.Write(buf.Bytes()); err != nil && !errors.Is(err, io.ErrClosedPipe) {
-		return 1
+}
+
+// cell is s as a cell of writePlan's table: quoted when it is not
+// text.Safe.
+func cell(s string) string {
+	if text.Safe(s) {
+		return s
 	}
-	return 0
+	return strconv.Quote(s)
 }

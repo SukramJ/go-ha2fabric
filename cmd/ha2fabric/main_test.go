@@ -16,6 +16,8 @@ import (
 
 	"github.com/SukramJ/go-ha2fabric/internal/config"
 	"github.com/SukramJ/go-ha2fabric/internal/ha/hatest"
+	"github.com/SukramJ/go-ha2fabric/internal/plan"
+	"github.com/SukramJ/go-ha2fabric/internal/text"
 )
 
 func TestVersionHelpAndBadConfig(t *testing.T) {
@@ -176,5 +178,27 @@ func TestRunRefusesAllowedHost(t *testing.T) {
 	var stderr strings.Builder
 	if code := run(context.Background(), nil, env, io.Discard, &stderr); code != 2 || !strings.Contains(stderr.String(), "WEB_ALLOWED_HOSTS") {
 		t.Fatalf("exit %d: %s", code, stderr.String())
+	}
+}
+
+// TestPlanTableQuotes (HR-P2-data-31): --dump-plan's table carries no
+// control or bidirectional control character to the operator's terminal:
+// a cell with one is printed quoted, the others as they are.
+func TestPlanTableQuotes(t *testing.T) {
+	var out bytes.Buffer
+	writePlan(&out, []plan.Verdict{
+		{EntityID: "light.a", Device: "Lamp\x1b]0;owned\a", Labels: []string{"Kü\u202eche", "plain"}, Exposed: true, Source: "rule", ExposeReason: "ok", Reason: "go-fabric refused: x\ny"},
+		{EntityID: "switch.b", Device: "Desk lamp", Labels: []string{"Office"}, Source: "rule", ExposeReason: "excluded"},
+	})
+	s := out.String()
+	for _, r := range s {
+		if r != '\n' && text.Unsafe(r) {
+			t.Fatalf("the table carries %U:\n%s", r, s)
+		}
+	}
+	for _, want := range []string{`"Lamp\x1b]0;owned\a"`, `"Kü\u202eche,plain"`, `"go-fabric refused: x\ny"`, "Desk lamp", "Office"} {
+		if !strings.Contains(s, want) {
+			t.Errorf("no %s in\n%s", want, s)
+		}
 	}
 }

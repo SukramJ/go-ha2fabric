@@ -16,6 +16,7 @@ import (
 
 	"github.com/SukramJ/go-ha2fabric/internal/adapt"
 	"github.com/SukramJ/go-ha2fabric/internal/ha"
+	"github.com/SukramJ/go-ha2fabric/internal/text"
 )
 
 func state(id, s string, attrs map[string]any) *ha.State {
@@ -450,5 +451,54 @@ func TestOptionNotTrimmed(t *testing.T) {
 		if _, err := adapt.Service(cmd(c.id, c.method, "  "), nil); err == nil {
 			t.Errorf("%s: a blank option was sent", c.id)
 		}
+	}
+}
+
+// TestHostileText (HR-P2-data-31): Home Assistant's free text reaches the
+// model without control and bidirectional control characters — the
+// device's name, manufacturer, model, versions, serial and area, an own
+// device's name, and the entity's name from the registry, the
+// friendly_name or the web UI; the joiners stay. An option keeps its
+// bytes (it goes back to Home Assistant).
+func TestHostileText(t *testing.T) {
+	const bad = "A\x00B\nC\x1b[31m‮evil⁦‎\u0085"
+	const clean = "AB C[31mevil"
+	areas := map[string]string{"k": "Kü‮che"}
+	d := adapt.Device(&ha.DeviceEntry{
+		ID: "d1", NameByUser: bad, Manufacturer: "V\x00\a" + bad, Model: bad, ModelID: bad,
+		SWVersion: bad, HWVersion: bad, SerialNumber: "S\r\n" + bad, AreaID: "k",
+	}, areas)
+	for what, got := range map[string]string{
+		"name": d.Name.Default, "manufacturer": d.Manufacturer, "model": d.Model, "model id": d.ModelID,
+		"sw version": d.SWVersion, "hw version": d.HWVersion, "serial": d.SerialNumber, "area": d.SuggestedArea,
+	} {
+		if !text.Safe(got) {
+			t.Errorf("device %s %q", what, got)
+		}
+	}
+	if d.Name.Default != clean || d.SerialNumber != "S  "+clean {
+		t.Errorf("device name %q, serial %q", d.Name.Default, d.SerialNumber)
+	}
+	if own := adapt.OwnDevice("light.a", bad); own.Name.Default != clean {
+		t.Errorf("own device %q", own.Name.Default)
+	}
+	st := state("select.a", "x", map[string]any{"friendly_name": bad, "options": []any{"Eco‮", "x"}})
+	dev := adapt.OwnDevice("select.a", "a")
+	for name, in := range map[string]adapt.Input{
+		"friendly_name": {EntityID: "select.a", State: st, Device: dev},
+		"registry name": {EntityID: "select.a", State: st, Device: dev, Registry: &ha.EntityEntry{Name: bad}},
+		"original_name": {EntityID: "select.a", State: st, Device: dev, Registry: &ha.EntityEntry{HasEntityName: true, OriginalName: bad}},
+		"web UI name":   {EntityID: "select.a", State: st, Device: dev, Name: bad},
+	} {
+		e := adapt.Entity(in)
+		if got := e.Description.Name.Default; got != clean {
+			t.Errorf("%s: entity name %q", name, got)
+		}
+		if e.Description.Options == nil || e.Description.Options.Codes[0] != "Eco‮" {
+			t.Errorf("%s: options %v", name, e.Description.Options)
+		}
+	}
+	if got := adapt.Device(&ha.DeviceEntry{ID: "d", Name: "Café \U0001F469‍\U0001F4BB"}, nil).Name.Default; got != "Café \U0001F469‍\U0001F4BB" {
+		t.Errorf("the joiner was dropped: %q", got)
 	}
 }

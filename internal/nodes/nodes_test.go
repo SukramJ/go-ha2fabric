@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SukramJ/go-fabric-ui/fabricui"
 	"thingfabric.dev/go-fabric/node"
 
 	"github.com/SukramJ/go-ha2fabric/internal/nodes"
@@ -313,5 +314,32 @@ func TestWriteFails(t *testing.T) {
 	}
 	if r.Len() != 0 {
 		t.Fatal("a node added although the file was not written")
+	}
+}
+
+// TestLabelText (HR-P2-data-31): a registry node's label with a control
+// or a bidirectional control character is refused on create and rename
+// (it becomes the node's NodeLabel), as the invalid argument it is.
+func TestLabelText(t *testing.T) {
+	r := open(t, t.TempDir())
+	r.SetSources(nil, func(string, string) bool { return true }, time.Now)
+	c := nodes.Configured{Listen: "127.0.0.1:5540"}
+	for _, l := range []string{"Alexa\x1b[2J", "a\nb", "‮evil", "x⁩", "\xff"} {
+		if _, err := r.Allocate(l, c); !errors.Is(err, fabricui.ErrInvalidArgument) {
+			t.Errorf("Allocate(%q): %v", l, err)
+		}
+	}
+	n, err := r.Allocate("Alexa", c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Add(n); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Rename(n.Key, "Echo‮"); !errors.Is(err, fabricui.ErrInvalidArgument) {
+		t.Errorf("Rename: %v", err)
+	}
+	if err := r.Rename(n.Key, "Echo \U0001F469‍\U0001F4BB"); err != nil {
+		t.Fatal(err)
 	}
 }
