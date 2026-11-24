@@ -81,7 +81,8 @@ FUZZ_TARGETS := \
 	./internal/ha/:FuzzDecode ./internal/ha/:FuzzEventData ./internal/ha/:FuzzSnapshotResults ./internal/ha/:FuzzHTTPBase \
 	./internal/config/:FuzzLoad ./internal/selection/:FuzzOpen ./internal/nodes/:FuzzOpen ./internal/nodes/:FuzzSlug \
 	./internal/camera/:FuzzCandidateFromHA ./internal/camera/:FuzzCandidateToHA ./internal/camera/:FuzzCaptureSnapshot \
-	./internal/adapt/:FuzzEntityState ./internal/adapt/:FuzzService
+	./internal/adapt/:FuzzEntityState ./internal/adapt/:FuzzService \
+	./internal/bridge/:FuzzPlanBuild
 
 fuzz-smoke: ## every fuzz target, $(FUZZTIME) each
 	@set -e; for t in $(FUZZ_TARGETS); do \
