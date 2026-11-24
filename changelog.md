@@ -10,7 +10,7 @@ All notable changes to this project are documented here. The format follows
 
 The move to go-fabric `v0.25.0` under its new module path
 `thingfabric.dev/go-fabric`, with go-fabric-ui `v0.13.0` and go-hamapping
-`v0.5.0`. **Back up before updating:** the store's upgrade is one-way.
+`v0.7.0`. **Back up before updating:** the store's upgrade is one-way.
 **Stand-alone with `WEB_ADMIN=true` on a listener that is not loopback
 and no `WEB_ALLOW`, the daemon no longer starts**:
 set `WEB_ALLOW` or a loopback `WEB_LISTEN` before updating (Changed).
@@ -94,13 +94,20 @@ to reach it from the network, run the image with
   administrator's request is refused when its `Origin` names a host the
   check does not admit (in the add-on: any other than the page's own). The page's
   event streams end when the daemon stops.
-- go-hamapping `v0.4.12` → `v0.6.0`: a bridged endpoint's SerialNumber is
+- go-hamapping `v0.4.12` → `v0.7.0`: a bridged endpoint's SerialNumber is
   its Home Assistant device's `serial_number` (cut to 32 bytes; none when
   the device has none) — for a bridge already paired, the attribute
   appears where none was served; a fan's percentage maps to its mode in
   three bands and off to 0 %, a climate entity's fan mode to FanControl's
   percentage, an `auto` preset to a null percentage; labels and the vendor
-  are cut by UTF-8 bytes, the vendor name to 32.
+  are cut by UTF-8 bytes, the vendor name to 32. A cover with tilt is
+  served (before, go-fabric refused it and its device's other entities
+  with it, HR-P2-adpt-33): Type TiltBlindLift with the end product type its
+  device class allows; a tilt-only cover's open, close and position move
+  its tilt. A select with 256 options and a thermostat whose `min_temp` is
+  above its `max_temp` are unmappable with a reason instead of refused by
+  the node (HR-P2-adpt-34, HR-P2-adpt-43); select labels that repeat are
+  numbered.
 
 ### Fixed
 
