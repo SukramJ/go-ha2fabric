@@ -180,7 +180,9 @@ type Bridge struct {
 	// sync that succeeded.
 	retry time.Duration
 
-	mu       sync.Mutex
+	mu sync.Mutex
+	// states are the served entities' current states: the snapshot's,
+	// then each state_changed's.
 	states   map[string]*ha.State
 	verdicts []plan.Verdict
 	last     *ha.Snapshot
@@ -613,13 +615,6 @@ func (b *Bridge) syncConnected(ctx context.Context, since time.Time) error {
 	warnings, uiWarnings := b.warn(plan.Warnings(in, labels))
 	b.labelIDs = in.Rule.Resolutions(labels)
 
-	b.mu.Lock()
-	b.states = map[string]*ha.State{}
-	for i := range snap.States {
-		b.states[snap.States[i].EntityID] = &snap.States[i]
-		b.settleRangeLocked(snap.States[i].EntityID, &snap.States[i])
-	}
-	b.mu.Unlock()
 	b.known = map[string]bool{}
 	for i := range verdicts {
 		b.known[verdicts[i].EntityID] = true
@@ -700,6 +695,17 @@ func (b *Bridge) syncConnected(ctx context.Context, since time.Time) error {
 			b.owner[e.Key()] = g
 		}
 	}
+	// The states of the entities the bridge serves, pointing into the
+	// snapshot: every other state is the snapshot's alone (HR-P2-bound-38).
+	b.mu.Lock()
+	b.states = map[string]*ha.State{}
+	for i := range snap.States {
+		if id := snap.States[i].EntityID; b.owner[id] != nil {
+			b.states[id] = &snap.States[i]
+			b.settleRangeLocked(id, &snap.States[i])
+		}
+	}
+	b.mu.Unlock()
 	// Every state onto its device: values and reachability.
 	endpoints := 0
 	for _, g := range next {
@@ -981,12 +987,15 @@ func (b *Bridge) apply(ctx context.Context, g *group, id string) {
 
 // stateChanged applies one state_changed: the value onto the device, or a
 // re-sync when the entity's description moved (a capability attribute
-// appeared) or the entity is new.
+// appeared) or the entity is new. Only a served entity's state is kept
+// (HR-P2-bound-38): the next sync reads every other one again.
 func (b *Bridge) stateChanged(ctx context.Context, sc ha.StateChanged) {
+	g := b.owner[sc.EntityID]
 	b.mu.Lock()
-	if sc.NewState == nil {
+	switch {
+	case sc.NewState == nil:
 		delete(b.states, sc.EntityID)
-	} else {
+	case g != nil:
 		b.states[sc.EntityID] = sc.NewState
 		b.settleRangeLocked(sc.EntityID, sc.NewState)
 	}
@@ -995,7 +1004,6 @@ func (b *Bridge) stateChanged(ctx context.Context, sc ha.StateChanged) {
 		b.resyncSoon()
 		return
 	}
-	g := b.owner[sc.EntityID]
 	if g == nil {
 		return
 	}
