@@ -442,6 +442,16 @@ func (h *Host) ProvideAnswer(context.Context, uint16, string) error { return Err
 // session; when the new one fails, the session ends (the controller is
 // told, which takes it out of CurrentSessions). A new session beyond
 // MaxSessions evicts the one idle longest, or is refused.
+//
+// The cap check and the insert after Home Assistant's answer are not one
+// step under h.mu: the cap holds because go-fabric runs one command of a
+// camera's provider at a time (cluster/camera/provider.go:125-131 and
+// state.go:15-26 at v0.25.0), so no second offer of this camera runs
+// between them (HR-P2-conc-69). The same lock means a slow Home Assistant
+// holds the camera's other commands (EndSession, ProvideIceCandidates)
+// until this offer returns (an evicted or replaced session's unsubscribe,
+// each within SignalTimeout, and the offer's call, within the request's
+// deadline).
 func (h *Host) ProvideOffer(ctx context.Context, args wpdef.OfferArgs) (wpdef.WebRTCSessionStruct, error) {
 	h.mu.Lock()
 	if h.closed {
