@@ -104,7 +104,9 @@ to reach it from the network, run the image with
   served (before, go-fabric refused it and its device's other entities
   with it, HR-P2-adpt-33): Type TiltBlindLift with the end product type its
   device class allows; a tilt-only cover's open, close and position move
-  its tilt. A select with 256 options and a thermostat whose `min_temp` is
+  its tilt, and a tilt without `SET_TILT_POSITION` opens
+  (`open_cover_tilt`) at 0 % only and closes (`close_cover_tilt`)
+  otherwise, as a lift without `SET_POSITION` does. A select with 256 options and a thermostat whose `min_temp` is
   above its `max_temp` are unmappable with a reason instead of refused by
   the node (HR-P2-adpt-34, HR-P2-adpt-43); select labels that repeat are
   numbered.
@@ -235,6 +237,32 @@ to reach it from the network, run the image with
   other entities off the bridge: it (with what rides on its endpoint) is
   unmappable with go-fabric's reason, and the rest of the device is built
   without it (`bridge.build_refused`) (HR-P2-data-35).
+- A camera's WebRTC sessions end together, within the stop's budget: a
+  controller that went away no longer holds the stop for ten seconds per
+  session (HR-P2-conc-60).
+- Camera: Home Assistant's ICE candidates are bounded as the
+  controller's are — 256 per session, 1 KiB each — and an event the
+  relay ignores no longer keeps a session from its idle end
+  (HR-P2-bound-40).
+- Home Assistant's names, manufacturers, models, versions and serials
+  reach the controllers without control and bidirectional control
+  characters; a web UI name, a node's label and `LABEL` carrying one are
+  refused; `--dump-plan` prints such a cell quoted (HR-P2-data-31, closes
+  HR-P1-data-36).
+- A select's option, a fan's preset and a climate's fan mode go back to
+  Home Assistant untrimmed (HR-P2-data-32).
+- A state over 256 KiB is read without its attributes and logged
+  (`ha.state_oversized`, also for a `state_changed`), and its plan line
+  says so (HR-P2-bound-38).
+- A message from Home Assistant over the read limit is named in the
+  sync's error, not only as a dropped connection (HR-P2-bound-37).
+- Home Assistant's error text is cut to 512 bytes in errors, the log and
+  the status (HR-P2-bound-39).
+- The add-on's Supervisor check reads the version every 10 minutes also
+  after it passed; a Supervisor downgraded below 2026.10.4 takes the web
+  UI's administrator away again (HR-P2-cfg-03).
+- A web UI apply racing a node's delete no longer writes the deleted
+  node's `selection-<key>.json` again (HR-P2-conc-68).
 
 ## [0.6.3] - 2026-11-12
 

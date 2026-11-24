@@ -233,6 +233,12 @@ unknown — and the web UI shows why; an entry whose id cannot be read
 fails the sync. A label registry entry that does not decode fails the
 sync while `INCLUDE_LABELS` or `EXCLUDE_LABELS` name labels (an exclude
 label would exclude nothing), and is left out otherwise; so is an area.
+A state over 256 KiB is read without its attributes (`ha.state_oversized`;
+the plan line says so), which keeps `get_states` far below the client's
+read limit of 64 MiB a message; a message over it ends the connection, and
+the sync's error, on the status page as `sync_failed`, reads `… exceeds
+the read limit of 67108864 bytes`. Home Assistant's error text is cut to
+512 bytes in errors, the log and the status.
 
 ## Logs
 
@@ -251,8 +257,8 @@ The lines to know:
 | `ha2fabric.passcode_created` | info | Without `PASSCODE`, the configured node's random passcode was drawn and written to `passcode.json` (`file`); once, on the first start. |
 | `ha2fabric.passcode_test_value` | warn | `PASSCODE` is the public test value 20202021 (Pairing). |
 | `ha2fabric.token_in_clear` | warn | `HA_URL` is `ws://` to a host that is neither loopback nor the Supervisor (`host`; The token). |
-| `ha2fabric.supervisor` | info, warn | Add-on: the Supervisor's `version` and whether the web UI has an `admin` (2026.10.4 or later; a pre-release of 2026.10.4 counts as older); at warn when it is older, read again every 10 minutes (`recheck_in`) until it is not. |
-| `ha2fabric.supervisor_unreadable` | warn, then debug | Add-on: `GET /info` failed (`error`); retried every 30 s (every 10 minutes once a version below 2026.10.4 was read), the web UI is the status page only meanwhile. |
+| `ha2fabric.supervisor` | info, warn | Add-on: the Supervisor's `version` and whether the web UI has an `admin` (2026.10.4 or later; a pre-release of 2026.10.4 counts as older); at warn when it is older; read again every 10 minutes (`recheck_in`), also once it passed: a Supervisor downgraded below 2026.10.4 takes the administrator away again. Logged when the version or the verdict changes. |
+| `ha2fabric.supervisor_unreadable` | warn, then debug | Add-on: `GET /info` failed (`error`); retried every 30 s, every 10 minutes once a version was read; until a version is read the web UI is the status page only, and a gate that passed stays open. |
 | `ha2fabric.node_erased` | info | A node was erased in the web UI (`node=<key>` for a registry node): `fabrics_removed`, `elapsed`; the node comes back next, with `ha2fabric.fabrics count=0` and `ha2fabric.pairing`. At warn with `error` when the reset failed part-way. |
 | `ha2fabric.node_limit` | warn | At start: `nodes.json` holds more nodes (`nodes`) than `NODE_LIMIT` (`limit`) allows; all start, the web UI creates no more (Nodes). |
 | `nodes.mode_tightened` | warn | `nodes.json` or `passcode.json` (`file`) had a mode wider than 0600 (`was`) and was set to 0600 (Files). |
@@ -263,6 +269,7 @@ The lines to know:
 | `ha.connected` / `ha.disconnected` | info / warn | The Home Assistant connection. |
 | `ha.token_refused` | warn | Home Assistant refused the access token (`auth_invalid`); retried after `retry_in` (five minutes, doubling to an hour). Also the status warning `ha_token_refused`. |
 | `ha.entry_skipped` | warn, then debug | An entry of a list (`command`) did not decode and was skipped (`skipped` of `of`, the first `error`); at warn the first time per list. What it means for the entities: What the daemon reads and writes. |
+| `ha.state_oversized` | warn, then debug | A state over 256 KiB (`entity_id`, `bytes`, `max`), in `get_states` or a `state_changed`; its attributes were dropped and its plan line says so. At warn the first time per entity (a `state_changed` once for each node's bridge). |
 | `bridge.synced` | info | A sync: candidates, devices, endpoints added, replaced, removed. |
 | `bridge.sync_failed` | error | A sync could not read Home Assistant or apply its plan (`error`); the endpoints stay as the last sync that succeeded left them. While Home Assistant stays connected it is tried again after 5 seconds, doubling to 5 minutes, until a sync succeeds; from the second failure in a row the status page shows `sync_failed`. |
 | `bridge.queue_full` | error | Home Assistant sent events faster than the bridge applies them; a re-sync follows once the queue is drained. One line at the first dropped event, then one every 10 seconds with the count (`dropped`) while events keep being dropped. |
@@ -285,7 +292,10 @@ The lines to know:
 | `selection.restore_failed` | warn | The last-good copy read at start could not be written back as `selection.json` (`error`); the next start reads the copy again. |
 | `bridge.camera_disabled` | info | Once per start: exposed cameras skipped because `CAMERA` is off (`skipped`). |
 | `camera.session` / `camera.session_ended` | info | A controller opened or ended a camera session (`entity_id`, `session`). |
-| `camera.ha_error` | warn | Home Assistant reported an error for a session (`code`, `message`, e.g. `go2rtc_webrtc_offer_failed`); the session ends. |
+| `camera.ha_error` | warn | Home Assistant reported an error for a session (`code`, `message`, each cut to 512 bytes, e.g. `go2rtc_webrtc_offer_failed`); the session ends. |
+| `camera.candidates_exceeded` | warn | Home Assistant signalled more than 256 candidates in one session (`session`, `max`); the session ends. |
+| `camera.candidate_refused` | warn | A candidate of Home Assistant's that cannot be carried: over 1 KiB (`bytes`, `max`) or an `sdpMLineIndex` out of range; the session stays. |
+| `camera.close_overrun` | warn | A camera's sessions did not all end within the stop's deadline or `SignalTimeout` (`sessions`); the rest was abandoned. |
 | `camera.signal_too_large` | error | A signal with an SDP did not fit the controller's UDP session; the session ends. See Cameras. |
 | `camera.signal_failed` | warn | A signal did not reach the controller (`command`, `error`); the session ends. |
 | `camera.snapshot_failed` | warn | A controller's snapshot failed at the camera proxy (`error`: off, refused, too large). |
@@ -418,7 +428,11 @@ Limits:
   so a view kept open longer than an hour must be opened again.
 - A controller's `ProvideIceCandidates` carries at most 64 candidates and
   a session at most 256; beyond, the call is answered RESOURCE_EXHAUSTED.
-  Before Home Assistant names its session at most 64 wait.
+  Before Home Assistant names its session at most 64 wait. Home
+  Assistant's side is bounded the same way: at most 256 candidates a
+  session (the session ends beyond, `camera.candidates_exceeded`) and
+  1 KiB a candidate (refused, `camera.candidate_refused`). Only a signal
+  the daemon relays counts as activity for the hour.
 - One camera proxy request runs per camera at a time: snapshots that
   arrive meanwhile share its still, and a still younger than a second is
   handed to a further snapshot of the same size.
@@ -443,7 +457,8 @@ header the request is not an administrator's. The check needs Supervisor
 read it, has no administrator — the status page only, with the warning
 `supervisor_too_old` or `supervisor_unknown`; while it is below, it reads
 the version again every 10 minutes and gets its administrator once the
-Supervisor is updated. The manifest sets
+Supervisor is updated; it keeps reading after that, and a downgrade below
+2026.10.4 takes the administrator away again. The manifest sets
 `panel_admin: true`, so the panel is an administrator's as well.
 Stand-alone nobody, unless `WEB_ADMIN=true`, which selects the UI's token
 mode (every request carries a per-process token the page reads from
@@ -503,7 +518,10 @@ daemon was stopped or not connected to Home Assistant: the bridge learns
 of a deletion from Home Assistant's event only, so re-created, such an
 entity gets its old number back. A rename is the endpoint's name in the controller
 as typed (its node label, at most 32 bytes), without the device name
-go-hamapping puts in front of an entity name otherwise. The status page
+go-hamapping puts in front of an entity name otherwise. A name or a node
+label with a control or bidirectional control character is refused; Home
+Assistant's own names, manufacturers, models, versions and serials reach
+the controllers without them. The status page
 lists the configuration's warnings: unresolved label values
 (`label_unresolved`), a sync with Home Assistant that keeps failing
 (`sync_failed`, with the error; `bridge.sync_failed` in Logs), an overrides file moved aside at start
@@ -656,8 +674,9 @@ nonetheless (`ha2fabric.node_erased` at warn) may have removed the
 fabrics without resetting the store, and must be repeated after the next
 start. A create, rename or delete still running is not waited for beyond
 the budget, nor is a node's bridge that does not end in it
-(`ha2fabric.bridge_stop_overrun`): the camera sessions it closes end in
-parallel, each within the budget. The add-on's
+(`ha2fabric.bridge_stop_overrun`): a camera's sessions end together
+within the budget, each in at most 10 seconds (`camera.close_overrun`
+when some do not). The add-on's
 manifest gives the stop 30 seconds before the Supervisor kills it. A
 second signal ends the process at once; a signal during the start is an
 ordinary stop (exit 0).
