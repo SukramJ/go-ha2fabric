@@ -141,7 +141,7 @@ func (s *served) launch(base context.Context) (nodeRun, error) {
 	// The web UI's event stream observes the node itself (Node.Observe,
 	// go-fabric-ui v0.1.2); s.events carries the bridge's own.
 	br := bridge.New(n, s.client, bridge.Options{
-		Input: s.in, Logger: s.log, CameraUpstream: camera.HA(s.client),
+		Input: s.in, Logger: s.log, CameraUpstream: camera.HA(s.client), Snapshots: s.fan.Snapshots(s.client),
 		OnChange: func(exposure []string, endpoints bool) {
 			if len(exposure) > 0 {
 				s.events.Publish(fabricui.Event{Type: fabricui.EventExposureChanged, Data: fabricui.ExposureEvent{Keys: exposure}})

@@ -25,6 +25,19 @@ type Fanout struct {
 	hs        []Handler
 	connected bool
 	version   string
+	snaps     *Snapshots
+}
+
+// Snapshots is the connection's one shared snapshot reader on src, made
+// at the first call: the nodes' bridges read through it, so one event is
+// one read of Home Assistant, not one per node (HR-P2-bound-62).
+func (f *Fanout) Snapshots(src Source) *Snapshots {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.snaps == nil {
+		f.snaps = NewSnapshots(src)
+	}
+	return f.snaps
 }
 
 // Add hands the connection to h from now on; h gets Connected at once

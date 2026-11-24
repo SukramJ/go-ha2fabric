@@ -5,6 +5,7 @@ package bridge
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"strings"
 	"sync"
@@ -75,13 +76,17 @@ func (r *records) named(msg string) []slog.Record {
 	return out
 }
 
-// ctxUp is fakeUp whose read ends with its context.
+// ctxUp is fakeUp whose read ends with its context, or after a second.
 type ctxUp struct{ *fakeUp }
 
 func (c ctxUp) GetStates(ctx context.Context) ([]ha.State, error) {
 	c.reads.Add(1)
-	<-ctx.Done()
-	return nil, ctx.Err()
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-time.After(time.Second):
+		return nil, errFakeRead
+	}
 }
 
 // TestCancelledSyncIsNoFailure (HR-P2-err-67): a sync the stop, an erase
@@ -94,7 +99,7 @@ func TestCancelledSyncIsNoFailure(t *testing.T) {
 	b := New(nil, ctxUp{up}, Options{Logger: slog.New(rec), Input: func() plan.Input { return plan.Input{} }})
 	ctx, cancel := context.WithCancel(context.Background())
 	time.AfterFunc(10*time.Millisecond, cancel)
-	_ = b.sync(ctx)
+	_ = b.sync(ctx, time.Now())
 	if n := len(rec.named("bridge.sync_failed")); n != 0 {
 		t.Fatalf("a cancelled sync logged bridge.sync_failed %d time(s)", n)
 	}
@@ -160,13 +165,33 @@ func TestSyncFailureInView(t *testing.T) {
 	up := &fakeUp{}
 	up.connected.Store(true)
 	b := New(nil, up, Options{Logger: slog.New(slog.DiscardHandler), Input: func() plan.Input { return plan.Input{} }})
-	_ = b.sync(context.Background())
+	_ = b.sync(context.Background(), time.Now())
 	if f := b.View().SyncFailure; f != nil {
 		t.Fatalf("one failed sync is a warning: %+v", f)
 	}
-	_ = b.sync(context.Background())
+	_ = b.sync(context.Background(), time.Now())
 	f := b.View().SyncFailure
 	if f == nil || !strings.Contains(f.Message, errFakeRead.Error()) || f.Since.IsZero() {
 		t.Fatalf("a sync that keeps failing is no warning: %+v", f)
+	}
+}
+
+// TestOneEventOneSnapshot (HR-P2-bound-62): one registry event on the
+// daemon's one connection reads Home Assistant once, not once per node:
+// the bridges share the connection's reader (ha.Fanout.Snapshots).
+func TestOneEventOneSnapshot(t *testing.T) {
+	up := &fakeUp{}
+	up.connected.Store(true)
+	fan := &ha.Fanout{}
+	const nodes = 9 // the configured node and NODE_LIMIT's default of 8
+	for range nodes {
+		b := syncBridge(t, up, func(o *Options) { o.Snapshots = fan.Snapshots(up) })
+		fan.Add(b)
+	}
+	fan.Event(ha.Event{EventType: ha.EventEntityRegistryUpdated, Data: json.RawMessage(`{"action":"update","entity_id":"light.a"}`)})
+	waitFor(t, "a sync", func() bool { return up.reads.Load() > 0 })
+	time.Sleep(200 * time.Millisecond)
+	if n := up.reads.Load(); n != 1 {
+		t.Fatalf("one entity_registry_updated read the snapshot %d times", n)
 	}
 }

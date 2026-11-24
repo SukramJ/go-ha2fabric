@@ -80,6 +80,11 @@ type Options struct {
 	// failure up to maxRetry and starts again after a sync that succeeded
 	// (HR-P2-err-61). 0 is five seconds.
 	Retry time.Duration
+	// Snapshots is the connection's shared snapshot reader
+	// (ha.Fanout.Snapshots), so the nodes on one connection read Home
+	// Assistant once per event, not once each (HR-P2-bound-62); nil reads
+	// through the upstream alone.
+	Snapshots *ha.Snapshots
 	// CameraUpstream is Home Assistant's side of the camera relay
 	// (camera.HA of the client). Without it a camera has no host ports
 	// and go-hamapping skips its row.
@@ -126,10 +131,11 @@ func (g *group) built() *plan.Built[*device.Device] {
 // runs on one goroutine ([Bridge.Run]); controller commands run on
 // another, so a slow service call never holds an attribute report.
 type Bridge struct {
-	n    *node.Node
-	up   Upstream
-	opts Options
-	log  *slog.Logger
+	n     *node.Node
+	up    Upstream
+	snaps *ha.Snapshots
+	opts  Options
+	log   *slog.Logger
 
 	work chan func(context.Context)
 	cmds chan model.Command
@@ -180,9 +186,11 @@ type Bridge struct {
 	warnings []Warning
 	timer    *time.Timer
 	// first is the first request the pending timer serves, zero while
-	// none is pending; armed counts the timers armed, so a timer that
-	// fired while it was replaced does nothing ([Bridge.fire]).
+	// none is pending, and latest its latest: the sync's read begins after
+	// it. armed counts the timers armed, so a timer that fired while it
+	// was replaced does nothing ([Bridge.fire]).
 	first  time.Time
+	latest time.Time
 	armed  uint64
 	synced chan struct{}
 	// forget is the stable key of every entity removed from Home
@@ -224,8 +232,12 @@ func New(n *node.Node, up Upstream, opts Options) *Bridge {
 	if log == nil {
 		log = slog.Default()
 	}
+	snaps := opts.Snapshots
+	if snaps == nil {
+		snaps = ha.NewSnapshots(up)
+	}
 	return &Bridge{
-		n: n, up: up, opts: opts, log: log,
+		n: n, up: up, snaps: snaps, opts: opts, log: log,
 		work:   make(chan func(context.Context), 1024),
 		wake:   make(chan struct{}, 1),
 		cmds:   make(chan model.Command, 256),
@@ -262,11 +274,11 @@ func (b *Bridge) Run(ctx context.Context) error {
 		case fn := <-b.work:
 			fn(ctx)
 			if len(b.work) == 0 && b.owed.Swap(false) {
-				_ = b.sync(ctx)
+				_ = b.sync(ctx, time.Now())
 			}
 		case <-b.wake:
 			if len(b.work) == 0 && b.owed.Swap(false) {
-				_ = b.sync(ctx)
+				_ = b.sync(ctx, time.Now())
 			}
 		}
 	}
@@ -303,7 +315,8 @@ func (b *Bridge) Synced() <-chan struct{} { return b.synced }
 func (b *Bridge) Connected(string) {
 	b.connected.Store(true)
 	b.setStatus(func(s *Status) { s.HAConnected = true })
-	b.enqueue(func(ctx context.Context) { _ = b.sync(ctx) })
+	since := time.Now()
+	b.enqueue(func(ctx context.Context) { _ = b.sync(ctx, since) })
 }
 
 // Disconnected implements ha.Handler: while Home Assistant is away every
@@ -315,7 +328,7 @@ func (b *Bridge) Disconnected(error) {
 		return
 	}
 	b.setStatus(func(s *Status) { s.HAConnected = false })
-	b.enqueue(func(ctx context.Context) { _ = b.sync(ctx) })
+	b.enqueue(func(ctx context.Context) { _ = b.sync(ctx, time.Now()) })
 }
 
 // unreachable marks every served endpoint unreachable, and logs the
@@ -433,6 +446,7 @@ func (b *Bridge) resyncSoon() {
 	if b.first.IsZero() {
 		b.first = now
 	}
+	b.latest = now
 	at := now.Add(b.opts.Debounce)
 	if latest := b.first.Add(maxWait * b.opts.Debounce); at.After(latest) {
 		at = latest
@@ -454,8 +468,8 @@ func (b *Bridge) retryLater() {
 	if !b.first.IsZero() {
 		return
 	}
-	b.first = now
-	b.armLocked(now.Add(wait))
+	b.first, b.latest = now, now.Add(wait)
+	b.armLocked(b.latest)
 }
 
 // armLocked arms the one sync timer to fire at at, in place of a pending
@@ -479,9 +493,10 @@ func (b *Bridge) fire(armed uint64) {
 		return
 	}
 	b.first = time.Time{}
+	since := b.latest
 	b.mu.Unlock()
 	select {
-	case b.work <- func(ctx context.Context) { _ = b.sync(ctx) }:
+	case b.work <- func(ctx context.Context) { _ = b.sync(ctx, since) }:
 	default:
 		b.owe()
 	}
@@ -530,13 +545,15 @@ func (b *Bridge) logCameraOff(verdicts []plan.Verdict) {
 // While Home Assistant is not connected it marks every endpoint
 // unreachable instead and returns errNotConnected. A read or a batch that
 // fails while Home Assistant stays connected is tried again after a
-// back-off (HR-P2-err-61); the error is the sync's.
-func (b *Bridge) sync(ctx context.Context) error {
+// back-off (HR-P2-err-61); the error is the sync's. Its snapshot is a
+// read that began at or after since, the time of what the sync is for
+// ([ha.Snapshots]).
+func (b *Bridge) sync(ctx context.Context, since time.Time) error {
 	if !b.up.Connected() {
 		b.unreachable(ctx)
 		return errNotConnected
 	}
-	err := b.syncConnected(ctx)
+	err := b.syncConnected(ctx, since)
 	switch {
 	case err == nil:
 		b.retry = 0
@@ -559,13 +576,13 @@ func (b *Bridge) sync(ctx context.Context) error {
 }
 
 // syncConnected is the sync while Home Assistant is connected.
-func (b *Bridge) syncConnected(ctx context.Context) error {
+func (b *Bridge) syncConnected(ctx context.Context, since time.Time) error {
 	in := b.opts.Input()
 	in.Rule.LabelIDs = b.labelIDs
 	b.mu.Lock()
 	readFrom := b.removals
 	b.mu.Unlock()
-	snap, err := ha.ReadSnapshot(ctx, b.up, in.Rule.Assist)
+	snap, err := b.snaps.Read(ctx, since, in.Rule.Assist)
 	if err == nil {
 		err = plan.Check(snap, in)
 	}
@@ -887,10 +904,11 @@ func (b *Bridge) Resync(ctx context.Context) error {
 	}
 	done := make(chan struct{})
 	var err error
+	since := time.Now()
 	select {
 	case b.work <- func(ctx context.Context) {
 		defer close(done)
-		err = b.sync(ctx)
+		err = b.sync(ctx, since)
 	}:
 	case <-ctx.Done():
 		return ctx.Err()
