@@ -70,9 +70,13 @@ type gatedSource struct {
 }
 
 func (*gatedSource) ListEntities(context.Context) ([]ha.EntityEntry, error) { return nil, nil }
-func (*gatedSource) ListDevices(context.Context) ([]ha.DeviceEntry, error)  { return nil, nil }
-func (*gatedSource) ListAreas(context.Context) ([]ha.Area, error)           { return nil, nil }
-func (*gatedSource) ListLabels(context.Context) ([]ha.Label, error)         { return nil, nil }
+
+func (*gatedSource) ListDevices(context.Context) ([]ha.DeviceEntry, error) { return nil, nil }
+
+func (*gatedSource) ListAreas(context.Context) ([]ha.Area, error) { return nil, nil }
+
+func (*gatedSource) ListLabels(context.Context) ([]ha.Label, error) { return nil, nil }
+
 func (*gatedSource) GetConfig(context.Context) (ha.Config, error) { return ha.Config{}, nil }
 
 func (*gatedSource) ListExposed(context.Context) (ha.Exposed, error) { return ha.Exposed{}, nil }
