@@ -81,3 +81,25 @@ took every recommendation and both further issues. Sources:
 | 32 | HR-P1-adpt-30, how long the range last sent is held | **30 s** (or until a state shows it); the stop-gap goes with go-hamapping #39 |
 | 33 | HR-P1-cfg-34, the label ids a renamed label is followed by | **In memory only**; the warning says the exclusion lapsed, the docs recommend the label id |
 | 34 | Follow-up issues after phase 1's pull request | **Three**: go-fabric's camera kit (a session cap option, a signal that a session's controller is gone, whether CameraAvStreamManagement serialises its commands; a Fable-checked hand-over); here a `--health` flag for an image health check (HR-P1-sup-19); here the add-on as an unprivileged user with a profile and a watchdog after the live Ingress test (HR-P1-sup-18) |
+
+## 2026-11-24, after phase 2's verification
+
+Put as three wizards of four questions, the recommendation first; the owner
+took every recommendation. Sources: `phase-2-X1.md`, `phase-2-X2.md`,
+`phase-2-X3.md`, `phase-2-verify.md` (questions section). The held row is
+named by ID only.
+
+| # | Subject | Decision |
+| --- | --- | --- |
+| 35 | HR-P2-adpt-33 (tilt covers mappable in go-hamapping v0.6.0, refused by go-fabric v0.25.0) with HR-P2-adpt-34 (256 vs 255 select options) | **Fixed in go-hamapping now**: its own pull request and release; the pin is lifted in phase 2's fix wave; if the release slips, a known-issue line in `changelog.md` for `0.7.0` |
+| 36 | HR-P2-data-30, first held | **Published now** and fixed in phase 2's pull request (as decision 23); it gives an untrusted role no new reach |
+| 37 | (held) HR-P1-auth-01 | **Published with the `0.7.0` tag**, with the documentation sentence and, the same day, a proposal upstream; labelled by the verifier's reading of the measurement (decision 24 continued) |
+| 38 | Sync scheduling (HR-P2-err-61, -err-65, -bound-37, -bound-62, -data-30) | **One design in phase 2**: a failed sync retried with back-off; `Resync` says whether a sync was planned; a web UI warning for a sync that keeps failing; one shared snapshot reader per connection (the plan stays per node); the debounce gets a latest time |
+| 39 | HR-P2-conc-60 (verifier: medium → low, a gap in HR-P1-err-64's fix) | **Full fix, low accepted**: the camera sessions end in parallel within the caller's deadline; `stopRun` bounded by the stop's context; the camera closes moved off the sync |
+| 40 | HR-P2-data-35, one refused entity drops its whole device | **A partial device**: the sound entities stay; the refused one is listed unmappable with its reason |
+| 41 | HR-P2-data-31, closes HR-P1-data-36 | **Dropped**: control and bidirectional control characters removed in `internal/adapt` (the joiners U+200C/U+200D kept), refused in web UI names and node labels, `--dump-plan` quotes; no go-fabric issue; the option labels a go-hamapping candidate |
+| 42 | HR-P2-bound-38, heap of a large `get_states` | **256 KiB per state**: an oversized entity's attributes dropped with a log line and a verdict reason; the states held once |
+| 43 | The owner's live Ingress test, phase 2's items | **The full list**: the framing origin (HR-P2-frame-02), the source address the daemon sees, HAOS's `rp_filter` (HR-P2-net-01), the held files' items; the T2 argument in `docs/operations.md` regardless |
+| 44 | HR-P2-cfg-03, the Supervisor gate after it opened | **Keeps re-reading**: a downgrade closes it again; in phase 2's pull request |
+| 45 | HR-P2-doc-66, an entity removed while disconnected keeps its endpoint number | **A docs sentence now and a follow-up issue** for a persisted set of served keys (a design change for the owner later) |
+| 46 | The remaining lows (HR-P2-data-32, -bound-39, -bound-40, -bound-64, -err-63, -test-42) | **All in phase 2's pull request**, each with a red regression test: the option not trimmed; Home Assistant's error text cut; the Home Assistant side of the camera relay capped like the controller side; a rate-limited summary for dropped items; the device state restored after a dropped or refused command; a fuzz target `Map` → `Build` → `Apply` in `fuzz-smoke` |
