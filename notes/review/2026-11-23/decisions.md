@@ -103,3 +103,13 @@ named by ID only.
 | 44 | HR-P2-cfg-03, the Supervisor gate after it opened | **Keeps re-reading**: a downgrade closes it again; in phase 2's pull request |
 | 45 | HR-P2-doc-66, an entity removed while disconnected keeps its endpoint number | **A docs sentence now and a follow-up issue** for a persisted set of served keys (a design change for the owner later) |
 | 46 | The remaining lows (HR-P2-data-32, -bound-39, -bound-40, -bound-64, -err-63, -test-42) | **All in phase 2's pull request**, each with a red regression test: the option not trimmed; Home Assistant's error text cut; the Home Assistant side of the camera relay capped like the controller side; a rate-limited summary for dropped items; the device state restored after a dropped or refused command; a fuzz target `Map` → `Build` → `Apply` in `fuzz-smoke` |
+
+## 2026-11-24, during phase 2's fix wave
+
+From 2026-11-24 the owner set Opus for every role this plan gives Fable,
+until further notice; the go-hamapping fact note below and every later
+read of phase 2 are by Opus.
+
+| # | Subject | Decision |
+| --- | --- | --- |
+| 47 | Decision 35's scope, after the fact note (`go-hamapping/notes/reads/fact-2026-11-24-cover-tilt.md`): covers with tilt build but two command gaps remain | **Build and both gaps**: a tilt-only cover's open, close and lift go to the tilt axis; a tilt without `SET_TILT_POSITION` uses new methods `open_tilt` / `close_tilt`; go-hamapping's pull request C8, this host's `internal/adapt` in round 2. HR-P2-adpt-43 (a thermostat whose `min_temp` is above its `max_temp`, mappable and refused; found by F1's fuzz target) joins C8 |
