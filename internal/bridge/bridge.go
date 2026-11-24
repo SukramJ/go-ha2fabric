@@ -75,6 +75,11 @@ type Options struct {
 	// changed the exposure (the entity ids whose decision moved) or the
 	// endpoints (added, replaced or removed devices).
 	OnChange func(exposure []string, endpoints bool)
+	// Retry is the first wait before a sync that failed while Home
+	// Assistant stays connected is tried again; it doubles with each
+	// failure up to maxRetry and starts again after a sync that succeeded
+	// (HR-P2-err-61). 0 is five seconds.
+	Retry time.Duration
 	// CameraUpstream is Home Assistant's side of the camera relay
 	// (camera.HA of the client). Without it a camera has no host ports
 	// and go-hamapping skips its row.
@@ -162,6 +167,9 @@ type Bridge struct {
 	// down is set once the endpoints were marked unreachable for an
 	// outage of Home Assistant, so the outage is logged once.
 	down bool
+	// retry is the wait before the next retry of a failed sync, 0 after a
+	// sync that succeeded.
+	retry time.Duration
 
 	mu       sync.Mutex
 	states   map[string]*ha.State
@@ -202,6 +210,9 @@ type Bridge struct {
 func New(n *node.Node, up Upstream, opts Options) *Bridge {
 	if opts.Debounce <= 0 {
 		opts.Debounce = time.Second
+	}
+	if opts.Retry <= 0 {
+		opts.Retry = 5 * time.Second
 	}
 	log := opts.Logger
 	if log == nil {
@@ -245,11 +256,11 @@ func (b *Bridge) Run(ctx context.Context) error {
 		case fn := <-b.work:
 			fn(ctx)
 			if len(b.work) == 0 && b.owed.Swap(false) {
-				b.sync(ctx)
+				_ = b.sync(ctx)
 			}
 		case <-b.wake:
 			if len(b.work) == 0 && b.owed.Swap(false) {
-				b.sync(ctx)
+				_ = b.sync(ctx)
 			}
 		}
 	}
@@ -286,7 +297,7 @@ func (b *Bridge) Synced() <-chan struct{} { return b.synced }
 func (b *Bridge) Connected(string) {
 	b.connected.Store(true)
 	b.setStatus(func(s *Status) { s.HAConnected = true })
-	b.enqueue(func(ctx context.Context) { b.sync(ctx) })
+	b.enqueue(func(ctx context.Context) { _ = b.sync(ctx) })
 }
 
 // Disconnected implements ha.Handler: while Home Assistant is away every
@@ -298,7 +309,7 @@ func (b *Bridge) Disconnected(error) {
 		return
 	}
 	b.setStatus(func(s *Status) { s.HAConnected = false })
-	b.enqueue(func(ctx context.Context) { b.sync(ctx) })
+	b.enqueue(func(ctx context.Context) { _ = b.sync(ctx) })
 }
 
 // unreachable marks every served endpoint unreachable, and logs the
@@ -395,6 +406,12 @@ func (b *Bridge) keepStaleForgets(forget map[string]device.SourceKey, removedAt 
 	}
 }
 
+// maxRetry bounds the back-off of a failed sync's retry.
+const maxRetry = 5 * time.Minute
+
+// errNotConnected is a sync's answer while Home Assistant is away.
+var errNotConnected = errors.New("bridge: Home Assistant is not connected")
+
 // maxWait is how many debounces a stream of re-sync requests can put a
 // sync off, counted from the first request (HR-P2-data-30).
 const maxWait = 5
@@ -415,6 +432,24 @@ func (b *Bridge) resyncSoon() {
 		at = latest
 	}
 	b.armLocked(at)
+}
+
+// retryLater schedules the retry of a failed sync after its back-off,
+// unless a sync is pending already: that one is the retry.
+func (b *Bridge) retryLater() {
+	if b.retry == 0 {
+		b.retry = b.opts.Retry
+	}
+	wait := b.retry
+	b.retry = min(2*b.retry, max(maxRetry, b.opts.Retry))
+	now := time.Now()
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if !b.first.IsZero() {
+		return
+	}
+	b.first = now
+	b.armLocked(now.Add(wait))
 }
 
 // armLocked arms the one sync timer to fire at at, in place of a pending
@@ -440,7 +475,7 @@ func (b *Bridge) fire(armed uint64) {
 	b.first = time.Time{}
 	b.mu.Unlock()
 	select {
-	case b.work <- func(ctx context.Context) { b.sync(ctx) }:
+	case b.work <- func(ctx context.Context) { _ = b.sync(ctx) }:
 	default:
 		b.owe()
 	}
@@ -487,12 +522,26 @@ func (b *Bridge) logCameraOff(verdicts []plan.Verdict) {
 // sync reads everything and brings the Aggregator's set to it in one
 // batch: new devices added, changed ones replaced, vanished ones removed.
 // While Home Assistant is not connected it marks every endpoint
-// unreachable instead.
-func (b *Bridge) sync(ctx context.Context) {
+// unreachable instead and returns errNotConnected. A read or a batch that
+// fails while Home Assistant stays connected is tried again after a
+// back-off (HR-P2-err-61); the error is the sync's.
+func (b *Bridge) sync(ctx context.Context) error {
 	if !b.up.Connected() {
 		b.unreachable(ctx)
-		return
+		return errNotConnected
 	}
+	err := b.syncConnected(ctx)
+	switch {
+	case err == nil:
+		b.retry = 0
+	case ctx.Err() == nil && b.up.Connected():
+		b.retryLater()
+	}
+	return err
+}
+
+// syncConnected is the sync while Home Assistant is connected.
+func (b *Bridge) syncConnected(ctx context.Context) error {
 	in := b.opts.Input()
 	in.Rule.LabelIDs = b.labelIDs
 	b.mu.Lock()
@@ -507,11 +556,11 @@ func (b *Bridge) sync(ctx context.Context) {
 			// A stop, an erase or a delete ended the worker: no failure
 			// (HR-P2-err-67).
 			b.log.Debug("bridge.sync_cancelled", slog.String("error", err.Error()))
-			return
+			return err
 		}
 		b.log.Error("bridge.sync_failed", slog.String("error", err.Error()))
 		b.setStatus(func(s *Status) { s.SyncError = err.Error() })
-		return
+		return err
 	}
 	b.unit = snap.Config.TemperatureUnit()
 	verdicts, plannedGroups := plan.Assess(snap, in)
@@ -676,6 +725,7 @@ func (b *Bridge) sync(ctx context.Context) {
 	if b.opts.OnChange != nil && (len(moved) > 0 || changed) {
 		b.opts.OnChange(moved, changed)
 	}
+	return err
 }
 
 // settle takes back what the batch's failed operations did not apply
@@ -801,16 +851,19 @@ func (b *Bridge) warn(found []string) ([]string, []Warning) {
 }
 
 // Resync reads Home Assistant again and brings the endpoints to it, and
-// returns when that sync has run: the web UI's reassemble.
+// returns when that sync has run: the web UI's reassemble. Its error is
+// the sync's, errNotConnected when Home Assistant went away before the
+// sync ran (HR-P2-err-65).
 func (b *Bridge) Resync(ctx context.Context) error {
 	if !b.up.Connected() {
-		return errors.New("bridge: Home Assistant is not connected")
+		return errNotConnected
 	}
 	done := make(chan struct{})
+	var err error
 	select {
 	case b.work <- func(ctx context.Context) {
 		defer close(done)
-		b.sync(ctx)
+		err = b.sync(ctx)
 	}:
 	case <-ctx.Done():
 		return ctx.Err()
@@ -820,8 +873,11 @@ func (b *Bridge) Resync(ctx context.Context) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	}
-	if e := b.Status().SyncError; e != "" {
-		return errors.New("bridge: " + e)
+	if errors.Is(err, errNotConnected) {
+		return err
+	}
+	if err != nil {
+		return fmt.Errorf("bridge: %w", err)
 	}
 	return nil
 }

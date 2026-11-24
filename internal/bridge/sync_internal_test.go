@@ -93,7 +93,7 @@ func TestCancelledSyncIsNoFailure(t *testing.T) {
 	b := New(nil, ctxUp{up}, Options{Logger: slog.New(rec), Input: func() plan.Input { return plan.Input{} }})
 	ctx, cancel := context.WithCancel(context.Background())
 	time.AfterFunc(10*time.Millisecond, cancel)
-	b.sync(ctx)
+	_ = b.sync(ctx)
 	if n := len(rec.named("bridge.sync_failed")); n != 0 {
 		t.Fatalf("a cancelled sync logged bridge.sync_failed %d time(s)", n)
 	}
@@ -111,5 +111,43 @@ func TestCancelledCommandIsNoFailure(t *testing.T) {
 	b.command(ctx, rangeCmd("temperature_low", "19"))
 	if s := b.Status(); s.CommandErrs != 0 || s.LastCommand != "" {
 		t.Fatalf("a cancelled call_service counted as a failure: %+v", s)
+	}
+}
+
+// TestFailedSyncIsRetried (HR-P2-err-61): a sync that fails while Home
+// Assistant stays connected is tried again, with a back-off; without a
+// connection it is not (the reconnection syncs).
+func TestFailedSyncIsRetried(t *testing.T) {
+	up := &fakeUp{}
+	up.connected.Store(true)
+	b := syncBridge(t, up, func(o *Options) { o.Retry = 20 * time.Millisecond })
+	b.Connected("2026.10.3")
+	waitFor(t, "the failed sync tried twice more", func() bool { return up.reads.Load() >= 3 })
+	up.connected.Store(false)
+	b.Disconnected(nil)
+	time.Sleep(50 * time.Millisecond)
+	n := up.reads.Load()
+	time.Sleep(500 * time.Millisecond)
+	if m := up.reads.Load(); m != n {
+		t.Fatalf("a sync was retried while Home Assistant was away: %d read(s), then %d", n, m)
+	}
+}
+
+// TestResyncSaysWhetherItPlanned (HR-P2-err-65): a Resync whose sync
+// found Home Assistant gone reports it, instead of a success.
+func TestResyncSaysWhetherItPlanned(t *testing.T) {
+	up := &fakeUp{}
+	up.connected.Store(true)
+	b := syncBridge(t, up)
+	hold, held := make(chan struct{}), make(chan struct{})
+	b.work <- func(context.Context) { close(held); <-hold }
+	<-held
+	errc := make(chan error, 1)
+	go func() { errc <- b.Resync(context.Background()) }()
+	waitFor(t, "the Resync queued", func() bool { return len(b.work) == 1 })
+	up.connected.Store(false)
+	close(hold)
+	if err := <-errc; err == nil {
+		t.Fatal("Resync reported success for a sync that did not plan")
 	}
 }

@@ -505,3 +505,13 @@ func readRegistry(t *testing.T, dir string) []nodes.Node {
 	}
 	return r.Nodes()
 }
+
+// TestResyncWithoutRun (HR-P2-err-65): a reassemble while the node is
+// between an erase and its come-back did not run; it says so instead of a
+// success. The stored selection applies at the next run's first sync.
+func TestResyncWithoutRun(t *testing.T) {
+	s := &served{}
+	if err := s.Resync(context.Background()); err == nil {
+		t.Fatal("Resync without a run reported success")
+	}
+}

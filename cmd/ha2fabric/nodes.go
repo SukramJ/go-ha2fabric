@@ -176,6 +176,10 @@ func (s *served) install(r nodeRun) {
 	}
 }
 
+// errNotRunning is a reassemble's answer while a node has no run: between
+// an erase and its come-back, or after a come-back that failed.
+var errNotRunning = errors.New("the node is not running; its next start applies the selection")
+
 // stopRun takes the bridge off the connection and ends its worker; the
 // node is the caller's to stop or reset. s.mu is held and a run exists.
 func (s *served) stopRun() {
@@ -195,13 +199,14 @@ func (s *served) View() bridge.View {
 	return s.br.View()
 }
 
-// Resync is the web UI's reassemble on the current bridge; without a run
-// there is nothing to rebuild, and the next run applies the selection.
+// Resync is the web UI's reassemble on the current bridge. Without a run
+// there is nothing to rebuild, and it says so (HR-P2-err-65): the next
+// run's first sync applies the stored selection.
 func (s *served) Resync(ctx context.Context) error {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	if s.br == nil {
-		return nil
+		return errNotRunning
 	}
 	return s.br.Resync(ctx)
 }
