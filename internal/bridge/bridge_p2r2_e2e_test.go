@@ -154,3 +154,42 @@ func TestSelect256Options(t *testing.T) {
 		t.Errorf("the node refused what Map called mappable: %s", live)
 	}
 }
+
+// TestRefusedEntityKeepsItsSiblings (HR-P2-data-35, decision 40, from
+// X2's probe): an entity go-fabric refuses no longer takes its device's
+// other entities off the bridge. The refused one is a thermostat stating
+// only a minimum above go-fabric's default maximum, a shape go-hamapping
+// v0.7.0 still calls mappable (go-hamapping #45); it joins the plug's
+// device.
+func TestRefusedEntityKeepsItsSiblings(t *testing.T) {
+	e := newEnv(t, expose.Rule{Assist: true})
+	if _, ok := e.endpoint("switch.coffee"); !ok {
+		t.Fatal("no endpoint")
+	}
+	e.ha.UpdateEntity("climate.hall", map[string]any{"device_id": "dev-shelly-1"})
+	e.ha.SetState("climate.hall", "heat", map[string]any{"hvac_modes": []any{"off", "heat"}, "min_temp": 50, "temperature": 55, "supported_features": 1, "friendly_name": "Hall"})
+	var refused *plan.Verdict
+	e.eventually("the thermostat's verdict", func() bool {
+		for _, v := range e.br.Plan() {
+			if v.EntityID == "climate.hall" && strings.Contains(v.Reason, "refused") {
+				refused = &v
+				return true
+			}
+		}
+		return false
+	})
+	if refused.State != "unmappable" || !strings.HasPrefix(refused.Reason, "go-fabric refused") {
+		t.Errorf("climate.hall: %s: %s", refused.State, refused.Reason)
+	}
+	for _, v := range e.br.Plan() {
+		if v.EntityID == "switch.coffee" && v.State == "unmappable" {
+			t.Errorf("switch.coffee: %s: %s", v.State, v.Reason)
+		}
+	}
+	if _, ok := e.endpoint("switch.coffee"); !ok {
+		t.Errorf("switch.coffee lost its endpoint to its device's refused thermostat")
+	}
+	if _, ok := e.endpoint("climate.hall"); ok {
+		t.Errorf("climate.hall has an endpoint")
+	}
+}

@@ -231,6 +231,10 @@ to reach it from the network, run the image with
   and then a count every 10 seconds, not one Error line per dropped item
   (HR-P2-bound-64). A sync or a command a stop cancels is no longer logged
   as failed (HR-P2-err-67).
+- An entity go-fabric refuses no longer takes its Home Assistant device's
+  other entities off the bridge: it (with what rides on its endpoint) is
+  unmappable with go-fabric's reason, and the rest of the device is built
+  without it (`bridge.build_refused`) (HR-P2-data-35).
 
 ## [0.6.3] - 2026-11-12
 

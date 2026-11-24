@@ -938,32 +938,65 @@ func (b *Bridge) Resync(ctx context.Context) error {
 	return nil
 }
 
-// build maps and builds one device's plan; a build failure leaves the
+// build maps and builds one device's plan. An endpoint go-fabric refuses
+// (go-hamapping's *BuildError) costs only its entity and the entities
+// riding on it: they are unmappable with the refusal as their reason, and
+// the device is mapped and built again without them, at most once per
+// entity (HR-P2-data-35, decision 40). Any other build failure leaves the
 // device without endpoints and says why in its verdicts.
 func (b *Bridge) build(ctx context.Context, p *plan.Group) (*group, []hamapping.Verdict) {
-	hp, mv := hamapping.Map(p.Device, p.Entities, plan.MapOptions(p.Regs, p.Names, b.ports))
-	g := &group{Group: p, plan: hp}
-	devs, err := hp.Build(ctx)
-	if err != nil {
+	entities := p.Entities
+	var refused []hamapping.Verdict
+	for {
+		hp, mv := hamapping.Map(p.Device, entities, plan.MapOptions(p.Regs, p.Names, b.ports))
+		g := &group{Group: p, plan: hp}
+		devs, err := hp.Build(ctx)
+		if err == nil {
+			mv = append(mv, refused...)
+			g.verdicts = mv
+			g.devices = devs
+			for i := range hp.Endpoints {
+				g.keys = append(g.keys, hp.Endpoints[i].Options.StableKey)
+			}
+			b.attachCameras(g, hp, devs)
+			hp.OnChange(b.onCommand)
+			hp.OnDiscard(b.onDiscard)
+			return g, mv
+		}
+		reason := "go-fabric refused the device: " + err.Error()
+		var be *hamapping.BuildError
+		if errors.As(err, &be) {
+			drop := map[string]bool{be.Key: true}
+			for _, k := range be.Riders {
+				drop[k] = true
+			}
+			rest := slices.DeleteFunc(slices.Clone(entities), func(e model.Entity) bool { return drop[e.Key()] })
+			if len(rest) < len(entities) {
+				b.log.Warn("bridge.build_refused", slog.String("device", p.Device.Name.Default), slog.String("entity", be.Key),
+					slog.Any("riders", be.Riders), slog.String("error", err.Error()))
+				for i := range mv {
+					if drop[mv[i].Key] {
+						mv[i].State = eligibility.StateUnmappable
+						mv[i].Reason = reason
+						refused = append(refused, mv[i])
+					}
+				}
+				hp.Close()
+				entities = rest
+				continue
+			}
+		}
 		b.log.Warn("bridge.build_failed", slog.String("device", p.Device.Name.Default), slog.String("error", err.Error()))
 		for i := range mv {
 			if mv[i].State != eligibility.StateUnmappable {
 				mv[i].State = eligibility.StateUnmappable
-				mv[i].Reason = "go-fabric refused the device: " + err.Error()
+				mv[i].Reason = reason
 			}
 		}
+		mv = append(mv, refused...)
 		g.verdicts = mv
 		return g, mv
 	}
-	g.verdicts = mv
-	g.devices = devs
-	for i := range hp.Endpoints {
-		g.keys = append(g.keys, hp.Endpoints[i].Options.StableKey)
-	}
-	b.attachCameras(g, hp, devs)
-	hp.OnChange(b.onCommand)
-	hp.OnDiscard(b.onDiscard)
-	return g, mv
 }
 
 // apply carries one entity's current state onto its device.
