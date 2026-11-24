@@ -14,7 +14,7 @@ import (
 	"thingfabric.dev/go-fabric/device"
 	"thingfabric.dev/go-fabric/fabrictest"
 
-	"github.com/SukramJ/go-ha2fabric/internal/expose"
+	"thingfabric.dev/go-ha2fabric/internal/expose"
 )
 
 // onOff reads the OnOff attribute of ep.

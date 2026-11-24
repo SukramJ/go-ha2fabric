@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/SukramJ/go-ha2fabric/internal/text"
+	"thingfabric.dev/go-ha2fabric/internal/text"
 )
 
 var quietLog = slog.New(slog.DiscardHandler)

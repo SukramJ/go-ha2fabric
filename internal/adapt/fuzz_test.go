@@ -10,9 +10,9 @@ import (
 	hamapping "github.com/SukramJ/go-hamapping"
 	"github.com/SukramJ/go-hamqtt/model"
 
-	"github.com/SukramJ/go-ha2fabric/internal/adapt"
-	"github.com/SukramJ/go-ha2fabric/internal/ha"
-	"github.com/SukramJ/go-ha2fabric/internal/text"
+	"thingfabric.dev/go-ha2fabric/internal/adapt"
+	"thingfabric.dev/go-ha2fabric/internal/ha"
+	"thingfabric.dev/go-ha2fabric/internal/text"
 )
 
 // FuzzEntityState holds the translation of an entity's state and

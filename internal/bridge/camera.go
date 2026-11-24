@@ -11,7 +11,7 @@ import (
 	"github.com/SukramJ/go-hamqtt/model"
 	"thingfabric.dev/go-fabric/device"
 
-	"github.com/SukramJ/go-ha2fabric/internal/camera"
+	"thingfabric.dev/go-ha2fabric/internal/camera"
 )
 
 // closeHost ends a camera host's sessions; a test's seam.

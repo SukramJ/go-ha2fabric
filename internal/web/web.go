@@ -30,7 +30,7 @@ import (
 	"strings"
 	"time"
 
-	fabricui "github.com/SukramJ/go-fabric-ui/fabricui"
+	fabricui "thingfabric.dev/go-fabric-ui/fabricui"
 )
 
 // Options configure the server.

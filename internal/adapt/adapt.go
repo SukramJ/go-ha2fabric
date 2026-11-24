@@ -23,8 +23,8 @@ import (
 	hacatalog "github.com/SukramJ/go-ha-catalog"
 	"github.com/SukramJ/go-hamqtt/model"
 
-	"github.com/SukramJ/go-ha2fabric/internal/ha"
-	"github.com/SukramJ/go-ha2fabric/internal/text"
+	"thingfabric.dev/go-ha2fabric/internal/ha"
+	"thingfabric.dev/go-ha2fabric/internal/text"
 )
 
 // Identifier namespaces of the devices the adapter makes.

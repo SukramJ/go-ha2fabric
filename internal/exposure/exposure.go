@@ -18,14 +18,14 @@ import (
 	"slices"
 	"strings"
 
-	fabricui "github.com/SukramJ/go-fabric-ui/fabricui"
+	fabricui "thingfabric.dev/go-fabric-ui/fabricui"
 	"thingfabric.dev/go-fabric/eligibility"
 
-	"github.com/SukramJ/go-ha2fabric/internal/bridge"
-	"github.com/SukramJ/go-ha2fabric/internal/expose"
-	"github.com/SukramJ/go-ha2fabric/internal/ha"
-	"github.com/SukramJ/go-ha2fabric/internal/plan"
-	"github.com/SukramJ/go-ha2fabric/internal/selection"
+	"thingfabric.dev/go-ha2fabric/internal/bridge"
+	"thingfabric.dev/go-ha2fabric/internal/expose"
+	"thingfabric.dev/go-ha2fabric/internal/ha"
+	"thingfabric.dev/go-ha2fabric/internal/plan"
+	"thingfabric.dev/go-ha2fabric/internal/selection"
 )
 
 // Model is the read model the provider shows: the last sync's;

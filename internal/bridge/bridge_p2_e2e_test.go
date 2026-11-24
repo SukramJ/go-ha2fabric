@@ -6,8 +6,8 @@ package bridge_test
 import (
 	"testing"
 
-	"github.com/SukramJ/go-ha2fabric/internal/bridge"
-	"github.com/SukramJ/go-ha2fabric/internal/expose"
+	"thingfabric.dev/go-ha2fabric/internal/bridge"
+	"thingfabric.dev/go-ha2fabric/internal/expose"
 )
 
 // TestStatesHeldOnce (HR-P2-bound-38, the bridge half): the bridge holds

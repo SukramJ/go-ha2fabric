@@ -10,7 +10,7 @@ import (
 
 	"github.com/SukramJ/go-hamqtt/model"
 
-	"github.com/SukramJ/go-ha2fabric/internal/expose"
+	"thingfabric.dev/go-ha2fabric/internal/expose"
 )
 
 // Input is what every assessment takes besides the snapshot: the

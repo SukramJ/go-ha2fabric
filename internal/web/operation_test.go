@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	fabricui "github.com/SukramJ/go-fabric-ui/fabricui"
+	fabricui "thingfabric.dev/go-fabric-ui/fabricui"
 )
 
 func do(t *testing.T, h http.Handler, method, path, body string, want int, out any) {

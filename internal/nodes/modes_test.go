@@ -9,7 +9,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/SukramJ/go-ha2fabric/internal/nodes"
+	"thingfabric.dev/go-ha2fabric/internal/nodes"
 )
 
 func mode(t *testing.T, path string) os.FileMode {

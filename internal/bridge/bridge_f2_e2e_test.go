@@ -7,7 +7,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/SukramJ/go-ha2fabric/internal/expose"
+	"thingfabric.dev/go-ha2fabric/internal/expose"
 )
 
 // TestRemovedEntityIsForgotten: an entity removed from Home Assistant's

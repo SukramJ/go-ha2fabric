@@ -17,9 +17,9 @@ import (
 
 	"thingfabric.dev/go-fabric/node"
 
-	"github.com/SukramJ/go-ha2fabric/internal/config"
-	"github.com/SukramJ/go-ha2fabric/internal/ha"
-	"github.com/SukramJ/go-ha2fabric/internal/ha/hatest"
+	"thingfabric.dev/go-ha2fabric/internal/config"
+	"thingfabric.dev/go-ha2fabric/internal/ha"
+	"thingfabric.dev/go-ha2fabric/internal/ha/hatest"
 )
 
 // restoreSeams puts the node seams back after a test.

@@ -21,9 +21,9 @@ import (
 
 	"thingfabric.dev/go-fabric/node"
 
-	"github.com/SukramJ/go-ha2fabric/internal/config"
-	"github.com/SukramJ/go-ha2fabric/internal/ha/hatest"
-	"github.com/SukramJ/go-ha2fabric/internal/nodes"
+	"thingfabric.dev/go-ha2fabric/internal/config"
+	"thingfabric.dev/go-ha2fabric/internal/ha/hatest"
+	"thingfabric.dev/go-ha2fabric/internal/nodes"
 )
 
 // daemon is one run of the daemon in a test, with its web UI's address.

@@ -18,7 +18,7 @@ import (
 	keypadinputdef "thingfabric.dev/go-fabric/cluster/spec/keypadinput"
 	levelcontroldef "thingfabric.dev/go-fabric/cluster/spec/levelcontrol"
 
-	"github.com/SukramJ/go-ha2fabric/internal/ha"
+	"thingfabric.dev/go-ha2fabric/internal/ha"
 )
 
 // ErrCommand is the error of a command the daemon cannot turn into a

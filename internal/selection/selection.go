@@ -33,7 +33,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/SukramJ/go-ha2fabric/internal/text"
+	"thingfabric.dev/go-ha2fabric/internal/text"
 )
 
 // Version is the file format's version.

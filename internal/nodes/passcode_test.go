@@ -12,7 +12,7 @@ import (
 
 	"thingfabric.dev/go-fabric/node"
 
-	"github.com/SukramJ/go-ha2fabric/internal/nodes"
+	"thingfabric.dev/go-ha2fabric/internal/nodes"
 )
 
 // TestConfiguredPasscode: the configured node's passcode without PASSCODE

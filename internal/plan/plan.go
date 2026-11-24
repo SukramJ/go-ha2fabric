@@ -26,9 +26,9 @@ import (
 	"thingfabric.dev/go-fabric/device"
 	"thingfabric.dev/go-fabric/eligibility"
 
-	"github.com/SukramJ/go-ha2fabric/internal/adapt"
-	"github.com/SukramJ/go-ha2fabric/internal/expose"
-	"github.com/SukramJ/go-ha2fabric/internal/ha"
+	"thingfabric.dev/go-ha2fabric/internal/adapt"
+	"thingfabric.dev/go-ha2fabric/internal/expose"
+	"thingfabric.dev/go-ha2fabric/internal/ha"
 )
 
 // Verdict is one candidate entity's line of the plan an operator reads:

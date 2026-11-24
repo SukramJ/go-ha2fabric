@@ -1,7 +1,7 @@
 # go-ha2fabric — make targets. `make help` lists them.
 GO ?= go
 
-MODULE   := github.com/SukramJ/go-ha2fabric
+MODULE   := thingfabric.dev/go-ha2fabric
 PKG_VER  := $(MODULE)/internal/version
 BIN_DIR  := bin
 DIST_DIR := dist

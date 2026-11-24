@@ -43,7 +43,7 @@ import (
 	"thingfabric.dev/go-fabric/contract"
 	"thingfabric.dev/go-fabric/device"
 
-	"github.com/SukramJ/go-ha2fabric/internal/ha"
+	"thingfabric.dev/go-ha2fabric/internal/ha"
 )
 
 // End reasons, WebRTCEndReasonEnum (connectedhomeip

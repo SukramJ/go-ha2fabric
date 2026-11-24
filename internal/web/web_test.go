@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	fabricui "github.com/SukramJ/go-fabric-ui/fabricui"
+	fabricui "thingfabric.dev/go-fabric-ui/fabricui"
 )
 
 func mustNew(t *testing.T, opts Options) *Server {

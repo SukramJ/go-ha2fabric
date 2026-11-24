@@ -11,14 +11,14 @@ import (
 	"testing"
 	"time"
 
-	fabricui "github.com/SukramJ/go-fabric-ui/fabricui"
+	fabricui "thingfabric.dev/go-fabric-ui/fabricui"
 
-	"github.com/SukramJ/go-ha2fabric/internal/bridge"
-	"github.com/SukramJ/go-ha2fabric/internal/expose"
-	"github.com/SukramJ/go-ha2fabric/internal/ha"
-	"github.com/SukramJ/go-ha2fabric/internal/ha/hatest"
-	"github.com/SukramJ/go-ha2fabric/internal/plan"
-	"github.com/SukramJ/go-ha2fabric/internal/selection"
+	"thingfabric.dev/go-ha2fabric/internal/bridge"
+	"thingfabric.dev/go-ha2fabric/internal/expose"
+	"thingfabric.dev/go-ha2fabric/internal/ha"
+	"thingfabric.dev/go-ha2fabric/internal/ha/hatest"
+	"thingfabric.dev/go-ha2fabric/internal/plan"
+	"thingfabric.dev/go-ha2fabric/internal/selection"
 )
 
 // model is a read model as a sync of the recorded fixtures leaves it.

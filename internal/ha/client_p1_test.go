@@ -17,8 +17,8 @@ import (
 
 	"github.com/coder/websocket"
 
-	"github.com/SukramJ/go-ha2fabric/internal/ha"
-	"github.com/SukramJ/go-ha2fabric/internal/ha/hatest"
+	"thingfabric.dev/go-ha2fabric/internal/ha"
+	"thingfabric.dev/go-ha2fabric/internal/ha/hatest"
 )
 
 // scripted is a hostile endpoint that authenticates every connection and

@@ -14,10 +14,10 @@ import (
 	"thingfabric.dev/go-fabric/controller/client"
 	"thingfabric.dev/go-fabric/fabrictest"
 
-	"github.com/SukramJ/go-ha2fabric/internal/adapt"
-	"github.com/SukramJ/go-ha2fabric/internal/bridge"
-	"github.com/SukramJ/go-ha2fabric/internal/expose"
-	"github.com/SukramJ/go-ha2fabric/internal/ha"
+	"thingfabric.dev/go-ha2fabric/internal/adapt"
+	"thingfabric.dev/go-ha2fabric/internal/bridge"
+	"thingfabric.dev/go-ha2fabric/internal/expose"
+	"thingfabric.dev/go-ha2fabric/internal/ha"
 )
 
 // TestOversizedStateTakesTheEndpoint (HR-P2-bound-90, decision 52): a

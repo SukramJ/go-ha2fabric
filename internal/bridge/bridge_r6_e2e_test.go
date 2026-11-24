@@ -15,9 +15,9 @@ import (
 	"thingfabric.dev/go-fabric/controller/client"
 	"thingfabric.dev/go-fabric/fabrictest"
 
-	"github.com/SukramJ/go-ha2fabric/internal/expose"
-	"github.com/SukramJ/go-ha2fabric/internal/ha/hatest"
-	"github.com/SukramJ/go-ha2fabric/internal/plan"
+	"thingfabric.dev/go-ha2fabric/internal/expose"
+	"thingfabric.dev/go-ha2fabric/internal/ha/hatest"
+	"thingfabric.dev/go-ha2fabric/internal/plan"
 )
 
 const cameraDeviceType = 0x0142 // go-fabric device/camera_gen.go:20-24 at v0.15.5

@@ -23,7 +23,7 @@ import (
 	"strings"
 )
 
-const module = "github.com/SukramJ/go-ha2fabric/"
+const module = "thingfabric.dev/go-ha2fabric/"
 
 type block struct {
 	stmts   int

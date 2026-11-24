@@ -24,8 +24,8 @@ import (
 	wpdef "thingfabric.dev/go-fabric/cluster/spec/webrtctransportprovider"
 	"thingfabric.dev/go-fabric/contract"
 
-	"github.com/SukramJ/go-ha2fabric/internal/camera"
-	"github.com/SukramJ/go-ha2fabric/internal/ha"
+	"thingfabric.dev/go-ha2fabric/internal/camera"
+	"thingfabric.dev/go-ha2fabric/internal/ha"
 )
 
 const entity = "camera.front_door"

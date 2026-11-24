@@ -14,9 +14,9 @@ import (
 	"github.com/SukramJ/go-hamqtt/model"
 	"thingfabric.dev/go-fabric/eligibility"
 
-	"github.com/SukramJ/go-ha2fabric/internal/adapt"
-	"github.com/SukramJ/go-ha2fabric/internal/ha"
-	"github.com/SukramJ/go-ha2fabric/internal/text"
+	"thingfabric.dev/go-ha2fabric/internal/adapt"
+	"thingfabric.dev/go-ha2fabric/internal/ha"
+	"thingfabric.dev/go-ha2fabric/internal/text"
 )
 
 func state(id, s string, attrs map[string]any) *ha.State {

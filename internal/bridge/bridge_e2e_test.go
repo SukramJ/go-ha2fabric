@@ -19,15 +19,15 @@ import (
 	"thingfabric.dev/go-fabric/fabrictest"
 	"thingfabric.dev/go-fabric/node"
 
-	"github.com/SukramJ/go-ha2fabric/internal/bridge"
-	"github.com/SukramJ/go-ha2fabric/internal/camera"
-	"github.com/SukramJ/go-ha2fabric/internal/config"
-	"github.com/SukramJ/go-ha2fabric/internal/expose"
-	"github.com/SukramJ/go-ha2fabric/internal/exposure"
-	"github.com/SukramJ/go-ha2fabric/internal/ha"
-	"github.com/SukramJ/go-ha2fabric/internal/ha/hatest"
-	"github.com/SukramJ/go-ha2fabric/internal/plan"
-	"github.com/SukramJ/go-ha2fabric/internal/selection"
+	"thingfabric.dev/go-ha2fabric/internal/bridge"
+	"thingfabric.dev/go-ha2fabric/internal/camera"
+	"thingfabric.dev/go-ha2fabric/internal/config"
+	"thingfabric.dev/go-ha2fabric/internal/expose"
+	"thingfabric.dev/go-ha2fabric/internal/exposure"
+	"thingfabric.dev/go-ha2fabric/internal/ha"
+	"thingfabric.dev/go-ha2fabric/internal/ha/hatest"
+	"thingfabric.dev/go-ha2fabric/internal/plan"
+	"thingfabric.dev/go-ha2fabric/internal/selection"
 )
 
 func logger() *slog.Logger {

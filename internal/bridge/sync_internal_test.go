@@ -12,10 +12,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SukramJ/go-ha2fabric/internal/camera"
-	"github.com/SukramJ/go-ha2fabric/internal/ha"
+	"thingfabric.dev/go-ha2fabric/internal/camera"
+	"thingfabric.dev/go-ha2fabric/internal/ha"
 
-	"github.com/SukramJ/go-ha2fabric/internal/plan"
+	"thingfabric.dev/go-ha2fabric/internal/plan"
 )
 
 // syncBridge is a running bridge on up with a short debounce.

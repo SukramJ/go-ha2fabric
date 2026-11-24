@@ -8,8 +8,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/SukramJ/go-ha2fabric/internal/config"
-	"github.com/SukramJ/go-ha2fabric/internal/web"
+	"thingfabric.dev/go-ha2fabric/internal/config"
+	"thingfabric.dev/go-ha2fabric/internal/web"
 )
 
 // TestRights: the add-on admits by the Ingress proxy's address and

@@ -64,8 +64,8 @@ See go-fabric's README, section "Not certified".
   moves the bridge at run time; the other endpoints keep their numbers.
 - **Reachability.** An `unavailable` or `unknown` entity is unreachable;
   while Home Assistant is away, every endpoint is.
-- **The family's web UI** ([go-fabric-ui](https://github.com/SukramJ/go-fabric-ui)
-  `v0.13.0`, through Ingress in the add-on): health, the pairing code and the
+- **The family's web UI** ([go-fabric-ui](https://github.com/thingfabric/go-fabric-ui)
+  `v0.14.0`, through Ingress in the add-on): health, the pairing code and the
   commissioning window, the fabrics, the endpoints, diagnostics, and the
   entity selection — every candidate entity with its labels, the layer of
   the rule that decided and go-hamapping's verdict, with per-entity

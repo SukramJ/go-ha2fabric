@@ -15,10 +15,10 @@ import (
 	"github.com/SukramJ/go-hamqtt/model"
 	"thingfabric.dev/go-fabric/device"
 
-	"github.com/SukramJ/go-ha2fabric/internal/adapt"
+	"thingfabric.dev/go-ha2fabric/internal/adapt"
 
-	"github.com/SukramJ/go-ha2fabric/internal/ha"
-	"github.com/SukramJ/go-ha2fabric/internal/plan"
+	"thingfabric.dev/go-ha2fabric/internal/ha"
+	"thingfabric.dev/go-ha2fabric/internal/plan"
 )
 
 // fakeUp is an upstream whose connection the test sets and whose every

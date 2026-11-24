@@ -8,9 +8,9 @@ import (
 	"net/url"
 	"time"
 
-	fabricui "github.com/SukramJ/go-fabric-ui/fabricui"
+	fabricui "thingfabric.dev/go-fabric-ui/fabricui"
 
-	"github.com/SukramJ/go-ha2fabric/internal/config"
+	"thingfabric.dev/go-ha2fabric/internal/config"
 )
 
 // Host-wide warning codes the daemon sets on every status page.

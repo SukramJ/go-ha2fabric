@@ -449,7 +449,7 @@ Limits:
 
 ## The web UI
 
-go-fabric-ui's interface (`v0.13.0`) at `WEB_LISTEN`, in the add-on through
+go-fabric-ui's interface (`v0.14.0`) at `WEB_LISTEN`, in the add-on through
 Ingress. The administrator — who may write (change the selection, open a
 commissioning window, remove a fabric, erase a node) and read every page
 but the status: the selection, fabrics, endpoints, diagnostics, pairing
