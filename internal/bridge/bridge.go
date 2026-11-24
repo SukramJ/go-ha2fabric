@@ -200,6 +200,12 @@ type Bridge struct {
 	serving map[string]bool
 	// viewLabelIDs is labelIDs for readers ([View]).
 	viewLabelIDs map[string]string
+	// failures counts the syncs that failed in a row while Home Assistant
+	// was connected, failure is the last one's error and failedSince the
+	// first one's time: from the second, a warning ([View.SyncFailure]).
+	failures    int
+	failure     string
+	failedSince time.Time
 	// ranges are the heat/cool ranges the command loop last sent, by
 	// entity id, until a state shows them ([Bridge.sentRangeLocked]).
 	ranges map[string]sentRange
@@ -534,8 +540,20 @@ func (b *Bridge) sync(ctx context.Context) error {
 	switch {
 	case err == nil:
 		b.retry = 0
-	case ctx.Err() == nil && b.up.Connected():
-		b.retryLater()
+		b.mu.Lock()
+		b.failures, b.failure, b.failedSince = 0, "", time.Time{}
+		b.mu.Unlock()
+	case ctx.Err() == nil:
+		b.mu.Lock()
+		if b.failures == 0 {
+			b.failedSince = time.Now()
+		}
+		b.failures++
+		b.failure = err.Error()
+		b.mu.Unlock()
+		if b.up.Connected() {
+			b.retryLater()
+		}
 	}
 	return err
 }
@@ -812,13 +830,22 @@ type View struct {
 	// LabelIDs are the label ids the rule's label values resolved to
 	// (expose.Rule.LabelIDs), for a reader's own assessment.
 	LabelIDs map[string]string
+	// SyncFailure, when set, is a sync that keeps failing while Home
+	// Assistant is connected, whatever the cause: the last error, since
+	// the first failure of the run. Nil after a sync that succeeded and
+	// while only one sync failed (its retry may still succeed).
+	SyncFailure *Warning
 }
 
 // View returns the last sync's read model.
 func (b *Bridge) View() View {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	return View{Snapshot: b.last, Verdicts: slices.Clone(b.verdicts), All: b.all, Warnings: slices.Clone(b.warnings), LabelIDs: maps.Clone(b.viewLabelIDs)}
+	v := View{Snapshot: b.last, Verdicts: slices.Clone(b.verdicts), All: b.all, Warnings: slices.Clone(b.warnings), LabelIDs: maps.Clone(b.viewLabelIDs)}
+	if b.failures >= 2 {
+		v.SyncFailure = &Warning{Message: b.failure, Since: b.failedSince}
+	}
+	return v
 }
 
 // warn logs the configuration's warnings (plan.Warnings) when they

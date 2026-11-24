@@ -6,6 +6,7 @@ package bridge
 import (
 	"context"
 	"log/slog"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -149,5 +150,23 @@ func TestResyncSaysWhetherItPlanned(t *testing.T) {
 	close(hold)
 	if err := <-errc; err == nil {
 		t.Fatal("Resync reported success for a sync that did not plan")
+	}
+}
+
+// TestSyncFailureInView (HR-P2-err-61, HR-P2-bound-37): a sync that keeps
+// failing — its retry failed too — is in the read model with its error
+// and since when; a sync that fails once is not.
+func TestSyncFailureInView(t *testing.T) {
+	up := &fakeUp{}
+	up.connected.Store(true)
+	b := New(nil, up, Options{Logger: slog.New(slog.DiscardHandler), Input: func() plan.Input { return plan.Input{} }})
+	_ = b.sync(context.Background())
+	if f := b.View().SyncFailure; f != nil {
+		t.Fatalf("one failed sync is a warning: %+v", f)
+	}
+	_ = b.sync(context.Background())
+	f := b.View().SyncFailure
+	if f == nil || !strings.Contains(f.Message, errFakeRead.Error()) || f.Since.IsZero() {
+		t.Fatalf("a sync that keeps failing is no warning: %+v", f)
 	}
 }
