@@ -503,6 +503,12 @@ func (b *Bridge) sync(ctx context.Context) {
 		err = plan.Check(snap, in)
 	}
 	if err != nil {
+		if ctx.Err() != nil {
+			// A stop, an erase or a delete ended the worker: no failure
+			// (HR-P2-err-67).
+			b.log.Debug("bridge.sync_cancelled", slog.String("error", err.Error()))
+			return
+		}
 		b.log.Error("bridge.sync_failed", slog.String("error", err.Error()))
 		b.setStatus(func(s *Status) { s.SyncError = err.Error() })
 		return

@@ -92,6 +92,11 @@ func (b *Bridge) command(ctx context.Context, c model.Command) {
 	cctx, cancel := context.WithTimeout(ctx, commandTimeout)
 	defer cancel()
 	err = b.up.CallService(cctx, sc)
+	if err != nil && ctx.Err() != nil {
+		// The worker stops: no failure to count (HR-P2-err-67).
+		b.log.Debug("bridge.call_service_cancelled", slog.String("call", sc.String()), slog.String("error", err.Error()))
+		return
+	}
 	b.setStatus(func(s *Status) {
 		s.Commands++
 		if err != nil {
