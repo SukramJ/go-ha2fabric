@@ -426,3 +426,29 @@ func TestServiceRangeNeverInverted(t *testing.T) {
 		}
 	}
 }
+
+// TestOptionNotTrimmed (HR-P2-data-32): a value go-hamapping takes from
+// the entity's own option list goes back to Home Assistant byte for
+// byte — "Eco " beside "Eco" is another option.
+func TestOptionNotTrimmed(t *testing.T) {
+	for _, c := range []struct {
+		id, method, key string
+	}{
+		{"select.a", hamapping.MethodSelectOption, "option"},
+		{"fan.a", hamapping.MethodPresetMode, "preset_mode"},
+		{"climate.a", hamapping.MethodFanMode, "fan_mode"},
+	} {
+		for _, opt := range []string{"Eco ", " Boost", "\tx\n"} {
+			sc, err := adapt.Service(cmd(c.id, c.method, opt), nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := sc.Data[c.key]; got != opt {
+				t.Errorf("%s: the controller chose %q, %s carries %q", c.id, opt, c.key, got)
+			}
+		}
+		if _, err := adapt.Service(cmd(c.id, c.method, "  "), nil); err == nil {
+			t.Errorf("%s: a blank option was sent", c.id)
+		}
+	}
+}

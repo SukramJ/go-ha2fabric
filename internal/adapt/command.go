@@ -95,6 +95,11 @@ func Service(cmd model.Command, cur *ha.State) (ha.ServiceCall, error) {
 		return ha.ServiceCall{Domain: domain, Service: service, EntityID: id, Data: data}, nil
 	}
 	payload := strings.TrimSpace(string(cmd.Payload))
+	// option is a value of the entity's own list (a select's options, a
+	// fan's preset_modes, a climate's fan_modes), which go-hamapping hands
+	// back byte for byte; Home Assistant compares it whole, so it is not
+	// trimmed (HR-P2-data-32). A blank one is no option of a list.
+	option := string(cmd.Payload)
 	var attrs map[string]any
 	if cur != nil {
 		attrs = cur.Attributes
@@ -164,7 +169,7 @@ func Service(cmd model.Command, cur *ha.State) (ha.ServiceCall, error) {
 	case domain == "fan" && cmd.Method == hamapping.MethodPresetMode:
 		// fan/services.yaml:2-14 set_preset_mode, preset_mode.
 		if payload != "" {
-			return call("set_preset_mode", map[string]any{"preset_mode": payload})
+			return call("set_preset_mode", map[string]any{"preset_mode": option})
 		}
 	case domain == "fan" && cmd.Method == hamapping.MethodOscillation:
 		// fan/services.yaml:63-73 oscillate, oscillating (boolean).
@@ -182,12 +187,12 @@ func Service(cmd model.Command, cur *ha.State) (ha.ServiceCall, error) {
 	case domain == "climate" && cmd.Method == hamapping.MethodFanMode:
 		// climate/services.py:214-219 set_fan_mode, fan_mode.
 		if payload != "" {
-			return call("set_fan_mode", map[string]any{"fan_mode": payload})
+			return call("set_fan_mode", map[string]any{"fan_mode": option})
 		}
 	case domain == "select" && cmd.Method == hamapping.MethodSelectOption:
 		// select/services.py:42-46 select_option, option.
 		if payload != "" {
-			return call("select_option", map[string]any{"option": payload})
+			return call("select_option", map[string]any{"option": option})
 		}
 	case domain == "vacuum" && cmd.Method == hamapping.MethodRunMode:
 		// Row vacuum/robotic_vacuum_cleaner: run mode 0 Idle, 1 Cleaning;
