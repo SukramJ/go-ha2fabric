@@ -290,3 +290,32 @@ func TestAssessIgnoresInputOrder(t *testing.T) {
 		}
 	}
 }
+
+// TestOversizedReason (HR-P2-bound-38, the bridge half): a state over
+// ha.MaxStateBytes came without its attributes; its verdict says so, in
+// the assessment and still after go-hamapping's verdict is merged.
+func TestOversizedReason(t *testing.T) {
+	s := snapshot(t)
+	for i := range s.States {
+		if s.States[i].EntityID == "light.kitchen" {
+			s.States[i].Attributes, s.States[i].Oversized = nil, 300<<10
+		}
+	}
+	in := plan.Input{Rule: expose.Rule{Assist: true}, Ports: camera.DryPorts}
+	want := "Home Assistant's state is 307200 bytes, over the cap of 262144: its attributes were dropped"
+	verdicts, _ := plan.Assess(s, in)
+	for _, list := range [][]plan.Verdict{verdicts, plan.Dry(s, in)} {
+		found := false
+		for _, v := range list {
+			if v.EntityID == "light.kitchen" {
+				found = true
+				if !strings.Contains(v.Reason, want) {
+					t.Errorf("light.kitchen: %s: %q", v.State, v.Reason)
+				}
+			}
+		}
+		if !found {
+			t.Fatal("no verdict for light.kitchen")
+		}
+	}
+}

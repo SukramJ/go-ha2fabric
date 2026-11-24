@@ -261,3 +261,22 @@ func TestRangeSetpointsInSequence(t *testing.T) {
 		}
 	})
 }
+
+// TestStateChangedOversizedLogged (HR-P2-bound-38, the bridge half): a
+// state_changed whose new state was over ha.MaxStateBytes is logged
+// ha.state_oversized as the client logs get_states', at Warn the first
+// time for the entity and at Debug after.
+func TestStateChangedOversizedLogged(t *testing.T) {
+	b, _ := rangeBridge(t)
+	rec := &records{}
+	b.log = slog.New(rec)
+	big := func() ha.StateChanged {
+		return ha.StateChanged{EntityID: "climate.a", NewState: &ha.State{EntityID: "climate.a", State: "heat", Oversized: 300 << 10}}
+	}
+	b.stateChanged(t.Context(), big())
+	b.stateChanged(t.Context(), big())
+	recs := rec.named("ha.state_oversized")
+	if len(recs) != 2 || recs[0].Level != slog.LevelWarn || recs[1].Level != slog.LevelDebug {
+		t.Fatalf("ha.state_oversized lines %v", recs)
+	}
+}
