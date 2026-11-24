@@ -337,8 +337,9 @@ const WarningLabelUnresolved = "label_unresolved"
 const WarningSelectionCorrupt = "selection_corrupt"
 
 // WarningSyncFailed is the web UI's code of a sync with Home Assistant
-// that keeps failing (the log's bridge.sync_failed, from its retry on):
-// the endpoints stay as the last sync that succeeded left them.
+// that keeps failing, from its retry on: Home Assistant not read (the
+// log's bridge.sync_failed) or a batch go-fabric refused in part (the
+// log's bridge.batch). The endpoints stay as the last sync left them.
 const WarningSyncFailed = "sync_failed"
 
 // WarningNodeEraseFailed is the web UI's code of a node that did not
@@ -360,7 +361,7 @@ func (p *Provider) Warnings(context.Context) []fabricui.Warning {
 	if f := v.SyncFailure; f != nil {
 		out = append(out, fabricui.Warning{
 			Code:    WarningSyncFailed,
-			Message: "the sync with Home Assistant keeps failing: " + f.Message + "; the endpoints stay as the last sync that succeeded left them, and it is tried again",
+			Message: "the sync with Home Assistant keeps failing: " + f.Message + "; the endpoints stay as the last sync left them, and what failed is tried again",
 			Since:   f.Since,
 		})
 	}

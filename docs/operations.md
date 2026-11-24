@@ -209,7 +209,7 @@ Supervisor (`GET /info`) takes no proxy and follows no redirect.
 | --- | --- | --- |
 | `auth` | each connection | `websocket_api/auth.py:25-46` |
 | `subscribe_events` `state_changed`, `entity_registry_updated`, `device_registry_updated`, `label_registry_updated` | each connection | `websocket_api/commands.py:180-219`; `helpers/label_registry.py:23-26` |
-| `config/entity_registry/list`, `config/device_registry/list`, `config/area_registry/list`, `config/label_registry/list`, `get_states`, `get_config`, `homeassistant/expose_entity/list` | each connection and each registry change, once for every node on the connection; a sync that failed is retried after 5 s, doubling to 5 minutes | `config/entity_registry.py:39-64`, `config/device_registry.py:75-101`, `config/area_registry.py:23-37`, `config/label_registry.py:53-67`, `websocket_api/commands.py:369-385, 658-666`, `homeassistant/exposed_entities.py:414-442` |
+| `config/entity_registry/list`, `config/device_registry/list`, `config/area_registry/list`, `config/label_registry/list`, `get_states`, `get_config`, `homeassistant/expose_entity/list` | each connection and each registry change, one read shared by every node on the connection; a sync that failed is retried after 5 s, doubling to 5 minutes | `config/entity_registry.py:39-64`, `config/device_registry.py:75-101`, `config/area_registry.py:23-37`, `config/label_registry.py:53-67`, `websocket_api/commands.py:369-385, 658-666`, `homeassistant/exposed_entities.py:414-442` |
 | `call_service` | a controller's command | `websocket_api/commands.py:266-295` |
 | `ping` | every 30 s | `websocket_api/commands.py:730-736` |
 | `camera/webrtc/offer`, `camera/webrtc/candidate`, `unsubscribe_events` | a controller's camera session, with `CAMERA` | `camera/webrtc.py:252-303, 333-348`, `websocket_api/commands.py:246-263` |
@@ -274,7 +274,7 @@ The lines to know:
 | `ha.entry_skipped` | warn, then debug | An entry of a list (`command`) did not decode and was skipped (`skipped` of `of`, the first `error`); at warn the first time per list. What it means for the entities: What the daemon reads and writes. |
 | `ha.state_oversized` | warn, then debug | A state over 256 KiB (`entity_id`, `bytes`, `max`), in `get_states` or a `state_changed`; its attributes were dropped, and the entity is unmappable until a state under the cap (its plan line says so). At warn the first time per entity (a `state_changed` once for each node's bridge). |
 | `bridge.synced` | info | A sync: candidates, devices, endpoints added, replaced, removed. |
-| `bridge.sync_failed` | error | A sync could not read Home Assistant or apply its plan (`error`); the endpoints stay as the last sync that succeeded left them. While Home Assistant stays connected it is tried again after 5 seconds, doubling to 5 minutes, until a sync succeeds; from the second failure in a row the status page shows `sync_failed`. |
+| `bridge.sync_failed` | error | A sync could not read Home Assistant (`error`); the endpoints stay as the last sync left them. A batch go-fabric refused in part (`bridge.batch`) counts as a failed sync too. While Home Assistant stays connected it is tried again after 5 seconds, doubling to 5 minutes, until a sync succeeds; from the second failure in a row the status page shows `sync_failed`. |
 | `bridge.queue_full` | error | Home Assistant sent events faster than the bridge applies them; a re-sync follows once the queue is drained. One line at the first dropped event, then one every 10 seconds with the count (`dropped`) while events keep being dropped. |
 | `bridge.command_dropped` | error | The command queue was full; the command was not sent and the device shows Home Assistant's state again. Logged as `bridge.queue_full` is: the first (`entity`), then a count every 10 seconds. |
 | `ha2fabric.bridge_stop_overrun` | warn | A node's bridge did not end within a stop's or an erase's budget (a camera session whose controller went away); the node is stopped without waiting for it. |
@@ -283,7 +283,7 @@ The lines to know:
 | `bridge.build_failed` | warn | go-fabric refused a device go-hamapping planned and named no entity; its entities have no endpoint (the plan says why). |
 | `bridge.call_service_failed` | warn | A controller's command failed in Home Assistant; the entity's state goes back onto its endpoint. |
 | `bridge.command_unserved` | warn | A controller's command waited in the queue while a sync took its entity off the bridge; it was dropped and counted as a command error. |
-| `bridge.batch` | error | go-fabric refused part of a sync's batch (the operation and the key); what it refused is tried again at the next sync, and the status shows it as `sync_error` until a sync succeeds. |
+| `bridge.batch` | error | go-fabric refused part of a sync's batch (the operation and the key); the batch's other operations are applied (a batch is not a transaction). It counts as a failed sync: what it refused is tried again with `bridge.sync_failed`'s back-off, and the status shows it as `sync_error` until a sync succeeds (`sync_failed` from the second in a row). |
 | `bridge.command_unmapped` | warn | A command the daemon's service table has no service for; the device shows Home Assistant's state again. |
 | `bridge.command_discarded` | info | A controller's command the entity has no action for (`entity`, `cluster`, `command`): an Off or OffWithEffect on a scene's, script's, automation's or button's plug. It was answered with success and nothing was called — the controller's "done" changed nothing. Counted as `discards` in the status JSON (`counters`) and on the status page, over every node (Health). |
 | `bridge.label_unresolved` | warn | A label of `INCLUDE_LABELS`/`EXCLUDE_LABELS` names no Home Assistant label; it is used as a label id, or follows a renamed label by its id; an exclude label that names no label excludes nothing. Logged when the set changes; also on the web UI's status page. |
@@ -527,7 +527,7 @@ Assistant's own names, manufacturers, models, versions and serials reach
 the controllers without them. The status page
 lists the configuration's warnings: unresolved label values
 (`label_unresolved`), a sync with Home Assistant that keeps failing
-(`sync_failed`, with the error; `bridge.sync_failed` in Logs), an overrides file moved aside at start
+(`sync_failed`, with the error; `bridge.sync_failed` or `bridge.batch` in Logs), an overrides file moved aside at start
 (`selection_corrupt`), the token sent unencrypted (`token_in_clear`,
 The token), the token refused by Home Assistant (`ha_token_refused`,
 What the daemon reads and writes), the public test passcode (`passcode_test_value`, Pairing), a

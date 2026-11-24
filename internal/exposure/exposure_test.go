@@ -120,4 +120,9 @@ func TestProviderSyncFailed(t *testing.T) {
 	if len(ws) != 1 || ws[0].Code != WarningSyncFailed || !ws[0].Since.Equal(since) || !strings.Contains(ws[0].Message, "connection dropped") {
 		t.Fatalf("warnings %+v", ws)
 	}
+	// A failed batch counts too, and part of it may be applied
+	// (HR-P2-doc-92): the warning promises no "last sync that succeeded".
+	if strings.Contains(ws[0].Message, "succeeded") {
+		t.Errorf("warning %q", ws[0].Message)
+	}
 }
