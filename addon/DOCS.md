@@ -142,5 +142,5 @@ Assistant user sees the status page only.
 
 ## More
 
-The daemon's [operations page](https://github.com/SukramJ/go-ha2fabric/blob/main/docs/operations.md)
+The daemon's [operations page](https://github.com/thingfabric/go-ha2fabric/blob/main/docs/operations.md)
 covers ports, logs, health and a factory reset.

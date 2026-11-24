@@ -5,7 +5,7 @@
 #
 #   docker run --network host -v ha2fabric:/data \
 #     -e HA_URL=ws://homeassistant.local:8123/api/websocket -e HA_TOKEN=... \
-#     ghcr.io/sukramj/go-ha2fabric
+#     ghcr.io/thingfabric/go-ha2fabric
 #
 # The web UI listens on the binary's default, 127.0.0.1:8099 (decision 27 of
 # the 2026-11-23 review); to reach it from the network set WEB_LISTEN, with

@@ -25,12 +25,12 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  IMAGE: ghcr.io/sukramj/go-ha2fabric
+  IMAGE: ghcr.io/thingfabric/go-ha2fabric
   PLATFORMS: linux/amd64,linux/arm64,linux/arm/v7
 
 jobs:
   build_and_push:
-    if: github.repository_owner == 'SukramJ'
+    if: github.repository_owner == 'thingfabric'
     name: buildx multi-arch -> ghcr.io
     runs-on: ubuntu-latest
     steps:

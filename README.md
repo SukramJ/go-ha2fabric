@@ -1,9 +1,9 @@
 # go-ha2fabric
 
-[![ci](https://github.com/SukramJ/go-ha2fabric/actions/workflows/ci.yml/badge.svg)](https://github.com/SukramJ/go-ha2fabric/actions/workflows/ci.yml)
-[![codeql](https://github.com/SukramJ/go-ha2fabric/actions/workflows/codeql.yml/badge.svg)](https://github.com/SukramJ/go-ha2fabric/actions/workflows/codeql.yml)
+[![ci](https://github.com/thingfabric/go-ha2fabric/actions/workflows/ci.yml/badge.svg)](https://github.com/thingfabric/go-ha2fabric/actions/workflows/ci.yml)
+[![codeql](https://github.com/thingfabric/go-ha2fabric/actions/workflows/codeql.yml/badge.svg)](https://github.com/thingfabric/go-ha2fabric/actions/workflows/codeql.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
-[![Open your Home Assistant instance and add this add-on repository.](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2FSukramJ%2Fgo-ha2fabric)
+[![Open your Home Assistant instance and add this add-on repository.](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fthingfabric%2Fgo-ha2fabric)
 
 A Home Assistant installation seen by Apple Home, Google Home and Amazon
 Alexa as a bridge — or as one bridge per ecosystem: the entities Home Assistant exposes become endpoints
@@ -103,7 +103,7 @@ not an error, and matches once it is created.
 
 1. **Settings → Apps → Install app**, **⋮ → Repositories** (formerly
    *Settings → Add-ons → Add-on Store*), add
-   `https://github.com/SukramJ/go-ha2fabric`.
+   `https://github.com/thingfabric/go-ha2fabric`.
 2. Install **go-ha2fabric** and start it (its passcode is random unless you
    set one).
 3. Open its **Web UI** and pair the QR code from Apple Home, Google Home or
@@ -121,7 +121,7 @@ host networking:
 docker run --network host -v ha2fabric:/data \
   -e HA_URL=ws://homeassistant.local:8123/api/websocket \
   -e HA_TOKEN=<token> -e PASSCODE=<8 digits> \
-  ghcr.io/sukramj/go-ha2fabric
+  ghcr.io/thingfabric/go-ha2fabric
 ```
 
 The image's web UI listens on loopback (`127.0.0.1:8099`); to reach it from

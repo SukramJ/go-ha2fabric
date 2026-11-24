@@ -2,7 +2,7 @@ name: "Add-on: Build and Push"
 #
 # Builds the Home Assistant add-on image (addon/Dockerfile: HA base + bashio +
 # run.sh entrypoint) once per architecture and pushes per-arch tags to ghcr.io.
-# The add-on manifest references ghcr.io/sukramj/go-ha2fabric-addon-{arch};
+# The add-on manifest references ghcr.io/thingfabric/go-ha2fabric-addon-{arch};
 # the Supervisor substitutes {arch} (amd64/aarch64/armv7) and pulls it.
 #
 # This is deliberately separate from the distroless daemon image (./Dockerfile,
@@ -30,11 +30,11 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  IMAGE: ghcr.io/sukramj/go-ha2fabric-addon
+  IMAGE: ghcr.io/thingfabric/go-ha2fabric-addon
 
 jobs:
   build_and_push:
-    if: github.repository_owner == 'SukramJ'
+    if: github.repository_owner == 'thingfabric'
     name: addon ${{ matrix.arch }} -> ghcr.io
     runs-on: ubuntu-latest
     strategy:

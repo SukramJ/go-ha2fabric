@@ -25,7 +25,7 @@ env:
 
 jobs:
   create_release:
-    if: github.repository_owner == 'SukramJ'
+    if: github.repository_owner == 'thingfabric'
     name: Create GitHub Release (${{ github.ref_name }})
     runs-on: ubuntu-latest
     steps:
