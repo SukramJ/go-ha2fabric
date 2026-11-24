@@ -749,13 +749,17 @@ func (b *Bridge) syncConnected(ctx context.Context, since time.Time) error {
 		}
 	}
 	slices.Sort(moved)
+	// Served is what the plan built: an entity go-fabric refused stays in
+	// its group without an endpoint (HR-P2-data-35, HR-P2-data-91).
 	serving := map[string]bool{}
 	for _, g := range next {
-		if len(g.devices) == 0 {
+		if len(g.devices) == 0 || g.plan == nil {
 			continue
 		}
 		for _, e := range g.Entities {
-			serving[e.Key()] = true
+			if g.plan.DeviceFor(e.Key()) != nil {
+				serving[e.Key()] = true
+			}
 		}
 	}
 	b.mu.Lock()

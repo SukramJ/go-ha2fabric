@@ -7,6 +7,11 @@ import (
 	"strings"
 	"testing"
 
+	hamapping "github.com/SukramJ/go-hamapping"
+	"github.com/SukramJ/go-hamqtt/model"
+
+	"github.com/SukramJ/go-ha2fabric/internal/adapt"
+	"github.com/SukramJ/go-ha2fabric/internal/bridge"
 	"github.com/SukramJ/go-ha2fabric/internal/expose"
 	"github.com/SukramJ/go-ha2fabric/internal/ha"
 )
@@ -34,4 +39,32 @@ func TestOversizedStateTakesTheEndpoint(t *testing.T) {
 		got, ok := e.endpoint("light.kitchen")
 		return ok && got == ep
 	})
+}
+
+// TestRefusedEntityIsNotServed (HR-P2-data-91): an entity go-fabric
+// refused while its device's siblings were built (data-35) has no
+// endpoint, so it is not served: a command for it queued before the
+// rebuild is dropped by the HR-P1-conc-33 guard and makes no call.
+func TestRefusedEntityIsNotServed(t *testing.T) {
+	e := newEnv(t, expose.Rule{Assist: true})
+	e.ha.UpdateEntity("climate.hall", map[string]any{"device_id": "dev-shelly-1"})
+	e.ha.SetState("climate.hall", "heat", map[string]any{"hvac_modes": []any{"off", "heat"}, "min_temp": 50, "temperature": 55, "supported_features": 1, "friendly_name": "Hall"})
+	e.eventually("the thermostat refused", func() bool {
+		v := e.verdict("climate.hall")
+		return strings.HasPrefix(v.Reason, "go-fabric refused")
+	})
+	if !bridge.Serving(e.br, "switch.coffee") {
+		t.Fatal("switch.coffee is not served")
+	}
+	if bridge.Serving(e.br, "climate.hall") {
+		t.Fatal("the refused climate.hall counts as served")
+	}
+	st := &ha.State{EntityID: "climate.hall", State: "heat", Attributes: map[string]any{}}
+	ent := adapt.Entity(adapt.Input{EntityID: "climate.hall", State: st, Device: adapt.OwnDevice("climate.hall", "Hall"), TemperatureUnit: "°C"})
+	errs, mark := e.br.Status().CommandErrs, len(e.ha.Calls())
+	bridge.RunCommand(e.ctx, e.br, model.Command{Entity: ent, Method: hamapping.MethodTemperature, Payload: []byte("21")})
+	e.noCall(mark, "climate.hall")
+	if got := e.br.Status().CommandErrs; got != errs+1 {
+		t.Fatalf("command errors %d, want %d", got, errs+1)
+	}
 }
