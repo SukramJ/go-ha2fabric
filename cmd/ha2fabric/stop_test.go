@@ -18,6 +18,7 @@ import (
 	"thingfabric.dev/go-fabric/node"
 
 	"github.com/SukramJ/go-ha2fabric/internal/config"
+	"github.com/SukramJ/go-ha2fabric/internal/ha"
 	"github.com/SukramJ/go-ha2fabric/internal/ha/hatest"
 )
 
@@ -218,5 +219,23 @@ func TestEraseAfterStopRefused(t *testing.T) {
 	}()
 	if !errors.Is(err, errStopping) || reset {
 		t.Fatalf("erase after the stop: err=%v reset=%v, want errStopping and no reset", err, reset)
+	}
+}
+
+// TestCloseBoundedByBridge (HR-P2-conc-60): a bridge worker that does not
+// end — a camera's sessions held by controllers that went away — does not
+// hold the node's close past the stop's context.
+func TestCloseBoundedByBridge(t *testing.T) {
+	restoreSeams(t)
+	stopNode = func(*node.Node, context.Context) error { return nil }
+	s := &served{base: context.Background(), fan: &ha.Fanout{}, n: &node.Node{}, cancel: func() {}, done: make(chan struct{}), log: slog.New(slog.DiscardHandler)}
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	errc := make(chan error, 1)
+	go func() { errc <- s.close(ctx) }()
+	select {
+	case <-errc:
+	case <-time.After(5 * time.Second):
+		t.Fatal("close waited for the bridge's worker past the stop's context")
 	}
 }
