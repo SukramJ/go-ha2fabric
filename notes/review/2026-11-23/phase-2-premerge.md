@@ -252,3 +252,89 @@ clean:
   and register files) are unchanged since phase 2's verifier read them.
 
 Nothing held-worthy came up, so there is no `held/phase-2-premerge.md`.
+
+## Re-read of round 3
+
+**Verdict: ready to merge.** One new note (HR-P2-bound-97), accept;
+nothing blocks.
+
+Read: `phase-2-fix-round3.md`, decision 52, and the diff `9b274b3..f851339`
+without `notes/`. Lines are at `f851339`. Probes in a `git archive f851339`
+copy (`…/scratchpad/PM2/src`): `TestOversizedStateTakesTheEndpoint`,
+`TestRefusedEntityIsNotServed`, `TestDroppedCommandAttributeBack`,
+`TestLabelCheckedAtLoad`, `TestUnsafeOnlyRegistryName` and
+`TestOversizedUnmappable` green (M). Nothing run in the worktree, nothing
+changed there except this section.
+
+| ID | Severity | What |
+| --- | --- | --- |
+| HR-P2-bound-97 | note | A state that flaps across the 256 KiB cap removes and re-adds its endpoint once per crossing, at most about once per debounce; bounded, accept |
+
+### HR-P2-bound-97 — note — a state flapping around the cap
+
+- **Where.** `internal/bridge/bridge.go:1080-1090` (`hollow` re-syncs under
+  the cap, a served entity re-syncs over it), `:451-468` (`resyncSoon`,
+  `maxWait`), `:625-635` (`hollow` built from the snapshot's `Oversized`
+  and the verdicts' `Exposed`).
+- **Claim.** Every crossing in either direction costs one full sync and
+  one endpoint removal or addition that a controller sees. It is not a
+  storm (M, read):
+  - an entity that **stays** over the cap triggers nothing after the
+    first sync: it is no longer owned (`g == nil`), and `hollow` re-syncs
+    only on `Oversized == 0`. Many oversized events of one entity cost a
+    Debug line each (`logOversized` is Warn once per entity, and the
+    client's `ha.state_oversized` is too, `internal/ha/client.go:699-702`)
+    and no sync;
+  - a fast flap (crossings closer than the debounce) coalesces: the timer
+    is re-armed but capped at `first + 5 × Debounce` (data-30), so one sync
+    per 5 s at most;
+  - a slow flap (crossings more than one debounce apart) is one sync per
+    crossing, so at worst about one per debounce (1 s). That is the same
+    bound as the paths that already re-sync per event (a moved
+    description, an unknown entity, a removed state); the syncs run on the
+    one worker in turn, the read is the shared single-flight reader
+    (bound-62), and a full work queue owes the sync rather than queueing
+    another (`fire`). Other work is delayed by the syncs, not starved: the
+    worker takes the queue in order.
+- **Before round 3** the same flap re-typed the endpoint on each crossing
+  (bound-90's last clause), so the churn is not new; only its form is.
+- **Fix, if wanted.** A hysteresis for `hollow` (for example stay
+  unmappable until a state under the cap has held for some debounces).
+  Not for this pull request; a follow-up candidate if a real entity shows
+  it.
+
+### The focus items, checked
+
+1. **The endpoint number is kept** (M). `TestOversizedStateTakesTheEndpoint`
+   takes the endpoint, crosses back under the cap and asserts the same
+   number; the recovery is the `hollow` re-sync, as the report says (it
+   saw the test red with that re-sync off). The number comes from the
+   node's stored numbering by stable key, which the removal does not
+   forget (only a registry removal does, `forget`).
+2. **The served entity's oversized `state_changed`** (M, read). It is
+   written into `b.states` before the `Oversized` check
+   (`bridge.go:1066-1072`), so until the sync a `restore` or a command
+   reads the stripped state. Harmless: go-hamapping v0.7.0's generated
+   `apply` sets only what the state carries (a missing attribute leaves
+   `n == 0` or skips its case, e.g. `rows_gen.go:2905-2919`), so the state
+   string alone is applied, which is current; `adapt.Service` refuses a
+   range command without the other bound (`ErrCommand`, restore). Not a
+   finding.
+3. **`hollow` against a failed sync** (I). It is rebuilt at each read
+   before the batch; if the batch fails, `owner` still holds the old
+   group, so the entity takes the `g != nil` path and the failed sync's
+   retry (err-61) brings it to the plan. No lost recovery.
+4. **data-91's served set** (M). `serving` has one reader,
+   `command.go:89` (the HR-P1-conc-33 guard), and one writer, the sync
+   (`bridge.go:752-766`), now from `g.plan.DeviceFor(key) != nil` and
+   skipping a group without a plan. `restore` and `apply` go by `owner`,
+   which still holds a refused entity, but `apply` on it reaches
+   `plan.Apply` with no binding (nil, nothing set). Right at every use.
+5. **data-94 at load** (M). `nodes.Open` cleans a refused label and logs
+   `nodes.label_refused` at Warn; it returns no error and does not rewrite
+   the file. A label that cleans to "" stays "" (no code path treats an
+   empty label as an error; `nodeLabel` only cuts). Not fatal.
+6. **doc-92, doc-93, test-95** read against the code: correct.
+
+Held-hint scan of `9b274b3..f851339` (code, docs, changelog, commit
+messages): nothing about HR-P1-auth-01's or HR-P0-auth-20's condition.
