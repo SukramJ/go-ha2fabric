@@ -113,3 +113,7 @@ read of phase 2 are by Opus.
 | # | Subject | Decision |
 | --- | --- | --- |
 | 47 | Decision 35's scope, after the fact note (`go-hamapping/notes/reads/fact-2026-11-24-cover-tilt.md`): covers with tilt build but two command gaps remain | **Build and both gaps**: a tilt-only cover's open, close and lift go to the tilt axis; a tilt without `SET_TILT_POSITION` uses new methods `open_tilt` / `close_tilt`; go-hamapping's pull request C8, this host's `internal/adapt` in round 2. HR-P2-adpt-43 (a thermostat whose `min_temp` is above its `max_temp`, mappable and refused; found by F1's fuzz target) joins C8 |
+| 48 | A tilt without `SET_TILT_POSITION`: where `GoToTiltPercentage` opens | **At 0 % only**, as the lift without `SET_POSITION` (matter.js); home-assistant-matter-hub opens from 50 % — a recorded divergence |
+| 49 | Cover rows outside C8: `stop_tilt`, window covers as Rollershade, `PositionAwareLift` always | **go-hamapping issues** #43, #44, decided after the owner's live tests (with go-hamapping #15); HR-P2-adpt-43's remaining shapes → #45 |
+| 50 | When the `sync_failed` warning shows | **From the second failure in a row**; the first is retried silently after 5 s |
+| 51 | A `READ_LIMIT` option | **No**: the 256 KiB cap per state (decision 42) keeps `get_states` far below 64 MiB, and the sync error now names the limit |
