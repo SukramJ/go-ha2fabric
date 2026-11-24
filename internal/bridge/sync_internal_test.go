@@ -69,9 +69,9 @@ func (r *records) named(msg string) []slog.Record {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	var out []slog.Record
-	for _, rec := range r.all {
-		if rec.Message == msg {
-			out = append(out, rec)
+	for i := range r.all {
+		if r.all[i].Message == msg {
+			out = append(out, r.all[i])
 		}
 	}
 	return out
@@ -225,9 +225,9 @@ func TestDroppedCommandRestoresTheState(t *testing.T) {
 // dropped sums the dropped attribute of recs, one for a record without.
 func dropped(recs []slog.Record) int64 {
 	var n int64
-	for _, r := range recs {
+	for i := range recs {
 		c := int64(1)
-		r.Attrs(func(a slog.Attr) bool {
+		recs[i].Attrs(func(a slog.Attr) bool {
 			if a.Key == "dropped" {
 				c = a.Value.Int64()
 			}

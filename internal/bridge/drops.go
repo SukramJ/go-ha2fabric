@@ -4,7 +4,6 @@
 package bridge
 
 import (
-	"context"
 	"log/slog"
 	"sync"
 	"time"
@@ -38,7 +37,11 @@ func (d *dropLog) drop(attrs ...slog.Attr) {
 		return
 	}
 	d.active = true
-	d.log.LogAttrs(context.Background(), slog.LevelError, d.msg, append(attrs, slog.Int("dropped", 1), slog.String("hint", d.hint))...)
+	args := make([]any, 0, len(attrs)+2)
+	for _, a := range attrs {
+		args = append(args, a)
+	}
+	d.log.Error(d.msg, append(args, slog.Int("dropped", 1), slog.String("hint", d.hint))...)
 	time.AfterFunc(d.every, d.flush)
 }
 
@@ -53,6 +56,6 @@ func (d *dropLog) flush() {
 		d.active = false
 		return
 	}
-	d.log.LogAttrs(context.Background(), slog.LevelError, d.msg, slog.Int("dropped", n), slog.Duration("within", d.every), slog.String("hint", d.hint))
+	d.log.Error(d.msg, slog.Int("dropped", n), slog.Duration("within", d.every), slog.String("hint", d.hint))
 	time.AfterFunc(d.every, d.flush)
 }

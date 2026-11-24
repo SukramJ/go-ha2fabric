@@ -46,7 +46,7 @@ func knownRefusal(id string, err error) bool {
 // and what Map calls mappable builds.
 func FuzzPlanBuild(f *testing.F) {
 	f.Add("select.a", "x", []byte(`{"options":["a","b"],"friendly_name":"S"}`), "Dev", "ACME", "SN1")
-	f.Add("light.a", "on", []byte(`{"brightness":180,"color_temp_kelvin":2702,"hs_color":[28.4,65.7],"supported_color_modes":["hs","color_temp"],"min_color_temp_kelvin":0,"max_color_temp_kelvin":1e30}`), "D\x00", "V‮", "")
+	f.Add("light.a", "on", []byte(`{"brightness":180,"color_temp_kelvin":2702,"hs_color":[28.4,65.7],"supported_color_modes":["hs","color_temp"],"min_color_temp_kelvin":0,"max_color_temp_kelvin":1e30}`), "D\x00", "V\u202e", "")
 	f.Add("climate.a", "heat", []byte(`{"hvac_modes":["off","heat","cool","heat_cool"],"min_temp":-1e30,"max_temp":1e30,"target_temp_step":0,"temperature":1e300,"fan_modes":["auto"],"supported_features":4095}`), "", "", "")
 	f.Add("sensor.a", "1e400", []byte(`{"device_class":"temperature","unit_of_measurement":"°C","state_class":"measurement"}`), "x", "", " ")
 	f.Add("cover.a", "open", []byte(`{"current_position":-5,"current_tilt_position":1e9,"supported_features":255}`), "x", "y", "z")
