@@ -201,6 +201,29 @@ to reach it from the network, run the image with
   the label is renamed in Home Assistant, while the daemon runs; the warning
   of an exclude label that names no label says it excludes nothing now
   (HR-P1-cfg-34).
+- A stream of Home Assistant events closer than the one-second debounce
+  no longer puts the bridge's re-sync off without end: it runs at the
+  latest five seconds after the first event (HR-P2-data-30). A sync that
+  fails while Home Assistant stays connected is tried again after 5
+  seconds, doubling to 5 minutes (HR-P2-err-61); from the second failure
+  in a row the status page shows the warning `sync_failed` with the error
+  (HR-P2-bound-37). The web UI's reassemble reports a sync that did not
+  run, instead of a success (HR-P2-err-65). The nodes on the one Home
+  Assistant connection share one read of it per event instead of one each
+  (HR-P2-bound-62).
+- The bridge holds only its served entities' states beside the last
+  snapshot, not a second copy of every state (HR-P2-bound-38).
+- A stop or an erase no longer waits past its budget for a bridge whose
+  camera sessions do not end (`ha2fabric.bridge_stop_overrun`), an erase
+  no longer holds the status pages while it waits, and a sync no longer
+  waits for a camera's sessions to end (HR-P2-conc-60).
+- A controller's command that the full queue drops, or that has no
+  service, puts Home Assistant's state back on the device, as a failed
+  call does (HR-P2-err-63).
+- `bridge.queue_full` and `bridge.command_dropped` are one line per burst
+  and then a count every 10 seconds, not one Error line per dropped item
+  (HR-P2-bound-64). A sync or a command a stop cancels is no longer logged
+  as failed (HR-P2-err-67).
 
 ## [0.6.3] - 2026-11-12
 

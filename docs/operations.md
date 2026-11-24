@@ -125,7 +125,13 @@ Assistant's Ingress requires that only its proxy reaches it
 `WEB_ALLOW=172.30.32.2` and the daemon refuses every other client with 403.
 In add-on mode (`SUPERVISOR_TOKEN` set) the daemon holds that itself:
 `WEB_ALLOW` defaults to `172.30.32.2`, and any other value is refused at
-start. Stand-alone, `WEB_ALLOW` takes any list of client addresses.
+start. Stand-alone, `WEB_ALLOW` takes any list of client addresses. A
+peer on the LAN that forges the source address `172.30.32.2` cannot
+complete a connection: that address is on the Supervisor's internal
+network (`172.30.32.0/23`), so the host sends its answer there and not
+back to the LAN; a host with reverse-path filtering drops such a packet on
+arrival already. (The argument of the threat model's T2; on HAOS it is
+checked by the live Ingress test, not yet measured.)
 
 ## mDNS
 
@@ -203,7 +209,7 @@ Supervisor (`GET /info`) takes no proxy and follows no redirect.
 | --- | --- | --- |
 | `auth` | each connection | `websocket_api/auth.py:25-46` |
 | `subscribe_events` `state_changed`, `entity_registry_updated`, `device_registry_updated`, `label_registry_updated` | each connection | `websocket_api/commands.py:180-219`; `helpers/label_registry.py:23-26` |
-| `config/entity_registry/list`, `config/device_registry/list`, `config/area_registry/list`, `config/label_registry/list`, `get_states`, `get_config`, `homeassistant/expose_entity/list` | each connection and each registry change | `config/entity_registry.py:39-64`, `config/device_registry.py:75-101`, `config/area_registry.py:23-37`, `config/label_registry.py:53-67`, `websocket_api/commands.py:369-385, 658-666`, `homeassistant/exposed_entities.py:414-442` |
+| `config/entity_registry/list`, `config/device_registry/list`, `config/area_registry/list`, `config/label_registry/list`, `get_states`, `get_config`, `homeassistant/expose_entity/list` | each connection and each registry change, once for every node on the connection; a sync that failed is retried after 5 s, doubling to 5 minutes | `config/entity_registry.py:39-64`, `config/device_registry.py:75-101`, `config/area_registry.py:23-37`, `config/label_registry.py:53-67`, `websocket_api/commands.py:369-385, 658-666`, `homeassistant/exposed_entities.py:414-442` |
 | `call_service` | a controller's command | `websocket_api/commands.py:266-295` |
 | `ping` | every 30 s | `websocket_api/commands.py:730-736` |
 | `camera/webrtc/offer`, `camera/webrtc/candidate`, `unsubscribe_events` | a controller's camera session, with `CAMERA` | `camera/webrtc.py:252-303, 333-348`, `websocket_api/commands.py:246-263` |
@@ -258,12 +264,16 @@ The lines to know:
 | `ha.token_refused` | warn | Home Assistant refused the access token (`auth_invalid`); retried after `retry_in` (five minutes, doubling to an hour). Also the status warning `ha_token_refused`. |
 | `ha.entry_skipped` | warn, then debug | An entry of a list (`command`) did not decode and was skipped (`skipped` of `of`, the first `error`); at warn the first time per list. What it means for the entities: What the daemon reads and writes. |
 | `bridge.synced` | info | A sync: candidates, devices, endpoints added, replaced, removed. |
+| `bridge.sync_failed` | error | A sync could not read Home Assistant or apply its plan (`error`); the endpoints stay as the last sync that succeeded left them. While Home Assistant stays connected it is tried again after 5 seconds, doubling to 5 minutes, until a sync succeeds; from the second failure in a row the status page shows `sync_failed`. |
+| `bridge.queue_full` | error | Home Assistant sent events faster than the bridge applies them; a re-sync follows once the queue is drained. One line at the first dropped event, then one every 10 seconds with the count (`dropped`) while events keep being dropped. |
+| `bridge.command_dropped` | error | The command queue was full; the command was not sent and the device shows Home Assistant's state again. Logged as `bridge.queue_full` is: the first (`entity`), then a count every 10 seconds. |
+| `ha2fabric.bridge_stop_overrun` | warn | A node's bridge did not end within a stop's or an erase's budget (a camera session whose controller went away); the node is stopped without waiting for it. |
 | `bridge.upstream_unusable` | warn | Home Assistant is away; every endpoint is unreachable. |
 | `bridge.build_failed` | warn | go-fabric refused a device go-hamapping planned; its entities have no endpoint (the plan says why). |
 | `bridge.call_service_failed` | warn | A controller's command failed in Home Assistant; the entity's state goes back onto its endpoint. |
 | `bridge.command_unserved` | warn | A controller's command waited in the queue while a sync took its entity off the bridge; it was dropped and counted as a command error. |
 | `bridge.batch` | error | go-fabric refused part of a sync's batch (the operation and the key); what it refused is tried again at the next sync, and the status shows it as `sync_error` until a sync succeeds. |
-| `bridge.command_unmapped` | warn | A command the daemon's service table has no service for. |
+| `bridge.command_unmapped` | warn | A command the daemon's service table has no service for; the device shows Home Assistant's state again. |
 | `bridge.command_discarded` | info | A controller's command the entity has no action for (`entity`, `cluster`, `command`): an Off or OffWithEffect on a scene's, script's, automation's or button's plug. It was answered with success and nothing was called — the controller's "done" changed nothing. Counted as `discards` in the status JSON (`counters`) and on the status page, over every node (Health). |
 | `bridge.label_unresolved` | warn | A label of `INCLUDE_LABELS`/`EXCLUDE_LABELS` names no Home Assistant label; it is used as a label id, or follows a renamed label by its id; an exclude label that names no label excludes nothing. Logged when the set changes; also on the web UI's status page. |
 | `bridge.selection_applied` | info | The web UI stored overrides. |
@@ -304,7 +314,8 @@ label decided ("included by label 'Matter'"). The daemon subscribes to
 `label_registry_updated`: creating, renaming or removing a label, or adding
 one to an entity or a device (`entity_registry_updated`,
 `device_registry_updated`), re-plans the bridge after a one-second
-debounce. The order: disabled, hidden, the web UI's override, `EXCLUDE`
+debounce; a stream of such changes puts the re-plan off by at most five
+seconds. The order: disabled, hidden, the web UI's override, `EXCLUDE`
 and `EXCLUDE_LABELS`, `INCLUDE` and `INCLUDE_LABELS`, Assist.
 
 ## Scripts, scenes and automations
@@ -486,11 +497,15 @@ rule and then brought back. Only an entity deleted from Home Assistant's
 entity registry loses its number (`bridge.forget`): Home Assistant gives a
 re-created entity its old registry id, but the bridge serves it under a
 fresh number, as a new device. One deleted and re-created within the
-re-sync's debounce keeps its endpoint. A rename is the endpoint's name in the controller
+re-sync's debounce keeps its endpoint, and so does one deleted while the
+daemon was stopped or not connected to Home Assistant: the bridge learns
+of a deletion from Home Assistant's event only, so re-created, such an
+entity gets its old number back. A rename is the endpoint's name in the controller
 as typed (its node label, at most 32 bytes), without the device name
 go-hamapping puts in front of an entity name otherwise. The status page
 lists the configuration's warnings: unresolved label values
-(`label_unresolved`), an overrides file moved aside at start
+(`label_unresolved`), a sync with Home Assistant that keeps failing
+(`sync_failed`, with the error; `bridge.sync_failed` in Logs), an overrides file moved aside at start
 (`selection_corrupt`), the token sent unencrypted (`token_in_clear`,
 The token), the token refused by Home Assistant (`ha_token_refused`,
 What the daemon reads and writes), the public test passcode (`passcode_test_value`, Pairing), a
@@ -639,7 +654,9 @@ those seconds and does not bring the node back; one the stop interrupts
 nonetheless (`ha2fabric.node_erased` at warn) may have removed the
 fabrics without resetting the store, and must be repeated after the next
 start. A create, rename or delete still running is not waited for beyond
-the budget. The add-on's
+the budget, nor is a node's bridge that does not end in it
+(`ha2fabric.bridge_stop_overrun`): the camera sessions it closes end in
+parallel, each within the budget. The add-on's
 manifest gives the stop 30 seconds before the Supervisor kills it. A
 second signal ends the process at once; a signal during the start is an
 ordinary stop (exit 0).
