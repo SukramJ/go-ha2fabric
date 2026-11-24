@@ -350,7 +350,7 @@ func TestLabelText(t *testing.T) {
 // (nodes.label_refused), not fatal.
 func TestLabelCheckedAtLoad(t *testing.T) {
 	dir := t.TempDir()
-	body := `{"nodes":[{"key":"a","label":"Alexa‮\u0007 Küche","listen":":5541","passcode":34567890},{"key":"b","label":"Google","listen":":5542","passcode":34567890}]}`
+	body := `{"nodes":[{"key":"a","label":"Alexa\u202e\u0007 Küche","listen":":5541","passcode":34567890},{"key":"b","label":"Google","listen":":5542","passcode":34567890}]}`
 	if err := os.WriteFile(filepath.Join(dir, nodes.File), []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
