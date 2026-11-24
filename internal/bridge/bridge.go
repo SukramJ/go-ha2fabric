@@ -66,7 +66,8 @@ type Options struct {
 	// (plan.Effective). Required.
 	Input func() plan.Input
 	// Debounce coalesces registry events into one re-sync; 0 is one
-	// second.
+	// second. A stream of events closer than it puts the sync off by at
+	// most maxWait debounces from the first ([Bridge.resyncSoon]).
 	Debounce time.Duration
 	// Logger is the bridge's logger; nil is slog.Default().
 	Logger *slog.Logger
@@ -170,7 +171,12 @@ type Bridge struct {
 	status   Status
 	warnings []Warning
 	timer    *time.Timer
-	synced   chan struct{}
+	// first is the first request the pending timer serves, zero while
+	// none is pending; armed counts the timers armed, so a timer that
+	// fired while it was replaced does nothing ([Bridge.fire]).
+	first  time.Time
+	armed  uint64
+	synced chan struct{}
 	// forget is the stable key of every entity removed from Home
 	// Assistant's registry since the last sync, by entity id: the next
 	// sync forgets it instead of removing it ([Bridge.noteRemoved]).
@@ -389,21 +395,55 @@ func (b *Bridge) keepStaleForgets(forget map[string]device.SourceKey, removedAt 
 	}
 }
 
-// resyncSoon schedules one sync after the debounce; events within it
-// coalesce. A full queue when it fires leaves the sync owed.
+// maxWait is how many debounces a stream of re-sync requests can put a
+// sync off, counted from the first request (HR-P2-data-30).
+const maxWait = 5
+
+// resyncSoon schedules one sync after the debounce; requests within it
+// coalesce, but a stream of them cannot put the sync off without end: it
+// runs at the latest maxWait debounces after the first request the timer
+// serves (HR-P2-data-30). A full queue when it fires leaves the sync owed.
 func (b *Bridge) resyncSoon() {
+	now := time.Now()
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	if b.first.IsZero() {
+		b.first = now
+	}
+	at := now.Add(b.opts.Debounce)
+	if latest := b.first.Add(maxWait * b.opts.Debounce); at.After(latest) {
+		at = latest
+	}
+	b.armLocked(at)
+}
+
+// armLocked arms the one sync timer to fire at at, in place of a pending
+// one. Called with mu held.
+func (b *Bridge) armLocked(at time.Time) {
 	if b.timer != nil {
 		b.timer.Stop()
 	}
-	b.timer = time.AfterFunc(b.opts.Debounce, func() {
-		select {
-		case b.work <- func(ctx context.Context) { b.sync(ctx) }:
-		default:
-			b.owe()
-		}
-	})
+	b.armed++
+	armed := b.armed
+	b.timer = time.AfterFunc(time.Until(at), func() { b.fire(armed) })
+}
+
+// fire is the sync timer's end: the sync it served goes to the worker.
+// A timer replaced after it fired does nothing; the one that replaced it
+// serves its requests.
+func (b *Bridge) fire(armed uint64) {
+	b.mu.Lock()
+	if armed != b.armed {
+		b.mu.Unlock()
+		return
+	}
+	b.first = time.Time{}
+	b.mu.Unlock()
+	select {
+	case b.work <- func(ctx context.Context) { b.sync(ctx) }:
+	default:
+		b.owe()
+	}
 }
 
 func (b *Bridge) setStatus(fn func(*Status)) {
