@@ -48,11 +48,6 @@ type Verdict struct {
 	Reason     string   `json:"reason,omitempty"`
 	DeviceType uint16   `json:"device_type,omitempty"`
 	Endpoint   uint16   `json:"endpoint,omitempty"`
-	// Oversized is the size in bytes of the entity's state when it was over
-	// ha.MaxStateBytes and came without its attributes (HR-P2-bound-38);
-	// Reason says so.
-	Oversized int `json:"-"`
-
 	// Full is go-hamapping's verdict in full (with the clusters), as the
 	// web UI shows it.
 	Full eligibility.Verdict `json:"-"`
@@ -188,9 +183,6 @@ func Assess(s *ha.Snapshot, in Input) ([]Verdict, []*Group) {
 		}
 		if st != nil {
 			v.Name, _ = st.Attributes["friendly_name"].(string)
-			if st.Oversized > 0 {
-				v.Oversized, v.Reason = st.Oversized, OversizedReason(st.Oversized)
-			}
 		}
 		if d.Exposed && st == nil {
 			v.Exposed, v.ExposeReason = false, d.Reason+"; no state yet"
@@ -207,6 +199,14 @@ func Assess(s *ha.Snapshot, in Input) ([]Verdict, []*Group) {
 		}
 		if !in.Cameras && isCamera(id) {
 			v.State, v.Reason = eligibility.StateUnmappable.String(), CameraOff
+			verdicts = append(verdicts, v)
+			continue
+		}
+		// A state over ha.MaxStateBytes came without the attributes its
+		// description is read from: mapped, it would be another device
+		// type (HR-P2-bound-90, decision 52).
+		if st.Oversized > 0 {
+			v.State, v.Reason = eligibility.StateUnmappable.String(), OversizedReason(st.Oversized)
 			verdicts = append(verdicts, v)
 			continue
 		}
@@ -262,10 +262,12 @@ func Describe(e model.Entity) string {
 	return string(b)
 }
 
-// OversizedReason is the verdict reason of an entity whose state of n
-// bytes was over ha.MaxStateBytes (HR-P2-bound-38, decision 42).
+// OversizedReason is the verdict reason of an exposed entity whose state
+// of n bytes was over ha.MaxStateBytes: it came without its attributes,
+// and the entity is unmappable until a state under the cap
+// (HR-P2-bound-38, HR-P2-bound-90; decisions 42 and 52).
 func OversizedReason(n int) string {
-	return fmt.Sprintf("Home Assistant's state is %d bytes, over the cap of %d: its attributes were dropped", n, ha.MaxStateBytes)
+	return fmt.Sprintf("state over %d KiB (%d bytes): its attributes were dropped, so it is not mapped until a state under the cap", ha.MaxStateBytes>>10, n)
 }
 
 // MergeVerdicts merges go-hamapping's verdicts mv into the candidates'.
@@ -279,11 +281,7 @@ func MergeVerdicts(verdicts []Verdict, mv []hamapping.Verdict) {
 		if !ok {
 			continue
 		}
-		reason := m.Reason
-		if n := verdicts[i].Oversized; n > 0 {
-			reason = strings.TrimPrefix(reason+"; "+OversizedReason(n), "; ")
-		}
-		verdicts[i].Row, verdicts[i].State, verdicts[i].Reason, verdicts[i].DeviceType = m.Row, m.State.String(), reason, m.DeviceType
+		verdicts[i].Row, verdicts[i].State, verdicts[i].Reason, verdicts[i].DeviceType = m.Row, m.State.String(), m.Reason, m.DeviceType
 		verdicts[i].Full = m.Verdict
 	}
 }

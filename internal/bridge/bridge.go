@@ -163,9 +163,13 @@ type Bridge struct {
 	// oversized holds the entities whose state_changed over
 	// ha.MaxStateBytes was logged at Warn (HR-P2-bound-38).
 	oversized map[string]bool
-	unit      string
-	warned    string
-	since     map[string]time.Time
+	// hollow holds the exposed entities the last sync left unmappable
+	// for a state over ha.MaxStateBytes: a state under the cap re-syncs
+	// (HR-P2-bound-90, decision 52).
+	hollow map[string]bool
+	unit   string
+	warned string
+	since  map[string]time.Time
 	// cameraLogged is set once the skipped cameras were logged.
 	cameraLogged bool
 	// hosts are the camera hosts by entity id: made when go-hamapping
@@ -618,8 +622,16 @@ func (b *Bridge) syncConnected(ctx context.Context, since time.Time) error {
 	b.labelIDs = in.Rule.Resolutions(labels)
 
 	b.known = map[string]bool{}
+	exposed := map[string]bool{}
 	for i := range verdicts {
 		b.known[verdicts[i].EntityID] = true
+		exposed[verdicts[i].EntityID] = verdicts[i].Exposed
+	}
+	b.hollow = map[string]bool{}
+	for i := range snap.States {
+		if st := &snap.States[i]; st.Oversized > 0 && exposed[st.EntityID] {
+			b.hollow[st.EntityID] = true
+		}
 	}
 	b.mu.Lock()
 	before := map[string]bool{}
@@ -1038,8 +1050,10 @@ func (b *Bridge) logOversized(ctx context.Context, st *ha.State) {
 
 // stateChanged applies one state_changed: the value onto the device, or a
 // re-sync when the entity's description moved (a capability attribute
-// appeared) or the entity is new. Only a served entity's state is kept
-// (HR-P2-bound-38): the next sync reads every other one again.
+// appeared), the entity is new, or its state crossed ha.MaxStateBytes
+// (an oversized entity is unmappable, HR-P2-bound-90). Only a served
+// entity's state is kept (HR-P2-bound-38): the next sync reads every
+// other one again.
 func (b *Bridge) stateChanged(ctx context.Context, sc ha.StateChanged) {
 	if sc.NewState != nil && sc.NewState.Oversized > 0 {
 		b.logOversized(ctx, sc.NewState)
@@ -1059,6 +1073,15 @@ func (b *Bridge) stateChanged(ctx context.Context, sc ha.StateChanged) {
 		return
 	}
 	if g == nil {
+		if b.hollow[sc.EntityID] && sc.NewState.Oversized == 0 {
+			b.resyncSoon()
+		}
+		return
+	}
+	if sc.NewState.Oversized > 0 {
+		// Not applied: its attributes were dropped; the sync takes the
+		// endpoint away.
+		b.resyncSoon()
 		return
 	}
 	if g.Descs[sc.EntityID] != g.Describe(sc.EntityID, sc.NewState, b.unit) {

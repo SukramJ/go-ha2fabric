@@ -254,6 +254,10 @@ to reach it from the network, run the image with
 - A state over 256 KiB is read without its attributes and logged
   (`ha.state_oversized`, also for a `state_changed`), and its plan line
   says so (HR-P2-bound-38).
+- An entity whose state is over 256 KiB is unmappable ("state over
+  256 KiB") until a state under the cap, which brings its endpoint back on
+  its number; it is no longer mapped from the state without attributes as
+  another device type (HR-P2-bound-90).
 - A message from Home Assistant over the read limit is named in the
   sync's error, not only as a dropped connection (HR-P2-bound-37).
 - Home Assistant's error text is cut to 512 bytes in errors, the log and

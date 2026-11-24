@@ -291,31 +291,41 @@ func TestAssessIgnoresInputOrder(t *testing.T) {
 	}
 }
 
-// TestOversizedReason (HR-P2-bound-38, the bridge half): a state over
-// ha.MaxStateBytes came without its attributes; its verdict says so, in
-// the assessment and still after go-hamapping's verdict is merged.
-func TestOversizedReason(t *testing.T) {
+// TestOversizedUnmappable (HR-P2-bound-90, decision 52; extends
+// decision 42): a state over ha.MaxStateBytes came without its
+// attributes, so the entity is not mapped from the stripped state as
+// another device type: it is unmappable with the reason, in the
+// assessment and in the dry run, and no group carries it.
+func TestOversizedUnmappable(t *testing.T) {
+	hollow := map[string]bool{"light.kitchen": true, "climate.bedroom_ac": true}
 	s := snapshot(t)
 	for i := range s.States {
-		if s.States[i].EntityID == "light.kitchen" {
+		if hollow[s.States[i].EntityID] {
 			s.States[i].Attributes, s.States[i].Oversized = nil, 300<<10
 		}
 	}
 	in := plan.Input{Rule: expose.Rule{Assist: true}, Ports: camera.DryPorts}
-	want := "Home Assistant's state is 307200 bytes, over the cap of 262144: its attributes were dropped"
-	verdicts, _ := plan.Assess(s, in)
-	for _, list := range [][]plan.Verdict{verdicts, plan.Dry(s, in)} {
-		found := false
-		for _, v := range list {
-			if v.EntityID == "light.kitchen" {
-				found = true
-				if !strings.Contains(v.Reason, want) {
-					t.Errorf("light.kitchen: %s: %q", v.State, v.Reason)
-				}
+	verdicts, groups := plan.Assess(s, in)
+	for _, g := range groups {
+		for _, e := range g.Entities {
+			if hollow[e.Key()] {
+				t.Errorf("%s is planned in group %s from its stripped state", e.Key(), g.Key)
 			}
 		}
-		if !found {
-			t.Fatal("no verdict for light.kitchen")
+	}
+	for _, list := range [][]plan.Verdict{verdicts, plan.Dry(s, in)} {
+		found := 0
+		for _, v := range list {
+			if !hollow[v.EntityID] {
+				continue
+			}
+			found++
+			if !v.Exposed || v.State != "unmappable" || v.DeviceType != 0 || !strings.HasPrefix(v.Reason, "state over 256 KiB") || !strings.Contains(v.Reason, "307200 bytes") {
+				t.Errorf("%s: exposed=%v %s dt=%#x %q", v.EntityID, v.Exposed, v.State, v.DeviceType, v.Reason)
+			}
+		}
+		if found != len(hollow) {
+			t.Fatalf("%d verdicts of %d", found, len(hollow))
 		}
 	}
 }

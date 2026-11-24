@@ -233,8 +233,11 @@ unknown — and the web UI shows why; an entry whose id cannot be read
 fails the sync. A label registry entry that does not decode fails the
 sync while `INCLUDE_LABELS` or `EXCLUDE_LABELS` name labels (an exclude
 label would exclude nothing), and is left out otherwise; so is an area.
-A state over 256 KiB is read without its attributes (`ha.state_oversized`;
-the plan line says so), which keeps `get_states` far below the client's
+A state over 256 KiB is read without its attributes (`ha.state_oversized`),
+and its entity is unmappable with the plan line "state over 256 KiB": its
+endpoint is removed rather than built from a state without its
+description, and a state under the cap brings it back on its number. The cap
+keeps `get_states` far below the client's
 read limit of 64 MiB a message; a message over it ends the connection, and
 the sync's error, on the status page as `sync_failed`, reads `… exceeds
 the read limit of 67108864 bytes`. Home Assistant's error text is cut to
@@ -269,7 +272,7 @@ The lines to know:
 | `ha.connected` / `ha.disconnected` | info / warn | The Home Assistant connection. |
 | `ha.token_refused` | warn | Home Assistant refused the access token (`auth_invalid`); retried after `retry_in` (five minutes, doubling to an hour). Also the status warning `ha_token_refused`. |
 | `ha.entry_skipped` | warn, then debug | An entry of a list (`command`) did not decode and was skipped (`skipped` of `of`, the first `error`); at warn the first time per list. What it means for the entities: What the daemon reads and writes. |
-| `ha.state_oversized` | warn, then debug | A state over 256 KiB (`entity_id`, `bytes`, `max`), in `get_states` or a `state_changed`; its attributes were dropped and its plan line says so. At warn the first time per entity (a `state_changed` once for each node's bridge). |
+| `ha.state_oversized` | warn, then debug | A state over 256 KiB (`entity_id`, `bytes`, `max`), in `get_states` or a `state_changed`; its attributes were dropped, and the entity is unmappable until a state under the cap (its plan line says so). At warn the first time per entity (a `state_changed` once for each node's bridge). |
 | `bridge.synced` | info | A sync: candidates, devices, endpoints added, replaced, removed. |
 | `bridge.sync_failed` | error | A sync could not read Home Assistant or apply its plan (`error`); the endpoints stay as the last sync that succeeded left them. While Home Assistant stays connected it is tried again after 5 seconds, doubling to 5 minutes, until a sync succeeds; from the second failure in a row the status page shows `sync_failed`. |
 | `bridge.queue_full` | error | Home Assistant sent events faster than the bridge applies them; a re-sync follows once the queue is drained. One line at the first dropped event, then one every 10 seconds with the count (`dropped`) while events keep being dropped. |
