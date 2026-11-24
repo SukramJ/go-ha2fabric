@@ -6,6 +6,7 @@ package bridge_test
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 
@@ -19,23 +20,26 @@ import (
 	"github.com/SukramJ/go-ha2fabric/internal/plan"
 )
 
-// knownRefusal reports a build failure go-hamapping v0.6.0 is known to
-// call mappable: a cover with tilt (HR-P2-adpt-33, its Type and
-// EndProductType by device class only), a select of more than 255
-// options (HR-P2-adpt-34), and a thermostat row whose minimum is above
-// its maximum (found by this target in the phase 2 fix wave; reported to
-// go-hamapping). Skipped by name until the pin moves to the release that
-// fixes them; then this goes.
-func knownRefusal(id string, err error) bool {
+// knownRefusal reports a build failure go-hamapping v0.7.0 is known to
+// call mappable, the thermostat shapes of go-hamapping #45 (decision 49):
+// (a) one of min_temp and max_temp stated, beyond go-fabric's default for
+// the other; (b) a heat_cool or auto range narrower than go-fabric's
+// deadband. Skipped by name until the pin moves to the release that
+// decides them; nothing else is.
+func knownRefusal(id string, attrs map[string]any, err error) bool {
 	platform, _, _ := strings.Cut(id, ".")
+	if platform != "climate" && platform != "water_heater" {
+		return false
+	}
 	msg := err.Error()
-	switch platform {
-	case "cover":
-		return strings.Contains(msg, "FeatureMap")
-	case "select", "input_select":
-		return strings.Contains(msg, "max 255")
-	case "climate", "water_heater":
-		return strings.Contains(msg, "setpoint configuration cannot be fixed")
+	_, hasMin := attrs["min_temp"]
+	_, hasMax := attrs["max_temp"]
+	switch {
+	case hasMin != hasMax && strings.Contains(msg, "setpoint configuration cannot be fixed"):
+		return true
+	case platform == "climate" && strings.Contains(msg, "setpoint limits"):
+		modes, _ := attrs["hvac_modes"].([]any)
+		return slices.Contains(modes, any("heat_cool")) || slices.Contains(modes, any("auto"))
 	}
 	return false
 }
@@ -54,6 +58,9 @@ func FuzzPlanBuild(f *testing.F) {
 	f.Add("media_player.a", "playing", []byte(`{"volume_level":-3,"is_volume_muted":"x","supported_features":1e18,"device_class":"tv"}`), "x", "y", "z")
 	f.Add("water_heater.a", "eco", []byte(`{"min_temp":1e9,"max_temp":-1e9,"operation_list":["off"],"supported_features":15,"temperature":null}`), "x", "y", "z")
 	f.Add("climate.b", "heat", []byte(`{"hvac_modes":["off","heat"],"min_temp":30,"max_temp":7,"temperature":20,"supported_features":1}`), "x", "y", "z")
+	// The shapes of go-hamapping #45 (knownRefusal).
+	f.Add("climate.c", "heat", []byte(`{"hvac_modes":["off","heat"],"min_temp":50,"temperature":55,"supported_features":1}`), "x", "y", "z")
+	f.Add("climate.d", "heat_cool", []byte(`{"hvac_modes":["off","heat_cool"],"min_temp":20,"max_temp":21,"target_temp_low":20,"target_temp_high":21,"supported_features":2}`), "x", "y", "z")
 	f.Add("number.a", "5", []byte(`{"min":1e308,"max":-1e308,"step":0}`), "x", "y", "z")
 	f.Add("vacuum.a", "cleaning", []byte(`{"supported_features":65535,"battery_level":1e9}`), "x", "y", "z")
 	f.Add("lock.a", "jammed", []byte(`{"supported_features":1}`), "x", "y", "z")
@@ -79,7 +86,7 @@ func FuzzPlanBuild(f *testing.F) {
 			plan.MergeVerdicts(verdicts, mv)
 			if _, err := hp.Build(context.Background()); err != nil {
 				for _, v := range mv {
-					if v.State != eligibility.StateUnmappable && !knownRefusal(v.Key, err) {
+					if v.State != eligibility.StateUnmappable && !knownRefusal(v.Key, a, err) {
 						t.Fatalf("%s is %s and does not build: %v", v.Key, v.State, err)
 					}
 				}
