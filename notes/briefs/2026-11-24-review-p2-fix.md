@@ -95,3 +95,23 @@ calls mappable builds (row tests over every device class × feature set),
 a typed build error carrying the entity key (for data-35), the repeated
 mode label (HR-P2-adpt-36: numbered, or unmappable — the fact note
 recommends); `changelog.md`; release by the coordinator.
+
+## Round 2 — the brief (after go-hamapping #42 / v0.7.0)
+
+One Opus implementer, review worktree, branch `review/p2` (F1 and F2 are
+integrated; the F2 worktree is gone or idle). Common rules as above.
+Report `notes/review/2026-11-23/phase-2-fix-round2.md`.
+
+| Row | What |
+| --- | --- |
+| pin lift | go-hamapping v0.7.0 (`go get`, `go mod tidy`); `changelog.md` `### Changed` line; no deprecated go-fabric identifier ([no-deprecated rule]) |
+| adpt-33 / decision 47 | `internal/adapt/command.go` `services`: `cover`: `hamapping.MethodOpenTilt` → `open_cover_tilt`, `hamapping.MethodCloseTilt` → `close_cover_tilt` (no data keys; cite `core:homeassistant/components/cover/services.py:72-82` @2026.10.3); a fixture cover with tilt (features 255, `device_class: blind`) and a tilt-only one (240) in `testdata/ha/` and the end-to-end test; the X2 probes `TestX2ProbeCoverBuild`, `TestX2Probe256Options` green as tests |
+| data-35 | decision 40: on `errors.As(err, &*hamapping.BuildError)` the group is mapped and built again without `be.Key` (its `Riders` lose the endpoint too), bounded by the group's entity count; the refused entity's verdict "unmappable: go-fabric refused …"; the probe `TestX2ProbeSiblingKnockedOut` as the red test |
+| test-42 | `FuzzPlanBuild`: drop the skips for adpt-33/-34/-43; keep only the shapes of go-hamapping #45, by name |
+| FuzzClean | `./internal/text/:FuzzClean` into `FUZZ_TARGETS` |
+| bound-38 bridge | an `Oversized` state gets a verdict reason in `plan.Assess`; the `state_changed` path logs `ha.state_oversized` once per entity |
+| conc-68 | an exposure apply racing a node's Delete does not write the deleted node's selection file again (`internal/selection` / its caller) |
+| conc-69 | the doc comment in `internal/camera` (the session cap holds under go-fabric's per-camera command lock) |
+| changelog / docs | F2's lines from `phase-2-fix-F2.md` ("Changelog lines", "Docs lines") into `changelog.md` and `docs/operations.md`; decision 48–51 where a page states them |
+
+Then the whole guard set of `CLAUDE.md` (the coordinator runs it).
