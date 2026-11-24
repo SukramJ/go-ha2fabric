@@ -41,6 +41,10 @@ var (
 	// ErrDisconnected is a command whose connection dropped before its
 	// result arrived.
 	ErrDisconnected = errors.New("ha: connection dropped")
+	// ErrReadLimit is a message of Home Assistant over the read limit
+	// (Options.ReadLimit): the connection ends with it, and a command
+	// whose result it was fails with it beside ErrDisconnected.
+	ErrReadLimit = errors.New("ha: a message from Home Assistant exceeds the read limit")
 )
 
 // Defaults of [Options].
@@ -407,6 +411,10 @@ func (c *Client) read(ctx context.Context, s *session, h Handler) {
 	for {
 		_, b, err := s.ws.Read(ctx)
 		if err != nil {
+			if errors.Is(err, websocket.ErrMessageTooBig) {
+				// Named, so the sync's error says why (HR-P2-bound-37).
+				err = fmt.Errorf("%w of %d bytes: %w", ErrReadLimit, c.opts.ReadLimit, err)
+			}
 			s.fail(fmt.Errorf("ha: read: %w", err))
 			return
 		}
@@ -449,6 +457,16 @@ func (c *Client) read(ctx context.Context, s *session, h Handler) {
 			}
 		}
 	}
+}
+
+// dropped is the error of a command whose connection ended with cause:
+// ErrDisconnected, carrying the cause when there is one (a message over
+// the read limit, say).
+func dropped(cause error) error {
+	if cause == nil {
+		return ErrDisconnected
+	}
+	return fmt.Errorf("%w: %w", ErrDisconnected, cause)
 }
 
 // fail ends the session once and fails every pending command.
@@ -508,9 +526,10 @@ func (s *session) callWith(ctx context.Context, cmd map[string]any, sub bool, st
 	s.mu.Lock()
 	select {
 	case <-s.done:
+		err := s.err
 		s.mu.Unlock()
 		s.writeMu.Unlock()
-		return Message{}, ErrDisconnected
+		return Message{}, dropped(err)
 	default:
 	}
 	s.pending[id] = ch
@@ -538,7 +557,10 @@ func (s *session) callWith(ctx context.Context, cmd map[string]any, sub bool, st
 	select {
 	case m, ok := <-ch:
 		if !ok {
-			return Message{}, ErrDisconnected
+			s.mu.Lock()
+			err := s.err
+			s.mu.Unlock()
+			return Message{}, dropped(err)
 		}
 		if m.Type == TypePong {
 			return m, nil

@@ -6,6 +6,7 @@ package ha_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"strings"
 	"testing"
@@ -89,5 +90,48 @@ func TestGetStatesLogsTheOversized(t *testing.T) {
 	}
 	if n := strings.Count(logs.String(), "ha.state_oversized"); n != 1 || !strings.Contains(logs.String(), "entity_id=sensor.big") {
 		t.Fatalf("%d log lines:\n%s", n, logs.String())
+	}
+}
+
+// TestReadLimitIsNamed (HR-P2-bound-37): a result over the read limit
+// fails its command with an error that says so — not only "connection
+// dropped" — and the connection's end carries it too.
+func TestReadLimitIsNamed(t *testing.T) {
+	url := hostile(t, func(ctx context.Context, ws *websocket.Conn) {
+		send(ctx, ws, `{"type":"auth_required"}`)
+		if _, _, err := ws.Read(ctx); err != nil {
+			return
+		}
+		send(ctx, ws, `{"type":"auth_ok","ha_version":"2026.10.3"}`)
+		for {
+			_, b, err := ws.Read(ctx)
+			if err != nil {
+				return
+			}
+			var cmd struct {
+				ID   int64  `json:"id"`
+				Type string `json:"type"`
+			}
+			if json.Unmarshal(b, &cmd) != nil {
+				return
+			}
+			if cmd.Type == "get_states" {
+				send(ctx, ws, `{"id":`+itoa(cmd.ID)+`,"type":"result","success":true,"result":[`+bigState("sensor.big", 8192)+`]}`)
+			}
+		}
+	})
+	c, r, _ := start(t, ha.Options{URL: url, Token: "t", ReadLimit: 4096, MinBackoff: time.Hour, Logger: slog.New(slog.DiscardHandler)})
+	r.wait(t, "connected")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	_, err := c.GetStates(ctx)
+	if !errors.Is(err, ha.ErrDisconnected) || !errors.Is(err, ha.ErrReadLimit) || !strings.Contains(err.Error(), "4096") {
+		t.Fatalf("GetStates over the read limit: %v", err)
+	}
+	r.wait(t, "disconnected")
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if !errors.Is(r.errs[0], ha.ErrReadLimit) {
+		t.Fatalf("the connection ended with %v", r.errs[0])
 	}
 }
