@@ -42,7 +42,21 @@ func (b *Bridge) onCommand(c model.Command) {
 	default:
 		b.log.Error("bridge.command_dropped", slog.String("entity", c.Entity.Key()), slog.String("hint", "the command queue is full"))
 		b.setStatus(func(s *Status) { s.CommandErrs++; s.LastCommand = "queue full" })
+		b.restore(c.Entity.Key())
 	}
+}
+
+// restore carries Home Assistant's state of id onto its device again: a
+// command that did not reach Home Assistant, or failed there, left the
+// controller's value on the device (HR-P2-err-63; go-hamapping's OnChange
+// runs after the change). A full queue leaves a sync owed instead, which
+// applies every state.
+func (b *Bridge) restore(id string) {
+	b.enqueue(func(ctx context.Context) {
+		if g := b.owner[id]; g != nil {
+			b.apply(ctx, g, id)
+		}
+	})
 }
 
 // onDiscard is the plans' OnDiscard: a controller's command the row
@@ -87,6 +101,7 @@ func (b *Bridge) command(ctx context.Context, c model.Command) {
 	if err != nil {
 		b.log.Warn("bridge.command_unmapped", slog.String("entity", id), slog.String("error", err.Error()))
 		b.setStatus(func(s *Status) { s.CommandErrs++; s.LastCommand = err.Error() })
+		b.restore(id)
 		return
 	}
 	cctx, cancel := context.WithTimeout(ctx, commandTimeout)
@@ -108,11 +123,7 @@ func (b *Bridge) command(ctx context.Context, c model.Command) {
 		b.log.Warn("bridge.call_service_failed", slog.String("call", sc.String()), slog.String("error", err.Error()))
 		// The controller already saw its change applied; Home Assistant's
 		// state is the truth, so it is carried onto the device again.
-		b.enqueue(func(ctx context.Context) {
-			if g := b.owner[id]; g != nil {
-				b.apply(ctx, g, id)
-			}
-		})
+		b.restore(id)
 		return
 	}
 	b.noteRange(id, sc)

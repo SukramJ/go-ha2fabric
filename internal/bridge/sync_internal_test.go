@@ -195,3 +195,28 @@ func TestOneEventOneSnapshot(t *testing.T) {
 		t.Fatalf("one entity_registry_updated read the snapshot %d times", n)
 	}
 }
+
+// TestDroppedCommandRestoresTheState (HR-P2-err-63): a controller's
+// command that never reaches call_service (the queue full, or the
+// command not mappable) carries Home Assistant's state onto the device
+// again, as a failed call_service does: the controller already saw its
+// value applied.
+func TestDroppedCommandRestoresTheState(t *testing.T) {
+	t.Run("queue full", func(t *testing.T) {
+		b, _ := rangeBridge(t)
+		for range cap(b.cmds) {
+			b.cmds <- rangeCmd("temperature_low", "19")
+		}
+		b.onCommand(rangeCmd("temperature_low", "20"))
+		if len(b.work) == 0 && !b.owed.Load() {
+			t.Fatal("a dropped command leaves the device at the controller's value: no re-apply and no sync owed")
+		}
+	})
+	t.Run("unmapped", func(t *testing.T) {
+		b, _ := rangeBridge(t)
+		b.command(context.Background(), rangeCmd("no_such_method", "1"))
+		if len(b.work) == 0 && !b.owed.Load() {
+			t.Fatalf("an unmapped command leaves the device at the controller's value: no re-apply (status %q)", b.Status().LastCommand)
+		}
+	})
+}
