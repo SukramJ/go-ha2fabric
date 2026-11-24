@@ -40,7 +40,7 @@ func (b *Bridge) onCommand(c model.Command) {
 	select {
 	case b.cmds <- c:
 	default:
-		b.log.Error("bridge.command_dropped", slog.String("entity", c.Entity.Key()), slog.String("hint", "the command queue is full"))
+		b.drops.cmds.drop(slog.String("entity", c.Entity.Key()))
 		b.setStatus(func(s *Status) { s.CommandErrs++; s.LastCommand = "queue full" })
 		b.restore(c.Entity.Key())
 	}

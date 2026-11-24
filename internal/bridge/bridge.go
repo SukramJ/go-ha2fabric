@@ -148,6 +148,9 @@ type Bridge struct {
 	// everything and marks every endpoint unreachable while Home
 	// Assistant is away, so nothing a dropped closure carried is lost.
 	owed atomic.Bool
+	// drops are the logs of the work and the command queue's dropped
+	// items ([dropLog]).
+	drops struct{ work, cmds *dropLog }
 	// wake tells a waiting worker that a sync is owed: the failed send and
 	// the mark are two steps, so the worker can drain the queue between
 	// them and would otherwise wait with the sync owed (HR-P1-conc-96).
@@ -236,7 +239,7 @@ func New(n *node.Node, up Upstream, opts Options) *Bridge {
 	if snaps == nil {
 		snaps = ha.NewSnapshots(up)
 	}
-	return &Bridge{
+	b := &Bridge{
 		n: n, up: up, snaps: snaps, opts: opts, log: log,
 		work:   make(chan func(context.Context), 1024),
 		wake:   make(chan struct{}, 1),
@@ -246,6 +249,9 @@ func New(n *node.Node, up Upstream, opts Options) *Bridge {
 		states: map[string]*ha.State{},
 		synced: make(chan struct{}),
 	}
+	b.drops.work = &dropLog{log: log, msg: "bridge.queue_full", every: dropEvery, hint: "Home Assistant sends faster than the bridge applies; a re-sync follows once the queue is drained"}
+	b.drops.cmds = &dropLog{log: log, msg: "bridge.command_dropped", every: dropEvery, hint: "the command queue is full; the device shows Home Assistant's state again"}
+	return b
 }
 
 // Run serves the bridge until ctx ends: the worker and the command
@@ -293,7 +299,7 @@ func (b *Bridge) enqueue(fn func(context.Context)) {
 	case b.work <- fn:
 	default:
 		b.owe()
-		b.log.Error("bridge.queue_full", slog.String("hint", "Home Assistant sends faster than the bridge applies; a re-sync follows once the queue is drained"))
+		b.drops.work.drop()
 	}
 }
 

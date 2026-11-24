@@ -220,3 +220,63 @@ func TestDroppedCommandRestoresTheState(t *testing.T) {
 		}
 	})
 }
+
+// dropped sums the dropped attribute of recs, one for a record without.
+func dropped(recs []slog.Record) int64 {
+	var n int64
+	for _, r := range recs {
+		c := int64(1)
+		r.Attrs(func(a slog.Attr) bool {
+			if a.Key == "dropped" {
+				c = a.Value.Int64()
+			}
+			return true
+		})
+		n += c
+	}
+	return n
+}
+
+// TestQueueFullLogsASummary (HR-P2-bound-64): a burst beyond the queue
+// writes one line at its start and one summary with the count, not one
+// Error line per dropped item, which would push everything else out of
+// the operation page's ring.
+func TestQueueFullLogsASummary(t *testing.T) {
+	up := &fakeUp{}
+	up.connected.Store(true)
+	b, _ := floodBridge(t, up)
+	rec := &records{}
+	b.log = slog.New(rec)
+	b.drops.work.log, b.drops.work.every = b.log, 30*time.Millisecond
+	flood(b)
+	if recs := rec.named("bridge.queue_full"); len(recs) != 1 {
+		t.Fatalf("a burst of 76 dropped events wrote %d queue_full lines", len(recs))
+	}
+	waitFor(t, "the summary", func() bool { return len(rec.named("bridge.queue_full")) == 2 })
+	if n := dropped(rec.named("bridge.queue_full")); n != 76 {
+		t.Fatalf("the lines count %d dropped events, want 76", n)
+	}
+	time.Sleep(100 * time.Millisecond)
+	if recs := rec.named("bridge.queue_full"); len(recs) != 2 {
+		t.Fatalf("a quiet queue wrote more lines: %d", len(recs))
+	}
+}
+
+// TestCommandDroppedLogsASummary (HR-P2-bound-64): the same for the
+// command queue.
+func TestCommandDroppedLogsASummary(t *testing.T) {
+	b, _ := rangeBridge(t)
+	rec := &records{}
+	b.log = slog.New(rec)
+	b.drops.cmds.log, b.drops.cmds.every = b.log, 30*time.Millisecond
+	for range cap(b.cmds) + 10 {
+		b.onCommand(rangeCmd("temperature_low", "19"))
+	}
+	if recs := rec.named("bridge.command_dropped"); len(recs) != 1 {
+		t.Fatalf("10 dropped commands wrote %d command_dropped lines", len(recs))
+	}
+	waitFor(t, "the summary", func() bool { return len(rec.named("bridge.command_dropped")) == 2 })
+	if n := dropped(rec.named("bridge.command_dropped")); n != 10 {
+		t.Fatalf("the lines count %d dropped commands, want 10", n)
+	}
+}
