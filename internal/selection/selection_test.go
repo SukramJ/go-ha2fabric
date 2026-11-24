@@ -119,15 +119,15 @@ func TestNameText(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"Desk\x1b[2J", "a\nb", "‮evil", "x⁦y", "\xff"} {
+	for _, name := range []string{"Desk\x1b[2J", "a\nb", "\u202eevil", "x\u2066y", "\xff"} {
 		if err := s.Set(map[string]Entry{"light.a": {Enabled: true, Name: name}}, nil); err == nil {
 			t.Errorf("the name %q was taken", name)
 		}
 	}
-	if err := s.Set(map[string]Entry{"light.a": {Enabled: true, Name: "Café \U0001F469‍\U0001F4BB"}}, nil); err != nil {
+	if err := s.Set(map[string]Entry{"light.a": {Enabled: true, Name: "Café \U0001F469\u200d\U0001F4BB"}}, nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(path, []byte(`{"version":1,"entities":{"light.b":{"enabled":true,"name":"Lamp\u001b[31m‮"}}}`), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(`{"version":1,"entities":{"light.b":{"enabled":true,"name":"Lamp\u001b[31m\u202e"}}}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	s, err = Open(path, nil)

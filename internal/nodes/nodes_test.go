@@ -324,7 +324,7 @@ func TestLabelText(t *testing.T) {
 	r := open(t, t.TempDir())
 	r.SetSources(nil, func(string, string) bool { return true }, time.Now)
 	c := nodes.Configured{Listen: "127.0.0.1:5540"}
-	for _, l := range []string{"Alexa\x1b[2J", "a\nb", "‮evil", "x⁩", "\xff"} {
+	for _, l := range []string{"Alexa\x1b[2J", "a\nb", "\u202eevil", "x\u2069", "\xff"} {
 		if _, err := r.Allocate(l, c); !errors.Is(err, fabricui.ErrInvalidArgument) {
 			t.Errorf("Allocate(%q): %v", l, err)
 		}
@@ -336,10 +336,10 @@ func TestLabelText(t *testing.T) {
 	if err := r.Add(n); err != nil {
 		t.Fatal(err)
 	}
-	if err := r.Rename(n.Key, "Echo‮"); !errors.Is(err, fabricui.ErrInvalidArgument) {
+	if err := r.Rename(n.Key, "Echo\u202e"); !errors.Is(err, fabricui.ErrInvalidArgument) {
 		t.Errorf("Rename: %v", err)
 	}
-	if err := r.Rename(n.Key, "Echo \U0001F469‍\U0001F4BB"); err != nil {
+	if err := r.Rename(n.Key, "Echo \U0001F469\u200d\U0001F4BB"); err != nil {
 		t.Fatal(err)
 	}
 }

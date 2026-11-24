@@ -461,9 +461,9 @@ func TestOptionNotTrimmed(t *testing.T) {
 // friendly_name or the web UI; the joiners stay. An option keeps its
 // bytes (it goes back to Home Assistant).
 func TestHostileText(t *testing.T) {
-	const bad = "A\x00B\nC\x1b[31m‮evil⁦‎\u0085"
+	const bad = "A\x00B\nC\x1b[31m\u202eevil\u2066\u200e\u0085"
 	const clean = "AB C[31mevil"
-	areas := map[string]string{"k": "Kü‮che"}
+	areas := map[string]string{"k": "Kü\u202eche"}
 	d := adapt.Device(&ha.DeviceEntry{
 		ID: "d1", NameByUser: bad, Manufacturer: "V\x00\a" + bad, Model: bad, ModelID: bad,
 		SWVersion: bad, HWVersion: bad, SerialNumber: "S\r\n" + bad, AreaID: "k",
@@ -482,7 +482,7 @@ func TestHostileText(t *testing.T) {
 	if own := adapt.OwnDevice("light.a", bad); own.Name.Default != clean {
 		t.Errorf("own device %q", own.Name.Default)
 	}
-	st := state("select.a", "x", map[string]any{"friendly_name": bad, "options": []any{"Eco‮", "x"}})
+	st := state("select.a", "x", map[string]any{"friendly_name": bad, "options": []any{"Eco\u202e", "x"}})
 	dev := adapt.OwnDevice("select.a", "a")
 	for name, in := range map[string]adapt.Input{
 		"friendly_name": {EntityID: "select.a", State: st, Device: dev},
@@ -494,11 +494,11 @@ func TestHostileText(t *testing.T) {
 		if got := e.Description.Name.Default; got != clean {
 			t.Errorf("%s: entity name %q", name, got)
 		}
-		if e.Description.Options == nil || e.Description.Options.Codes[0] != "Eco‮" {
+		if e.Description.Options == nil || e.Description.Options.Codes[0] != "Eco\u202e" {
 			t.Errorf("%s: options %v", name, e.Description.Options)
 		}
 	}
-	if got := adapt.Device(&ha.DeviceEntry{ID: "d", Name: "Café \U0001F469‍\U0001F4BB"}, nil).Name.Default; got != "Café \U0001F469‍\U0001F4BB" {
+	if got := adapt.Device(&ha.DeviceEntry{ID: "d", Name: "Café \U0001F469\u200d\U0001F4BB"}, nil).Name.Default; got != "Café \U0001F469\u200d\U0001F4BB" {
 		t.Errorf("the joiner was dropped: %q", got)
 	}
 }
