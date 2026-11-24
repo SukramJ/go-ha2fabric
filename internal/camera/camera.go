@@ -353,8 +353,12 @@ func (h *Host) AttachDevice(d *device.Device) error {
 }
 
 // Close ends every session with ReasonUnknown and stops the host. The
-// signals go out also when ctx has ended (a daemon shutting down), each
-// bounded by SignalTimeout.
+// sessions end together: each one's unsubscribe and End go out at once,
+// also when ctx has ended (a daemon shutting down), and all of them are
+// bounded by one deadline — SignalTimeout from now, or ctx's deadline
+// when that is earlier (HR-P2-conc-60). Close returns by that deadline;
+// a signal still running then is abandoned, as is the host's other work
+// (a relay's last signal, a still).
 func (h *Host) Close(ctx context.Context) {
 	h.mu.Lock()
 	if h.closed {
@@ -369,19 +373,45 @@ func (h *Host) Close(ctx context.Context) {
 		all = append(all, ss)
 	}
 	h.mu.Unlock()
+	deadline := time.Now().Add(h.opts.SignalTimeout)
+	if d, ok := ctx.Deadline(); ok && d.Before(deadline) {
+		deadline = d
+	}
+	ectx, cancel := context.WithDeadline(context.WithoutCancel(ctx), deadline)
+	defer cancel()
+	var ends sync.WaitGroup
 	for _, ss := range all {
 		ss.stopIdle()
-		h.unsubscribe(ctx, ss)
-		if sig != nil {
-			ectx, cancel := context.WithTimeout(context.WithoutCancel(ctx), h.opts.SignalTimeout)
-			if err := sig.End(ectx, ss.id, ReasonUnknown); err != nil {
-				h.log.Debug("camera.end", slog.Int("session", int(ss.id)), slog.String("error", err.Error()))
+		ends.Go(func() {
+			if err := ss.stream.Unsubscribe(ectx); err != nil {
+				h.log.Debug("camera.unsubscribe", slog.Int("session", int(ss.id)), slog.String("error", err.Error()))
 			}
-			cancel()
+		})
+		if sig != nil {
+			ends.Go(func() {
+				if err := sig.End(ectx, ss.id, ReasonUnknown); err != nil {
+					h.log.Debug("camera.end", slog.Int("session", int(ss.id)), slog.String("error", err.Error()))
+				}
+			})
 		}
 	}
 	h.cancel()
-	h.wg.Wait()
+	done := make(chan struct{})
+	go func() {
+		ends.Wait()
+		h.wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-ectx.Done():
+		select {
+		case <-done:
+			return
+		default:
+		}
+		h.log.Warn("camera.close_overrun", slog.Int("sessions", len(all)), slog.String("error", ectx.Err().Error()))
+	}
 }
 
 // SolicitOffer implements wpdef.ProviderPort: not served, since Home
