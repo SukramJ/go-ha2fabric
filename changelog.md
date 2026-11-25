@@ -6,7 +6,7 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
-## [0.7.0] - 2026-11-23
+## [0.7.0] - 2026-11-25
 
 The move to go-fabric `v0.26.0` under its new module path
 `thingfabric.dev/go-fabric`, with go-fabric-ui `v0.14.1` (now
