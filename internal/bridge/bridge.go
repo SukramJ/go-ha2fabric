@@ -676,7 +676,9 @@ func (b *Bridge) syncConnected(ctx context.Context, since time.Time) error {
 	// node's set after the batch (settle), and the calls' errors, kept by
 	// index, are for the log and a Forget's own failure.
 	opErrs := make([]error, len(ch.Ops))
+	ran := false
 	err = b.n.Aggregator().Batch(ctx, func(bt *node.Batch) error {
+		ran = true
 		for i, op := range ch.Ops {
 			var e error
 			switch op.Kind {
@@ -697,6 +699,13 @@ func (b *Bridge) syncConnected(ctx context.Context, since time.Time) error {
 	})
 	if err != nil {
 		b.log.Error("bridge.batch", slog.String("error", err.Error()))
+	}
+	if !ran {
+		// Refused before fn ran (a stopped node, node.ErrStopped): no
+		// call was made, so every operation failed with the batch.
+		for i := range opErrs {
+			opErrs[i] = err
+		}
 	}
 	b.settle(ch.Ops, opErrs, next)
 	for _, k := range slices.Sorted(maps.Keys(ch.Forgotten)) {
@@ -806,10 +815,18 @@ func (b *Bridge) syncConnected(ctx context.Context, since time.Time) error {
 // served, so it leaves its group's keys and endpoints; a group with a
 // refused Add or Replace keeps no signature, so the next sync rebuilds it
 // and plan.Diff adds or replaces its keys again. A Forget applied unless
-// its call failed or an endpoint the batch did not add still serves its
-// key, itself or as a part (the node's refusal); a Forget not applied is
-// recorded again for the next sync. A failed Remove needs nothing: the
-// node refuses it for a key it does not serve.
+// its call failed or an endpoint still serves its key, itself or as a
+// part (the node's refusal); a Forget not applied is recorded again for
+// the next sync. A failed Remove needs nothing: the node refuses it for a
+// key it does not serve.
+//
+// The set is the default partition's: go-fabric judges a key against
+// every partition, but this daemon creates no other (each node of the
+// registry is a node of its own, cmd/ha2fabric/nodes.go). go-fabric lets
+// a Forget pass whose key a device the same batch added serves; that
+// cannot come from this bridge, since plan.Diff drops a forget whose key
+// a planned group serves and go-hamapping's part keys (<key>#n) are no
+// entity's key, so every endpoint that serves the key is the refusal.
 func (b *Bridge) settle(ops []plan.Op[*device.Device], errs []error, next map[string]*group) {
 	set := b.n.Aggregator().Endpoints()
 	byKey := make(map[string]node.Endpoint, len(set))
@@ -824,19 +841,11 @@ func (b *Bridge) settle(ops []plan.Op[*device.Device], errs []error, next map[st
 		d, ok := byKey[op.Key.String()].(*device.Device)
 		return ok && d != nil && d == op.Endpoint
 	}
-	// The keys every endpoint of the set serves but those the batch's
-	// Adds put there: a Forget of one of them is the node's refusal.
-	added := map[*device.Device]bool{}
-	for _, op := range ops {
-		if op.Kind == plan.Add && applied(op) {
-			added[op.Endpoint] = true
-		}
-	}
-	others := map[string]bool{}
+	// The keys the set serves: a Forget of one of them is the node's
+	// refusal.
+	served := map[string]bool{}
 	for _, ep := range set {
-		if d, ok := ep.(*device.Device); !ok || !added[d] {
-			servedKeys(ep, others)
-		}
+		servedKeys(ep, served)
 	}
 	refused := map[string]plan.OpKind{}
 	for i, op := range ops {
@@ -846,7 +855,7 @@ func (b *Bridge) settle(ops []plan.Op[*device.Device], errs []error, next map[st
 				refused[op.Key.String()] = op.Kind
 			}
 		case plan.Forget:
-			if errs[i] == nil && !others[op.Key.String()] {
+			if errs[i] == nil && !served[op.Key.String()] {
 				continue
 			}
 			b.mu.Lock()
