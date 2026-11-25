@@ -884,7 +884,8 @@ func (b *Bridge) settle(ops []plan.Op[*device.Device], errs []error, next map[st
 // depth, to keys.
 func servedKeys(ep node.Endpoint, keys map[string]bool) {
 	spec := ep.Spec()
-	stack := append(spec.Parts[:0:0], spec)
+	stack := spec.Parts[:0:0]
+	stack = append(stack, spec)
 	for len(stack) > 0 {
 		s := stack[len(stack)-1]
 		stack = stack[:len(stack)-1]
