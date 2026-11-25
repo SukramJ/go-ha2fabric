@@ -5,6 +5,8 @@ package bridge
 
 import (
 	"context"
+	"maps"
+	"slices"
 
 	"github.com/SukramJ/go-hamqtt/model"
 )
@@ -37,4 +39,11 @@ func FillCommands(b *Bridge, c model.Command) {
 			return
 		}
 	}
+}
+
+// Forgets are the entity ids whose Forget the next sync makes.
+func Forgets(b *Bridge) []string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return slices.Sorted(maps.Keys(b.forget))
 }

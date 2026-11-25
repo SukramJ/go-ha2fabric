@@ -4,12 +4,15 @@
 package bridge_test
 
 import (
+	"errors"
+	"slices"
 	"strings"
 	"testing"
 
 	"thingfabric.dev/go-fabric/device"
 	"thingfabric.dev/go-fabric/node"
 
+	"thingfabric.dev/go-ha2fabric/internal/bridge"
 	"thingfabric.dev/go-ha2fabric/internal/expose"
 )
 
@@ -118,5 +121,25 @@ func TestRefusedReplaceIsRetried(t *testing.T) {
 	}
 	if ps := e.served(key).Spec().Parts; len(ps) != 1 || ps[0].StableKey.String() != key+"#1" {
 		t.Fatalf("the smoke alarm was not replaced again: %d parts", len(ps))
+	}
+}
+
+// TestForgetOfAStoppedBatchIsKept (R7 review N2): a batch the stopped
+// node refused before it ran applied nothing; a Forget of a key the node
+// no longer serves is recorded again, not lost.
+func TestForgetOfAStoppedBatchIsKept(t *testing.T) {
+	e := newEnv(t, expose.Rule{Assist: true})
+	key := "ha:dev-hue-1/" + e.regID("light.kitchen")
+	e.ha.UpdateEntity("light.kitchen", map[string]any{"disabled_by": "user"})
+	e.eventually("the disabled light is gone", func() bool { return e.served(key) == nil })
+	if err := e.dev.Stop(e.ctx); err != nil {
+		t.Fatal(err)
+	}
+	e.ha.RemoveEntity("light.kitchen")
+	if err := e.br.Resync(e.ctx); !errors.Is(err, node.ErrStopped) {
+		t.Fatalf("Resync on a stopped node: %v", err)
+	}
+	if f := bridge.Forgets(e.br); !slices.Contains(f, "light.kitchen") {
+		t.Fatalf("the Forget was lost: %q", f)
 	}
 }
