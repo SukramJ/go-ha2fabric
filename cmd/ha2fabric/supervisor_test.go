@@ -156,6 +156,8 @@ func TestSupervisorGateRecloses(t *testing.T) {
 	}
 	version.Store("2026.11.0")
 	eventually(t, "the gate opens again", g.open)
+	// The state flips before the line is logged: wait for the second line.
+	eventually(t, "one opening line per change", func() bool { return strings.Count(logs.String(), "admin=true") == 2 })
 	if n := strings.Count(logs.String(), "admin=true"); n != 2 {
 		t.Fatalf("%d opening lines, want one per change\n%s", n, logs.String())
 	}
