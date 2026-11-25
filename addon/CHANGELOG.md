@@ -16,11 +16,13 @@ has the details.
   repository under its old address, remove it and add the new one
   (Settings → Apps → Install app, ⋮ → Repositories), then install the
   add-on from it.
-- Updated libraries (go-fabric 0.25.0 under its new name thingfabric.dev,
-  go-fabric-ui 0.14.0 under thingfabric.dev, go-hamapping 0.7.0). Fans and climate fan modes map
+- Updated libraries (go-fabric 0.26.0 under its new name thingfabric.dev,
+  go-fabric-ui 0.14.1 under thingfabric.dev, go-hamapping 0.7.1). Fans and climate fan modes map
   their percentages more closely; controllers see the bridge advertised as a
-  bridge (Aggregator) whichever entity comes first, and a bridged device's
-  serial number as Home Assistant knows it.
+  bridge (Aggregator) whichever entity comes first, a bridged device's
+  serial number as Home Assistant knows it, and a changed device's new
+  values at once. A camera live view stays open as long as the controller
+  keeps it; a controller that went away has its camera sessions ended.
 - The web UI checks the address it is opened under; through Ingress nothing
   changes for you.
 - The web UI's settings are for Home Assistant administrators only; this

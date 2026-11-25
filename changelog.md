@@ -8,9 +8,9 @@ All notable changes to this project are documented here. The format follows
 
 ## [0.7.0] - 2026-11-23
 
-The move to go-fabric `v0.25.0` under its new module path
-`thingfabric.dev/go-fabric`, with go-fabric-ui `v0.14.0` (now
-`thingfabric.dev/go-fabric-ui`) and go-hamapping `v0.7.0`; the project moved
+The move to go-fabric `v0.26.0` under its new module path
+`thingfabric.dev/go-fabric`, with go-fabric-ui `v0.14.1` (now
+`thingfabric.dev/go-fabric-ui`) and go-hamapping `v0.7.1`; the project moved
 to `github.com/thingfabric/go-ha2fabric`. **Back up before updating:** the
 store's upgrade is one-way.
 **The images and the add-on repository moved**: pull
@@ -88,7 +88,7 @@ to reach it from the network, run the image with
 - `-h` no longer prints an environment `PASSCODE` or `HA_URL` as a flag's
   default.
 
-- go-fabric `v0.22.2` → `v0.25.0`, now `thingfabric.dev/go-fabric`
+- go-fabric `v0.22.2` → `v0.26.0`, now `thingfabric.dev/go-fabric`
   (repository `github.com/thingfabric/go-fabric`). The store's schema is
   upgraded from version 7 to 12 at the first start, one-way: an older
   daemon is not expected to open it, so going back means restoring a
@@ -98,8 +98,15 @@ to reach it from the network, run the image with
   and the commissionable advertisement now names the node an
   Aggregator explicitly (`DT`), rather than the first bridged device's type
   go-fabric would infer. GeneralCommissioning's `LocationCapability` is
-  IndoorOutdoor, go-fabric's new default (was Indoor).
-- go-fabric-ui `v0.9.2` → `v0.14.0`, now `thingfabric.dev/go-fabric-ui`
+  IndoorOutdoor, go-fabric's new default (was Indoor). A device the bridge
+  rebuilds under its key (a changed entity, label or area) is announced as
+  new: its clusters get new data versions and subscribed controllers are
+  sent its values, so a controller's cache no longer hides them
+  (go-fabric #589). go-fabric's node ends the camera sessions of a
+  controller it proved lost (an exchange the node opened went unanswered
+  and no session with the controller is left); the daemon closes Home
+  Assistant's session with them.
+- go-fabric-ui `v0.9.2` → `v0.14.1`, now `thingfabric.dev/go-fabric-ui`
   (repository `github.com/thingfabric/go-fabric-ui`); a problem's `type`
   URI is `https://thingfabric.dev/go-fabric-ui/problems#problem-<code>`,
   its `code` is unchanged. Every request's `Host` is checked; the
@@ -110,7 +117,7 @@ to reach it from the network, run the image with
   administrator's request is refused when its `Origin` names a host the
   check does not admit (in the add-on: any other than the page's own). The page's
   event streams end when the daemon stops.
-- go-hamapping `v0.4.12` → `v0.7.0`: a bridged endpoint's SerialNumber is
+- go-hamapping `v0.4.12` → `v0.7.1`: a bridged endpoint's SerialNumber is
   its Home Assistant device's `serial_number` (cut to 32 bytes; none when
   the device has none) — for a bridge already paired, the attribute
   appears where none was served; a fan's percentage maps to its mode in
@@ -129,6 +136,10 @@ to reach it from the network, run the image with
 
 ### Fixed
 
+- A CASE session is installed from the handshake step that established
+  it (go-fabric `v0.26.0`): with Matter over TCP on, which `CAMERA` turns
+  on, go-fabric names a second route by which one handshake's keys could
+  end up under another peer's identity (inferred there, not run).
 - A web UI node's key from a long label could be 57 characters, one over
   the documented bound of 56.
 - A light command's brightness, colour and colour temperature, a cover's
@@ -167,8 +178,10 @@ to reach it from the network, run the image with
   closes the Home Assistant connection every node shares.
 - A camera holds at most 8 WebRTC sessions: a further offer ends the
   session idle longest (a minute or more), or is answered
-  `RESOURCE_EXHAUSTED`; a session without signalling for an hour ends,
-  which also ends what a controller that went away left open.
+  `RESOURCE_EXHAUSTED`. A session has no idle end of its own, so a live
+  view stays open as long as its controller keeps it; the sessions of a
+  controller that went away end through go-fabric's node (above) or make
+  room by the eviction.
 - A controller's ICE candidates are bounded after Home Assistant's session
   event too: 64 per call, 256 per session (`RESOURCE_EXHAUSTED` beyond).
 - Concurrent snapshots of one camera share one camera proxy request, and a
