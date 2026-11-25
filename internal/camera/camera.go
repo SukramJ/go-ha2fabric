@@ -133,17 +133,14 @@ const MaxCandidateBytes = 1024
 // A controller ecosystem opens one live view per viewer, and eight
 // viewers of one camera is beyond any household. At the bound the
 // session idle longest makes room when it has been idle for EvictIdle
-// (a controller that went away never ends its session); otherwise the
-// offer is refused with RESOURCE_EXHAUSTED before Home Assistant is
-// asked.
+// (a controller that abandoned its view but stays on Matter never ends
+// its session; one the node proved lost go-fabric ends through
+// [Host.EndSession]); otherwise the offer is refused with
+// RESOURCE_EXHAUSTED before Home Assistant is asked.
 const MaxSessions = 8
 
 // Defaults of [Options].
 const (
-	// DefaultIdleTimeout ends a session without signalling for an hour:
-	// once the peer connection stands, a live view signals nothing, so
-	// the bound is long; it ends what a controller left behind.
-	DefaultIdleTimeout = time.Hour
 	// DefaultEvictIdle is a minute: far beyond a session's signalling
 	// phase, so a session being set up is never evicted.
 	DefaultEvictIdle = time.Minute
@@ -210,10 +207,6 @@ type Options struct {
 	// SignalTimeout bounds one signal and one Home Assistant command; 0
 	// is 10 s.
 	SignalTimeout time.Duration
-	// IdleTimeout ends a session without a controller command or a Home
-	// Assistant event the relay acts on for so long; 0 is
-	// DefaultIdleTimeout.
-	IdleTimeout time.Duration
 	// EvictIdle is how long a session must have been idle to make room
 	// for a new offer at MaxSessions; 0 is DefaultEvictIdle.
 	EvictIdle time.Duration
@@ -256,9 +249,12 @@ type session struct {
 	// got counts Home Assistant's candidates against MaxSessionCandidates.
 	got int
 	// last is the time of the last controller command or Home Assistant
-	// event the relay acts on; idle ends the session IdleTimeout after it.
+	// event the relay acts on: the eviction at MaxSessions takes the
+	// session whose last is oldest. A session has no idle end: once the
+	// peer connection stands a live view signals nothing, and go-fabric's
+	// node ends the sessions of a controller it proved lost through
+	// [Host.EndSession] (decision 31).
 	last time.Time
-	idle *time.Timer
 }
 
 // still is one camera proxy request; its fields are set before done
@@ -303,9 +299,6 @@ func New(entityID string, up Upstream, opts Options) *Host {
 	if opts.SignalTimeout <= 0 {
 		opts.SignalTimeout = 10 * time.Second
 	}
-	if opts.IdleTimeout <= 0 {
-		opts.IdleTimeout = DefaultIdleTimeout
-	}
 	if opts.EvictIdle <= 0 {
 		opts.EvictIdle = DefaultEvictIdle
 	}
@@ -342,7 +335,6 @@ func (h *Host) Attach(s Signaller) {
 	}
 	h.mu.Unlock()
 	for _, ss := range stale {
-		ss.stopIdle()
 		h.unsubscribe(h.ctx, ss)
 	}
 }
@@ -392,7 +384,6 @@ func (h *Host) Close(ctx context.Context) {
 	defer cancel()
 	var ends sync.WaitGroup
 	for _, ss := range all {
-		ss.stopIdle()
 		ends.Go(func() {
 			if err := ss.stream.Unsubscribe(ectx); err != nil {
 				h.log.Debug("camera.unsubscribe", slog.Int("session", int(ss.id)), slog.String("error", err.Error()))
@@ -475,7 +466,6 @@ func (h *Host) ProvideOffer(ctx context.Context, args wpdef.OfferArgs) (wpdef.We
 	h.mu.Unlock()
 	if victim != nil {
 		h.log.Info("camera.session_evicted", slog.Int("session", int(victim.id)), slog.Int("for", int(args.SessionID)))
-		victim.stopIdle()
 		h.unsubscribe(ctx, victim)
 		// The controller that left it may be gone: its End must not hold
 		// the new offer.
@@ -485,7 +475,6 @@ func (h *Host) ProvideOffer(ctx context.Context, args wpdef.OfferArgs) (wpdef.We
 		}()
 	}
 	if old != nil {
-		old.stopIdle()
 		h.unsubscribe(ctx, old)
 	}
 	stream, err := h.up.Subscribe(ctx, h.entity, args.Sdp)
@@ -505,7 +494,6 @@ func (h *Host) ProvideOffer(ctx context.Context, args wpdef.OfferArgs) (wpdef.We
 		h.unsubscribe(ctx, ss)
 		return wpdef.WebRTCSessionStruct{}, ErrClosed
 	}
-	ss.idle = time.AfterFunc(h.opts.IdleTimeout, func() { h.expire(ss) })
 	h.sessions[ss.id] = ss
 	h.wg.Add(1)
 	h.mu.Unlock()
@@ -538,30 +526,11 @@ func (h *Host) idlest() *session {
 	return out
 }
 
-// touch records activity on ss and pushes its idle end back.
+// touch records activity on ss.
 func (h *Host) touch(ss *session) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	ss.last = time.Now()
-	if ss.idle != nil {
-		ss.idle.Reset(h.opts.IdleTimeout)
-	}
-}
-
-// expire ends ss after IdleTimeout without activity.
-func (h *Host) expire(ss *session) {
-	if !h.own(ss) {
-		return
-	}
-	h.log.Info("camera.session_idle", slog.Int("session", int(ss.id)), slog.Duration("idle", h.opts.IdleTimeout))
-	h.end(h.ctx, ss, ReasonUnknown)
-}
-
-// stopIdle stops the session's idle end.
-func (ss *session) stopIdle() {
-	if ss.idle != nil {
-		ss.idle.Stop()
-	}
 }
 
 // streams is the session's stream list: the first stream of the
@@ -608,7 +577,6 @@ func (h *Host) ProvideIceCandidates(ctx context.Context, sessionID uint16, candi
 	}
 	ss.sent += len(candidates)
 	ss.last = time.Now()
-	ss.idle.Reset(h.opts.IdleTimeout)
 	out := make([]ha.ICECandidate, len(candidates))
 	for i, c := range candidates {
 		out[i] = toHA(c)
@@ -636,7 +604,6 @@ func (h *Host) EndSession(ctx context.Context, sessionID uint16, reason uint8) e
 	delete(h.sessions, sessionID)
 	h.mu.Unlock()
 	if ss != nil {
-		ss.stopIdle()
 		h.log.Info("camera.session_ended", slog.Int("session", int(sessionID)), slog.Int("reason", int(reason)))
 		h.unsubscribe(ctx, ss)
 	}
@@ -713,8 +680,8 @@ func (h *Host) relay(ctx context.Context, ss *session) {
 }
 
 // event handles one event; false ends the relay. Only an event it acts
-// on is activity: one it ignores or refuses does not put off the
-// session's idle end (HR-P2-bound-40).
+// on is activity: one it ignores or refuses does not keep the session
+// from the eviction at MaxSessions (HR-P2-bound-40).
 func (h *Host) event(ctx context.Context, ss *session, ev ha.WebRTCEvent) bool {
 	switch ev.Type {
 	case ha.WebRTCSession:
@@ -872,7 +839,6 @@ func (h *Host) drop(ctx context.Context, ss *session) bool {
 	}
 	h.mu.Unlock()
 	if ours {
-		ss.stopIdle()
 		h.unsubscribe(ctx, ss)
 	}
 	return ours

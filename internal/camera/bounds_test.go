@@ -110,45 +110,25 @@ func TestIdleSessionEvictedAtTheBound(t *testing.T) {
 	}
 }
 
-// TestIdleSessionEnds (HR-P1-conc-03): a session with no controller
-// command and no Home Assistant event for IdleTimeout ends: the
-// controller is told and Home Assistant's session closes.
-func TestIdleSessionEnds(t *testing.T) {
+// TestQuietSessionStays (decision 31): a session has no idle end of its
+// own — once the peer connection stands a live view signals nothing, and
+// go-fabric's node ends a lost controller's sessions through EndSession.
+// Below the bound a session idle beyond EvictIdle stays.
+func TestQuietSessionStays(t *testing.T) {
 	up := &upstream{script: func(s *stream) {
 		s.push(session("01HA"))
 		s.push(map[string]any{"type": "answer", "answer": "v=0 answer"})
 	}}
-	h := boundedHost(t, up, camera.Options{IdleTimeout: 50 * time.Millisecond})
+	h := boundedHost(t, up, camera.Options{EvictIdle: 10 * time.Millisecond})
 	sig := &signaller{}
 	h.Attach(sig)
 	if _, err := h.ProvideOffer(context.Background(), offer(5)); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "the idle session's end", func() bool { return slices.Contains(sig.seen(), "end 5 12") })
-	eventually(t, "the unsubscribe", func() bool { return up.stream(0).unsubscribed() == 1 })
-}
-
-// TestActiveSessionDoesNotEnd (HR-P1-conc-03's negative): activity
-// within IdleTimeout keeps a session.
-func TestActiveSessionDoesNotEnd(t *testing.T) {
-	up := &upstream{}
-	h := boundedHost(t, up, camera.Options{IdleTimeout: 150 * time.Millisecond})
-	sig := &signaller{}
-	h.Attach(sig)
-	ctx := context.Background()
-	if _, err := h.ProvideOffer(ctx, offer(5)); err != nil {
-		t.Fatal(err)
-	}
-	var c wpdef.ICECandidateStruct
-	c.Candidate, c.SdpMid, c.SdpmLineIndex = "candidate:a", spec.ValueOf("0"), spec.ValueOf[uint16](0)
-	for range 6 {
-		time.Sleep(50 * time.Millisecond)
-		if err := h.ProvideIceCandidates(ctx, 5, []wpdef.ICECandidateStruct{c}); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if len(sig.seen()) != 0 || up.stream(0).unsubscribed() != 0 {
-		t.Fatalf("an active session ended: %q", sig.seen())
+	eventually(t, "the answer", func() bool { return slices.Contains(sig.seen(), "answer 5 v=0 answer") })
+	time.Sleep(100 * time.Millisecond)
+	if slices.ContainsFunc(sig.seen(), func(s string) bool { return strings.HasPrefix(s, "end ") }) || up.stream(0).unsubscribed() != 0 {
+		t.Fatalf("a quiet session ended: %q", sig.seen())
 	}
 }
 
@@ -359,23 +339,33 @@ func TestHACandidatesAreBounded(t *testing.T) {
 }
 
 // TestIgnoredEventsDoNotKeepTheSession (HR-P2-bound-40): an event the
-// relay does not act on is no activity; the session reaches its idle
-// end.
+// relay does not act on is no activity; at the bound the session it
+// reached is still the one idle longest and is evicted.
 func TestIgnoredEventsDoNotKeepTheSession(t *testing.T) {
 	up := &upstream{}
-	h := boundedHost(t, up, camera.Options{IdleTimeout: 150 * time.Millisecond})
+	h := boundedHost(t, up, camera.Options{EvictIdle: 20 * time.Millisecond})
 	sig := &signaller{}
 	h.Attach(sig)
-	if _, err := h.ProvideOffer(context.Background(), offer(5)); err != nil {
-		t.Fatal(err)
+	ctx := context.Background()
+	for i := range camera.MaxSessions {
+		if _, err := h.ProvideOffer(ctx, offer(uint16(i+1))); err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(2 * time.Millisecond)
 	}
+	// Session 1 is the oldest; ignored events on it change nothing.
 	st := up.stream(0)
-	for range 10 {
-		time.Sleep(50 * time.Millisecond)
+	for range 5 {
+		time.Sleep(10 * time.Millisecond)
 		st.push(map[string]any{"type": "noise"})
 	}
-	if !slices.Contains(sig.seen(), "end 5 12") {
-		t.Fatalf("ignored events kept the session from its idle end: %q", sig.seen())
+	time.Sleep(30 * time.Millisecond)
+	if _, err := h.ProvideOffer(ctx, offer(100)); err != nil {
+		t.Fatalf("an offer at the bound: %v", err)
+	}
+	eventually(t, "the evicted session's end", func() bool { return slices.Contains(sig.seen(), "end 1 12") })
+	if st.unsubscribed() != 1 {
+		t.Fatal("ignored events kept the session from the eviction")
 	}
 }
 
