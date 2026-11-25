@@ -4,11 +4,11 @@ go 1.27.4
 
 require (
 	github.com/SukramJ/go-ha-catalog v0.3.2-0.20261024093528-d9582e022b8f
-	github.com/SukramJ/go-hamapping v0.7.0
+	github.com/SukramJ/go-hamapping v0.7.1
 	github.com/SukramJ/go-hamqtt v0.40.0
 	github.com/coder/websocket v1.8.15
-	thingfabric.dev/go-fabric v0.25.0
-	thingfabric.dev/go-fabric-ui v0.14.0
+	thingfabric.dev/go-fabric v0.26.0
+	thingfabric.dev/go-fabric-ui v0.14.1
 )
 
 require (

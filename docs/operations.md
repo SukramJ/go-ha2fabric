@@ -4,7 +4,7 @@ What an operator of go-ha2fabric needs: the files it keeps, the ports and
 addresses, mDNS, the token, the logs, the health endpoint, pairing and the
 nodes created in the web UI. The
 node's side of each is go-fabric's
-[operations guide](https://github.com/thingfabric/go-fabric/blob/v0.25.0/docs/guides/operations.md);
+[operations guide](https://github.com/thingfabric/go-fabric/blob/v0.26.0/docs/guides/operations.md);
 this page is the daemon's version. Terms such as fabric, commissioning
 window, bridged node and served surface are defined in go-fabric's
 [glossary](https://docs.thingfabric.dev/reference/glossary/).
@@ -34,7 +34,7 @@ keys unencrypted), back it up only with the daemon stopped (the add-on
 sets `backup: cold`, so the Supervisor stops it for a backup), and never
 run two copies of one store.
 
-**The upgrade to 0.7.0 is one-way.** go-fabric v0.25.0 upgrades the store's
+**The upgrade to 0.7.0 is one-way.** go-fabric v0.26.0 upgrades the store's
 schema from version 7 to 12 at the first start, and an older daemon is not
 expected to open the upgraded file. Take a backup before the update; to go
 back to 0.6.x, restore the add-on together with its data from that backup
@@ -307,7 +307,7 @@ The lines to know:
 | `camera.signal_failed` | warn | A signal did not reach the controller (`command`, `error`); the session ends. |
 | `camera.snapshot_failed` | warn | A controller's snapshot failed at the camera proxy (`error`: off, refused, too large). |
 | `camera.session_lost` | info | The Home Assistant connection dropped; its camera sessions ended with it. |
-| `camera.session_evicted` / `camera.session_idle` | info | A session ended to make room for a new offer at the camera's 8 (`session`, `for`), or after an hour without signalling (Cameras). |
+| `camera.session_evicted` | info | A session ended to make room for a new offer at the camera's 8 (`session`, `for`; Cameras). |
 | `camera.answer_empty` | warn | Home Assistant's answer carried no SDP; the session ends. |
 
 ## Labels
@@ -429,17 +429,20 @@ Limits:
   session idle longest — no command and no Home Assistant event for a
   minute — with `End` (reason 12) to its controller
   (`camera.session_evicted`), or, when every session is more recent, is
-  answered RESOURCE_EXHAUSTED. A session with no signalling for an hour
-  ends the same way (`camera.session_idle`): a controller that went away
-  never ends its session, and a live view signals nothing once it stands,
-  so a view kept open longer than an hour must be opened again.
+  answered RESOURCE_EXHAUSTED. A session has no idle end of its own: a
+  live view signals nothing once it stands, and it stays open as long as
+  the controller keeps it. The sessions of a controller go-fabric's node
+  proved lost — an exchange the node opened to it went unanswered and no
+  session with it is left — end through the node (`camera.session_ended`,
+  and Home Assistant's session closes); a controller still on Matter
+  that abandoned its view ends only by the eviction above.
 - A controller's `ProvideIceCandidates` carries at most 64 candidates and
   a session at most 256; beyond, the call is answered RESOURCE_EXHAUSTED.
   Before Home Assistant names its session at most 64 wait. Home
   Assistant's side is bounded the same way: at most 256 candidates a
   session (the session ends beyond, `camera.candidates_exceeded`) and
   1 KiB a candidate (refused, `camera.candidate_refused`). Only a signal
-  the daemon relays counts as activity for the hour.
+  the daemon relays counts as activity for the eviction.
 - One camera proxy request runs per camera at a time: snapshots that
   arrive meanwhile share its still, and a still younger than a second is
   handed to a further snapshot of the same size.
@@ -449,7 +452,7 @@ Limits:
 
 ## The web UI
 
-go-fabric-ui's interface (`v0.14.0`) at `WEB_LISTEN`, in the add-on through
+go-fabric-ui's interface (`v0.14.1`) at `WEB_LISTEN`, in the add-on through
 Ingress. The administrator — who may write (change the selection, open a
 commissioning window, remove a fabric, erase a node) and read every page
 but the status: the selection, fabrics, endpoints, diagnostics, pairing
