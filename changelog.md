@@ -99,7 +99,7 @@ to reach it from the network, run the image with
   Aggregator explicitly (`DT`), rather than the first bridged device's type
   go-fabric would infer. GeneralCommissioning's `LocationCapability` is
   IndoorOutdoor, go-fabric's new default (was Indoor). A device the bridge
-  rebuilds under its key (a changed entity, label or area) is announced as
+  rebuilds under its key (a changed entity or device) is announced as
   new: its clusters get new data versions and subscribed controllers are
   sent its values, so a controller's cache no longer hides them
   (go-fabric #589). go-fabric's node ends the camera sessions of a

@@ -93,8 +93,8 @@ Nothing in v0.13.0, v0.14.0 or v0.14.1 is a node-family feature the bridge leave
 | Item | Recorded | Before the tag? |
 | --- | --- | --- |
 | The owner's live Ingress test | Decisions 8, 12, 22, 24, 43 | **Yes** — decision 8: "a tag only on the owner's release go, together with the owed live Ingress test". Its list (decision 43 and 22): the framing origin (HR-P2-frame-02), the source address the daemon sees and the Supervisor's gateway (for cfg-27), HAOS's `rp_filter` (HR-P2-net-01, `docs/operations.md:136-137`), the held files' items; also the camera proxy URL derivation in the add-on (`docs/operations.md:405-412`) and the Supervisor admin gate (`X-Remote-User-Groups`, Supervisor 2026.10.4, `cmd/ha2fabric/supervisor.go:34`) |
-| HR-P0-cfg-27, binding the add-on's listener tighter | Decision 22 | Not by decision 22 (a follow-up issue after the live test). But decision 24 couples the held item's publication with "the tighter bind of decision 22", while decision 37 restates the publication at the tag without the bind → **question Q4** |
-| HR-P1-auth-01 (held) | Decisions 24, 37 | Not a code blocker. **The tag triggers the step**: decision 37 publishes it with the `0.7.0` tag, with the documentation sentence and, the same day, a proposal upstream; decision 21: the held reports go out in a notes pull request at the tag |
+| HR-P0-cfg-27, binding the add-on's listener tighter | Decision 22 | Not by decision 22 (a follow-up issue after the live test); decisions 24 and 37 bear on its timing → **question Q4** |
+| HR-P1-auth-01 | Decisions 21, 24, 37 | Decisions 21, 24, 37 |
 | The go-fabric v0.26.0 lift with G2's fix | This note | **Yes** if 0.7.0 is to carry G1 (the CASE/TCP fix reaches a CAMERA daemon) |
 | How the live test gets a build | **[inferred]** | The image workflows publish only on a tag or a dispatch; a dispatch with tag input `0.7.0` passes the version check and pushes `:0.7.0` **and `:latest`** (`.github/workflows/addon-image.yml:62-88`, tags step after `:104`), i.e. publishes before the tag; a dispatch without input pushes a `git describe` tag and `:latest`, which the manifest's `version: "0.7.0"` does not name. So the live test before the tag runs as a **local add-on** (the repository copied into the HAOS `/addons` share, built by the Supervisor from `addon/Dockerfile` without the `image:` key) → **question Q5** |
 
@@ -118,7 +118,7 @@ Nothing in v0.13.0, v0.14.0 or v0.14.1 is a node-family feature the bridge leave
   ("Updated libraries" line); `CLAUDE.md`'s state line; `docs/operations.md:429-433` if G9 drops the 1 h end.
 - Old installations: the add-on repository URL changed (already in `addon/CHANGELOG.md` 0.7.0); no `0.7.0`
   under `ghcr.io/sukramj/` (changelog 0.7.0, Changed).
-- After the tag: the held item's notes pull request and the upstream proposal (decision 37); the cfg-27
+- After the tag: HR-P1-auth-01 per decisions 21 and 37; the cfg-27
   follow-up issue with the live test's measured addresses (decision 22); #72 opens for work.
 
 ## 7. Proposed release scope
@@ -156,9 +156,8 @@ Nothing in v0.13.0, v0.14.0 or v0.14.1 is a node-family feature the bridge leave
 - **Q3 — G2's fix shape: derive what the batch applied from the node's set after `Batch` (host-only), plus an
   upstream issue for a typed commit error?** Recommended: **yes, both**; never match keys in error text.
 - **Q4 — cfg-27 (the tighter add-on bind) before the tag or after?** Decision 22 puts it after the live test
-  as a follow-up issue; decision 24 tied the held item's publication to that bind; decision 37 publishes at
-  the tag. Recommended: **after the tag as decided in 22**, with decision 37 governing the publication;
-  confirm that 37 supersedes 24's coupling.
+  as a follow-up issue; decisions 24 and 37 bear on it (HR-P1-auth-01). Recommended: **after the tag as
+  decided in 22**, with decision 37 governing; confirm that 37 supersedes 24.
 - **Q5 — How the live test gets its build?** Recommended: **a local add-on** built by the Supervisor from the
   release candidate commit (no image published before the tag); not a `workflow_dispatch`, which would push
   `:0.7.0` and `:latest` before the tag.

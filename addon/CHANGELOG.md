@@ -22,7 +22,8 @@ has the details.
   bridge (Aggregator) whichever entity comes first, a bridged device's
   serial number as Home Assistant knows it, and a changed device's new
   values at once. A camera live view stays open as long as the controller
-  keeps it; a controller that went away has its camera sessions ended.
+  keeps it; the sessions of a controller the bridge proved lost end, and
+  any other abandoned one makes room once a camera holds 8.
 - The web UI checks the address it is opened under; through Ingress nothing
   changes for you.
 - The web UI's settings are for Home Assistant administrators only; this
