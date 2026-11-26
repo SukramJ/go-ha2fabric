@@ -23,6 +23,10 @@ All notable changes to this project are documented here. The format follows
 ### Changed
 
 - go-fabric `v0.26.0` → `v0.27.0`.
+- Cameras: one fabric holds at most 4 of a camera's 8 WebRTC sessions, and
+  an offer at either bound ends only an idle session of its own fabric,
+  else it is answered RESOURCE_EXHAUSTED; another ecosystem's live view is
+  no longer ended for it (HR-P4-bound-20).
 - Dependencies moved to their vanity import paths: `sukramj.dev/go-ha-catalog` v0.4.0, `sukramj.dev/go-hamapping` v0.8.0, `sukramj.dev/go-hamqtt` v0.41.0.
 - Add-on: the web UI binds to the address the Supervisor gives the add-on
   (the Supervisor network's gateway, where the Ingress proxy connects),
@@ -60,6 +64,17 @@ All notable changes to this project are documented here. The format follows
   of s6-overlay's 3 s before it kills the daemon (HR-P4-cfg-01).
 - A Home Assistant reply that is not a result with `success` fails its
   command instead of passing as a success (HR-P3-ha-09).
+- A device whose replacement go-fabric refuses keeps its state,
+  reachability and commands on the endpoint still served, until a later
+  sync applies it (HR-P4-err-40).
+- Deleting a node that does not stop is refused (500) and keeps its record
+  and files for a second Delete, instead of leaving the node running
+  unlisted (HR-P4-err-64).
+- `WEB_ALLOWED_HOSTS` with white space inside an entry is refused at
+  start, as the web UI would refuse it later (HR-P4-cfg-05).
+- A Home Assistant ICE candidate's `sdpMid` counts toward the 1 KiB bound
+  (HR-P4-bound-21); a line or paragraph separator (U+2028, U+2029) in a
+  name becomes a space (HR-P4-data-22).
 - Docs: the add-on's "Mapped today" lists what go-hamapping v0.8.0 maps
   (scenes, media players, an air conditioner's fan modes and more were
   listed as not mapped); `THIRD-PARTY-NOTICES.md` names `go.mod`'s
