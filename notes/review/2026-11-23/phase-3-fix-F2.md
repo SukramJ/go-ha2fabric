@@ -344,15 +344,12 @@ gh api -X POST repos/$R/rulesets --input - <<'EOF'
  "rules":[{"type":"creation"}],
  "bypass_actors":[{"actor_id":5,"actor_type":"RepositoryRole","bypass_mode":"always"}]}
 EOF
-# 3. the ghcr environment: v* tags (a tag push) and main (a dispatch, which
-#    the workflow itself narrows to an existing tag's source)
+# 3. the ghcr environment: v* tags only
 gh api -X PUT repos/$R/environments/ghcr --input - <<'EOF'
 {"deployment_branch_policy":{"protected_branches":false,"custom_branch_policies":true}}
 EOF
 gh api -X POST repos/$R/environments/ghcr/deployment-branch-policies -f name='v*' -f type=tag
-gh api -X POST repos/$R/environments/ghcr/deployment-branch-policies -f name=main -f type=branch
-#    optional, the owner's choice: a required reviewer on each publish
-#    ("reviewers":[{"type":"User","id":<the owner's user id>}] in the PUT)
+#    no reviewer (decision 66); no main policy (no dispatch, decision 65)
 # 4. required checks bound to GitHub Actions (15368), plus coverage,
 #    fuzz-smoke, docker (decision 57) and codeql (actions) (sup-45)
 gh api -X PATCH repos/$R/branches/main/protection/required_status_checks --input - <<'EOF'
@@ -399,7 +396,29 @@ rows (cfg-68 `label: str(1,32)`, test and guard rows are not
 user-visible except cfg-68) — the coordinator merges F1's lines.
 `addon/CHANGELOG.md` not touched (per-release file; doc-30 lines left).
 
-## Questions
+## Follow-up after decisions 64–67 (on `review/p3`)
+
+- **Decision 64, armv7 dropped from the add-on** (the decision names the
+  add-on; the release archives and the plain image keep linux/arm/v7, they
+  need no Home Assistant base): `addon/config.yaml` `arch`, the
+  `base-armv7` stage of `addon/Dockerfile`, the `addon-image.yml` matrix;
+  docs (`addon/DOCS.md` intro, `docs/operations.md` "Platforms",
+  README Features); `changelog.md` `### Removed` and the digest line
+  without armv7. Dependabot needed nothing (directories only).
+- **Decision 65, no manual rebuild**: `workflow_dispatch` removed from
+  `docker-build-push.yml` and `addon-image.yml` (no dispatch path is left;
+  none is needed); the resolve step reads the tag only; the checkout is
+  the pushed tag; the ancestry and version checks stay. Settings call 3:
+  the `ghcr` environment's branch policy is `v*` tags only (the `main`
+  policy is dropped with the dispatch).
+- **Decision 66**: no reviewer; call 3's optional reviewer line removed.
+- **Decision 67**: `docs/roadmap.md` is not in `CITE_PATHS` (f4734f9) and
+  nothing else references it for the check.
+
+Supersedes above: the sup-32 dispatch paragraph and its "Difference",
+call 3's `main` policy and reviewer line, question 2 to 4.
+
+## Questions (answered by decisions 64–67; kept as asked)
 
 1. `docs/roadmap.md` against F1's `script/cite`: history list (my
    recommendation) or re-pin the history to go.mod's versions (against
