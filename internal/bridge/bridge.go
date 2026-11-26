@@ -12,7 +12,7 @@
 // (internal/exposure).
 //
 // It follows go-fabric's cookbook "Embed in a daemon"
-// (docs/guides/embed-in-a-daemon.md at v0.26.0): one aggregator batch for
+// (docs/guides/embed-in-a-daemon.md at v0.27.0): one aggregator batch for
 // the whole exposed set at start and on every registry change (§4),
 // states to attributes through the plan's typed Sets (§5), reachability
 // from each entity's availability and from the Home Assistant connection
@@ -685,6 +685,13 @@ func (b *Bridge) syncConnected(ctx context.Context, since time.Time) error {
 			case plan.Remove:
 				e = bt.Remove(op.Key)
 			case plan.Forget:
+				// A Forget whose reservation go-fabric cannot read answers
+				// nil here and erases nothing for the key; the commit joins
+				// "the erasure of … is skipped" into Batch's error
+				// (go-fabric node/reserve.go:615-631 at v0.27.0). settle
+				// then takes it as applied, so the entity, created again,
+				// gets its old number. Typing that error so it can be
+				// recorded again is go-fabric #616's scope.
 				e = bt.Forget(op.Key)
 			case plan.Replace:
 				e = bt.Replace(op.Key, op.Endpoint)
@@ -808,7 +815,7 @@ func (b *Bridge) syncConnected(ctx context.Context, since time.Time) error {
 
 // settle takes back what the batch did not apply (HR-P1-err-31), so the
 // next sync tries it again. What applied is the node's set after the
-// batch, not the calls' answers: go-fabric v0.26.0 holds a call whose key
+// batch, not the calls' answers: go-fabric (since v0.26.0) holds a call whose key
 // another endpoint serves, answers it nil and may refuse it at the
 // commit (node.Partition.Batch). An Add or a Replace applied when the set
 // serves its very endpoint under its key; a refused Add's key is not

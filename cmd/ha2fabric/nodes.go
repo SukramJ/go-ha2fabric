@@ -35,7 +35,7 @@ import (
 // (fabricui.NodeSwitch, go-fabric-ui v0.7.1). The run is the go-fabric
 // node and its bridge on the one Home Assistant connection; an erase
 // ends it and starts a new one (a Go node is single-use, go-fabric
-// node/node.go:42-46 at v0.26.0), so the web UI's handler, which keeps
+// node/node.go:42-46 at v0.27.0), so the web UI's handler, which keeps
 // the values it was given, follows the new node through the switch.
 type served struct {
 	base   context.Context
@@ -123,7 +123,7 @@ func (s *served) start(base context.Context) error {
 }
 
 // launch runs a node and its bridge in the cookbook's order (go-fabric
-// docs/guides/embed-in-a-daemon.md §6 at v0.26.0): node.New and Start, the fabrics
+// docs/guides/embed-in-a-daemon.md §6 at v0.27.0): node.New and Start, the fabrics
 // and the pairing codes to the log, the bridge on the node and its worker
 // on base. It touches none of s's run, so it needs no lock.
 func (s *served) launch(base context.Context) (nodeRun, error) {
@@ -278,7 +278,7 @@ func (s *served) Warnings(ctx context.Context) []fabricui.Warning {
 // configuration on the erased store. Without a run — a come-back that
 // failed — it only starts, after resetting a node an earlier reset did
 // not stop (stale). A reset that fails may leave the node running
-// (go-fabric node/factory_reset.go:51-55 at v0.26.0: "the node is not
+// (go-fabric node/factory_reset.go:51-55 at v0.27.0: "the node is not
 // stopped and keeps its store"): it is stopped before the come-back, and
 // kept as stale when that fails too. A come-back that fails leaves s
 // without a run and the switch on the stopped node; the daemon keeps
@@ -547,7 +547,7 @@ func newFleet(base context.Context, cfg *config.Config, client *ha.Client, fan *
 }
 
 // nodeLabel is a registry label as the node's NodeLabel: at most 32 bytes
-// (go-fabric cluster/core/basic_information.go:651 at v0.26.0, as config's
+// (go-fabric cluster/core/basic_information.go:651 at v0.27.0, as config's
 // LABEL), cut
 // at a character boundary.
 func nodeLabel(label string) string {
@@ -662,7 +662,7 @@ func (f *fleet) find(key string) *member {
 
 // Rename implements [fabricui.NodeRegistry]: the label in the registry
 // and the selector, then the running node's own NodeLabel
-// (Node.SetNodeLabel, go-fabric node/node_label.go:39 at v0.26.0: a host
+// (Node.SetNodeLabel, go-fabric node/node_label.go:39 at v0.27.0: a host
 // write, persisted, reported to the controllers' subscriptions), cut as
 // at start (nodeLabel). The node's error is logged and leaves the
 // registry's rename standing; a node without a run takes the label from
