@@ -133,6 +133,8 @@ func TestSubscribeAbandonedRefusedSendsNothing(t *testing.T) {
 		case "unsubscribe_events":
 			unsub.Add(1)
 			out(`{"id":` + itoa(id) + `,"type":"result","success":true,"result":null}`)
+		case "ping":
+			out(`{"id":` + itoa(id) + `,"type":"pong"}`)
 		default:
 			out(`{"id":` + itoa(id) + `,"type":"result","success":true,"result":null}`)
 		}

@@ -562,10 +562,23 @@ func (s *session) callWith(ctx context.Context, cmd map[string]any, sub bool, st
 			s.mu.Unlock()
 			return Message{}, dropped(err)
 		}
-		if m.Type == TypePong {
-			return m, nil
+		// A ping's reply is a pong; every other command's a result with
+		// success (core websocket_api/messages.py:63-65 result_message,
+		// :81-104 error_message; commands.py:730-736 pong, at 2026.10.3).
+		// Anything else is no answer to trust (HR-P3-ha-09).
+		want := TypeResult
+		if cmd["type"] == TypePing {
+			want = TypePong
 		}
-		if m.Success != nil && !*m.Success {
+		switch {
+		case m.Type != want:
+			return m, fmt.Errorf("%w: a %q reply to %v", ErrFrame, m.Type, cmd["type"])
+		case want == TypePong:
+			return m, nil
+		case m.Success == nil:
+			return m, fmt.Errorf("%w: a result without success to %v", ErrFrame, cmd["type"])
+		}
+		if !*m.Success {
 			if m.Error != nil {
 				return m, m.Error
 			}
