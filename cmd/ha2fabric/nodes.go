@@ -679,15 +679,10 @@ func (f *fleet) Create(ctx context.Context, spec fabricui.NodeSpec) (fabricui.No
 	}
 	if err := f.reg.Add(rec); err != nil {
 		rctx, cancel := rollbackContext(ctx)
-		if cerr := s.close(rctx); cerr != nil {
-			// The node did not stop: its files stay with it.
-			cancel()
-			f.log.Warn("ha2fabric.node_stop", slog.String("node", rec.Key), slog.String("error", cerr.Error()))
-			return fabricui.NodeEntry{}, errors.Join(err, fmt.Errorf("node %s: stop: %w", rec.Key, cerr))
-		}
+		cerr := s.close(rctx)
 		cancel()
 		_ = f.reg.RemoveFiles(&rec)
-		return fabricui.NodeEntry{}, err
+		return fabricui.NodeEntry{}, errors.Join(err, cerr)
 	}
 	m := &member{rec: rec, s: s}
 	f.mu.Lock()

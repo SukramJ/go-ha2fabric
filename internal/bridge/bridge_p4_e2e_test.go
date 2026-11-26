@@ -59,6 +59,11 @@ func TestRefusedReplaceKeepsServedEndpointLive(t *testing.T) {
 	e.eventually("the served endpoint follows the state", func() bool { return !old.Reachable() })
 	e.ha.SetState(id, "off", smoke)
 	e.eventually("the served endpoint follows the state back", func() bool { return old.Reachable() })
+	// Home Assistant gone: the served endpoint is unreachable too.
+	e.ha.Down()
+	e.eventually("the served endpoint is unreachable while Home Assistant is gone", func() bool { return !old.Reachable() })
+	e.ha.Up()
+	e.eventually("the served endpoint is reachable again", func() bool { return old.Reachable() })
 
 	// The part key free again: the retry replaces, and the new device
 	// follows the state.

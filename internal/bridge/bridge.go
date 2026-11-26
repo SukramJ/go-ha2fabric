@@ -930,11 +930,8 @@ func (b *Bridge) settle(ops []plan.Op[*device.Device], errs []error, next map[st
 // back to the served device's provider.
 func (b *Bridge) keepStale(g *group, key string, ep node.Endpoint) {
 	d, ok := ep.(*device.Device)
-	if !ok || d == nil {
-		return
-	}
 	old := b.groups[g.Key]
-	if old == nil {
+	if !ok || d == nil || old == nil {
 		return
 	}
 	for _, c := range append([]*group{old}, slices.Collect(maps.Values(old.stale))...) {

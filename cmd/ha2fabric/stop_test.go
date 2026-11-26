@@ -302,28 +302,29 @@ func TestDeleteWhoseStopFailsIsRefused(t *testing.T) {
 	d.stop()
 }
 
-// TestCloseRetriesAFailedStop (decision 74): close whose node stop
-// failed is not done: a second close stops the node again.
+// TestCloseRetriesAFailedStop (decision 74): close whose stops failed —
+// the node's and a stale one's — is not done: a second close stops both
+// again, a third does nothing.
 func TestCloseRetriesAFailedStop(t *testing.T) {
 	restoreSeams(t)
 	calls := 0
 	stopNode = func(*node.Node, context.Context) error {
 		calls++
-		if calls == 1 {
+		if calls <= 2 {
 			return errors.New("the sentinel's stop failed")
 		}
 		return nil
 	}
 	done := make(chan struct{})
 	close(done)
-	s := &served{base: context.Background(), fan: &ha.Fanout{}, n: &node.Node{}, cancel: func() {}, done: done, log: slog.New(slog.DiscardHandler)}
+	s := &served{base: context.Background(), fan: &ha.Fanout{}, n: &node.Node{}, stale: &node.Node{}, cancel: func() {}, done: done, log: slog.New(slog.DiscardHandler)}
 	if err := s.close(context.Background()); err == nil {
 		t.Fatal("the failed stop was not returned")
 	}
-	if err := s.close(context.Background()); err != nil || calls != 2 {
-		t.Fatalf("second close: %v after %d stops, want the stop retried", err, calls)
+	if err := s.close(context.Background()); err != nil || calls != 4 {
+		t.Fatalf("second close: %v after %d stops, want both stops retried", err, calls)
 	}
-	if err := s.close(context.Background()); err != nil || calls != 2 {
+	if err := s.close(context.Background()); err != nil || calls != 4 {
 		t.Fatalf("third close: %v after %d stops, want nothing", err, calls)
 	}
 }
