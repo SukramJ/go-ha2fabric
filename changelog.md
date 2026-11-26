@@ -69,11 +69,22 @@ All notable changes to this project are documented here. The format follows
   sync applies it (HR-P4-err-40).
 - Deleting a node that does not stop is refused (500) and keeps its record
   and files for a second Delete, instead of leaving the node running
-  unlisted (HR-P4-err-64).
+  unlisted; the node has left its fabrics already (HR-P4-err-64).
+- A node create whose record cannot be written stops the started node
+  within the stop budget; a node that does not stop keeps its files and
+  is stopped with the daemon (HR-P4-conc-65, HR-P4-err-93). An erase stops
+  a node an earlier failed erase kept before it resets the current one
+  (HR-P4-err-66).
+- The web UI's selection shows why an exposed camera is not served while
+  the camera option is off, and why an entity whose state is over 256 KiB
+  is not mapped (HR-P4-err-41).
+- A device with very many entities no longer makes each sync slow: its
+  signature was quadratic in its entities (HR-P4-bound-43).
 - `WEB_ALLOWED_HOSTS` with white space inside an entry is refused at
   start, as the web UI would refuse it later (HR-P4-cfg-05).
-- A Home Assistant ICE candidate's `sdpMid` counts toward the 1 KiB bound
-  (HR-P4-bound-21); a line or paragraph separator (U+2028, U+2029) in a
+- An ICE candidate's `sdpMid` counts toward the 1 KiB bound with its
+  line: Home Assistant's longer candidate is refused as before, a
+  controller's is answered CONSTRAINT_ERROR (HR-P4-bound-21); a line or paragraph separator (U+2028, U+2029) in a
   name becomes a space (HR-P4-data-22).
 - Docs: the add-on's "Mapped today" lists what go-hamapping v0.8.0 maps
   (scenes, media players, an air conditioner's fan modes and more were

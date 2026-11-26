@@ -326,7 +326,7 @@ The lines to know:
 | `camera.signal_failed` | warn | A signal did not reach the controller (`command`, `error`); the session ends. |
 | `camera.snapshot_failed` | warn | A controller's snapshot failed at the camera proxy (`error`: off, refused, too large). |
 | `camera.session_lost` | info | The Home Assistant connection dropped; its camera sessions ended with it. |
-| `camera.session_evicted` | info | A session ended to make room for a new offer of its fabric at the camera's 8 or the fabric's 4 (`session`, `for`; Cameras). |
+| `camera.session_evicted` | info | A session ended to make room for a new offer of its fabric at the camera's 8 or the fabric's 4 (`session`, `for`, `fabric`; Cameras). |
 | `camera.answer_empty` | warn | Home Assistant's answer carried no SDP; the session ends. |
 
 ## Labels
@@ -462,8 +462,11 @@ Limits:
   a session at most 256; beyond, the call is answered RESOURCE_EXHAUSTED.
   Before Home Assistant names its session at most 64 wait. Home
   Assistant's side is bounded the same way: at most 256 candidates a
-  session (the session ends beyond, `camera.candidates_exceeded`) and
-  1 KiB a candidate (refused, `camera.candidate_refused`). Only a signal
+  session (the session ends beyond, `camera.candidates_exceeded`). A
+  candidate, its line and its `sdpMid` together, is at most 1 KiB — the
+  daemon's own bound, not the specification's: Home Assistant's longer
+  one is refused (`camera.candidate_refused`), the session stays; a
+  controller's is answered CONSTRAINT_ERROR. Only a signal
   the daemon relays counts as activity for the eviction.
 - One camera proxy request runs per camera at a time: snapshots that
   arrive meanwhile share its still, and a still younger than a second is
@@ -673,9 +676,10 @@ for all its fabrics, so a different scope is a different node.
 - **Delete** is final: the node leaves every fabric it holds (its
   controllers lose it), stops, and its store, its selection (with its
   `.bak` and any copy moved aside) and its record are removed (`ha2fabric.node_deleted`). A node that does not
-  stop (`ha2fabric.node_stop` at warn with `error`) is not deleted: the
-  Delete answers 500, its record and its files stay, and a second Delete
-  tries the stop again. The configured node
+  stop (`ha2fabric.node_stop` at warn with `error`) is not deleted, but it
+  has already left its fabrics (the controllers lost it): the Delete
+  answers 500, its record and its files stay, it is listed not enabled,
+  and a second Delete tries the stop again (`fabrics_removed=0`). The configured node
   cannot be deleted (409 `node_is_default`).
 - **Erase** starts the node over for the controllers and keeps it: as
   for the configured node (Erase and factory reset), its fabrics, its
