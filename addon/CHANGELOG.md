@@ -12,10 +12,13 @@ has the details.
   back, restore the backup.
 - **The add-on moved.** Its repository is now
   `https://github.com/thingfabric/go-ha2fabric` and its image
-  `ghcr.io/thingfabric/go-ha2fabric-addon-{arch}`. If you added the
-  repository under its old address, remove it and add the new one
-  (Settings → Apps → Install app, ⋮ → Repositories), then install the
-  add-on from it.
+  `ghcr.io/thingfabric/go-ha2fabric-addon-{arch}`. **If you added the
+  repository under its old address, keep it and update the add-on in
+  place**: the old address redirects, and the update keeps the add-on's
+  data and its pairings. Do not remove the old repository to add the new
+  one: Home Assistant would install the add-on as a different add-on, with
+  empty data, and every controller would have to be paired again. New
+  installations add `https://github.com/thingfabric/go-ha2fabric`.
 - Updated libraries (go-fabric 0.26.0 under its new name thingfabric.dev,
   go-fabric-ui 0.14.1 under thingfabric.dev, go-hamapping 0.7.1). Fans and climate fan modes map
   their percentages more closely; controllers see the bridge advertised as a
