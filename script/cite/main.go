@@ -143,12 +143,12 @@ func main() {
 	}
 	var files []string
 	for _, r := range roots {
-		fs, err := walk(r)
+		found, err := walk(r)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "cite:", err)
 			os.Exit(2)
 		}
-		files = append(files, fs...)
+		files = append(files, found...)
 	}
 	problems := 0
 	for _, f := range files {
