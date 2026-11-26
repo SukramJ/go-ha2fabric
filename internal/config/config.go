@@ -237,8 +237,8 @@ func Load(args []string, env Env, out io.Writer) (*Config, error) {
 	// it in the process list.
 	passcode := fs.String("passcode", "", "setup passcode (PASSCODE; set it in the environment, a flag shows in the process list)")
 	discr := str("discriminator", "DISCRIMINATOR", strconv.Itoa(DefaultDiscriminator), "12-bit discriminator")
-	vendor := str("vendor-id", "VENDOR_ID", "0xFFF1", "vendor id")
-	product := str("product-id", "PRODUCT_ID", "0x8001", "product id")
+	vendor := str("vendor-id", "VENDOR_ID", fmt.Sprintf("0x%04X", DefaultVendorID), "vendor id")
+	product := str("product-id", "PRODUCT_ID", fmt.Sprintf("0x%04X", DefaultProductID), "product id")
 	label := str("label", "LABEL", DefaultLabel, "the bridge's node label")
 	store := str("store-path", "STORE_PATH", "", "the node's SQLite store file")
 	include := str("include", "INCLUDE", "", "entity ids or globs always exposed (comma-separated)")
