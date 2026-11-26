@@ -179,3 +179,11 @@ if the pre-merge read adds none.
 | 73 | HR-P4-err-40, a refused Replace leaves the served endpoint without a live plan | **A stale plan for exactly the refused keys**, live until a later batch applies them; completes HR-P1-err-31 |
 | 74 | HR-P4-err-64, a Delete whose stop fails | **Refused** with 500, the record and files kept, a second Delete retries |
 | 75 | Every other row of run 1 | **As the verifier recommends**: cfg-01 `S6_CMD_RECEIVE_SIGNALS=1` with a guard test and the comments and docs (cfg-02's docs line with it); sup-03 the `# syntax=` line dropped and the lint grep extended; sup-04 a lint check that holds the Go version in its four places; test-62 floor 94 and the floors header; sup-70 `gosec` on `cmd/` with one reasoned `nolint`; P's `ErrNoStableKey` probe as a standing guard; adpt-42 a go-fabric issue beside #616, outside the fix wave; every other low and note fixed in phase 4's pull request |
+
+## 2026-11-26, after phase 4's pre-merge read
+
+| # | Subject | Decision |
+| --- | --- | --- |
+| 76 | Decision 72's share and a third fabric (two ecosystems at 4 each can lock a third out until go-fabric proves their controllers lost) | **4 of 8 kept**; the lock-out goes into go-hamapping #50 (a total that follows the share times the fabrics, or a fair-share eviction) |
+| 77 | HR-P4-err-93, Create's rollback stop fails | **Fixed**: the unstopped node goes to the fleet's close list, its files stay, Create answers the error |
+| 78 | HR-P4-bound-98, a controller's ICE candidate over 1024 bytes | **CONSTRAINT_ERROR kept**; the comment and docs say it is the host's own bound |
