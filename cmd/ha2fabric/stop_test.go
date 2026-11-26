@@ -95,7 +95,10 @@ func TestStatusDuringErase(t *testing.T) {
 	}
 	erased := make(chan int, 1)
 	go func() {
-		code, _ := d.call(http.MethodPost, "/api/v1/node/maintenance/erase", eraseBody)
+		code, _, err := d.do(http.MethodPost, "/api/v1/node/maintenance/erase", eraseBody)
+		if err != nil {
+			t.Error(err)
+		}
 		erased <- code
 	}()
 	select {
@@ -104,9 +107,9 @@ func TestStatusDuringErase(t *testing.T) {
 		t.Fatal("the erase did not reach the come-back")
 	}
 	began := time.Now()
-	code, _ := d.call(http.MethodGet, "/api/v1/node/status", "")
-	if took := time.Since(began); code != http.StatusOK || took > time.Second {
-		t.Fatalf("a status read during the erase: %d after %v", code, took)
+	code, _, err := d.do(http.MethodGet, "/api/v1/node/status", "")
+	if took := time.Since(began); err != nil || code != http.StatusOK || took > time.Second {
+		t.Fatalf("a status read during the erase: %d after %v (%v)", code, took, err)
 	}
 	if code := <-erased; code != http.StatusNoContent {
 		t.Fatalf("erase %d", code)
@@ -137,7 +140,7 @@ func TestStopWithinBudget(t *testing.T) {
 		}
 		return errors.New("released")
 	}
-	go func() { _, _ = d.call(http.MethodPost, "/api/v1/node/maintenance/erase", eraseBody) }()
+	go func() { _, _, _ = d.do(http.MethodPost, "/api/v1/node/maintenance/erase", eraseBody) }()
 	// The stop comes while the erase is inside its reset (HR-P3-test-11).
 	select {
 	case <-entered:
@@ -181,7 +184,7 @@ func TestStopLetsEraseFinish(t *testing.T) {
 		}
 		return n.FactoryReset(ctx)
 	}
-	go func() { _, _ = d.call(http.MethodPost, "/api/v1/node/maintenance/erase", eraseBody) }()
+	go func() { _, _, _ = d.do(http.MethodPost, "/api/v1/node/maintenance/erase", eraseBody) }()
 	<-entered
 	d.cancel()
 	d.cancel = nil
