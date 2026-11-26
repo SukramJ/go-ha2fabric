@@ -118,3 +118,16 @@ read of phase 2 are by Opus.
 | 50 | When the `sync_failed` warning shows | **From the second failure in a row**; the first is retried silently after 5 s |
 | 51 | A `READ_LIMIT` option | **No**: the 256 KiB cap per state (decision 42) keeps `get_states` far below 64 MiB, and the sync error now names the limit |
 | 52 | HR-P2-bound-90 (pre-merge read): an entity whose state exceeds the 256 KiB cap is mapped from its stripped state as another device type | **Unmappable with a reason** in `plan.Assess` ("state over 256 KiB"); no change of device type, the operator sees the reason; extends decision 42 |
+
+## 2026-11-26, phase 3 start
+
+All roles this plan gives Fable still run on Opus (owner, 2026-11-24).
+Baseline of phase 3: origin/main `0a47095` (phase 2 `d16f3ab`, the move to
+`thingfabric.dev` #76, R7 #78, release 0.7.0 #79, the libraries under
+`sukramj.dev` #80).
+
+| # | Subject | Decision |
+| --- | --- | --- |
+| 53 | Decisions 21 and 37 after the `0.7.0` tag: the held reports and the docs sentence on co-installed add-ons | **In phase 3's pull request**: every `held/*` report of phases 0–2 published, HR-P1-auth-01 labelled "interception measured on a real HAOS, the end-to-end exchange not completed on a live box"; the docs sentence; decision 37 amended by the owner on 2026-11-25: **docs only**, no Supervisor issue |
+| 54 | HR-P0-cfg-27, the add-on listener's address (the live test of 2026-11-25 measured the Supervisor network's gateway as the add-on's `ip_address`) | **Fixed in phase 3**: the add-on binds the web listener to the Supervisor network's gateway address, found at start (interface or Supervisor network info), not a constant; when it is not found, today's bind with a warning line; the client filter stays |
+| 55 | go-fabric-server's review | **After this review's phase 3** (the plan rule: written while this review is in phase 4) |
