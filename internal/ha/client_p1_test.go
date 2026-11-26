@@ -202,6 +202,44 @@ func TestClientBackoffResetsAfterStableConnection(t *testing.T) {
 	}
 }
 
+// TestClientBackoffResetsAfterLongConnection (HR-P3-test-02): the delay
+// first grows near MaxBackoff (five short connections double 10 ms to
+// 320 ms), then a connection up longer than MaxBackoff resets it, so the
+// next attempt comes after MinBackoff, not after 320 ms. The test above
+// cannot tell the two apart (MaxBackoff 50 ms within a 1 s bound).
+func TestClientBackoffResetsAfterLongConnection(t *testing.T) {
+	var n atomic.Int32
+	var dropped atomic.Int64 // unix nanos of the long connection's end
+	var next atomic.Int64
+	url := hostile(t, func(ctx context.Context, ws *websocket.Conn) {
+		i := n.Add(1)
+		if i == 7 && dropped.Load() != 0 {
+			next.CompareAndSwap(0, time.Now().UnixNano())
+		}
+		send(ctx, ws, `{"type":"auth_required"}`)
+		if _, _, err := ws.Read(ctx); err != nil {
+			return
+		}
+		send(ctx, ws, `{"type":"auth_ok","ha_version":"2026.10.3"}`)
+		if i == 6 { // after five short ones the delay is near MaxBackoff (320 ms)
+			time.Sleep(500 * time.Millisecond)
+			dropped.Store(time.Now().UnixNano())
+		}
+		_ = ws.Close(websocket.StatusGoingAway, "bye")
+	})
+	start(t, ha.Options{URL: url, Token: "t", MinBackoff: 10 * time.Millisecond, MaxBackoff: 400 * time.Millisecond, Logger: slog.New(slog.DiscardHandler)})
+	deadline := time.Now().Add(10 * time.Second)
+	for next.Load() == 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("no attempt after the long connection")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if d := time.Duration(next.Load() - dropped.Load()); d > 150*time.Millisecond {
+		t.Fatalf("reconnected %v after a connection up longer than MaxBackoff; want about MinBackoff", d)
+	}
+}
+
 // TestClientAuthRefusedBacksOffLong (HR-P1-ha-08, decision 28): after
 // auth_invalid the client waits AuthBackoff, not MaxBackoff, and reports
 // the refusal for the status page; an authentication clears it.
@@ -341,11 +379,13 @@ func TestCallContextKeepsConnection(t *testing.T) {
 	// the context ends.
 	began := time.Now()
 	err := c.Call(ctx, map[string]any{"type": "get_states", "pad": strings.Repeat("x", 24<<20)}, nil)
+	// The precondition (HR-P3-test-11): the write was still in progress
+	// when the context ended, which it is only while the server does not
+	// read; a write that ended earlier tests nothing here.
 	if time.Since(began) < time.Second {
-		t.Logf("the write ended before the server read again: %v", err)
-	} else {
-		t.Logf("call: %v after %v", err, time.Since(began))
+		t.Fatalf("the write ended before the server read again (%v): the precondition did not hold", err)
 	}
+	t.Logf("call: %v after %v", err, time.Since(began))
 	time.Sleep(200 * time.Millisecond)
 	r.mu.Lock()
 	defer r.mu.Unlock()
