@@ -1,7 +1,8 @@
 # go-ha2fabric: concept
 
 Status: implemented in 0.1.0 (brief H2, 2026-10-25); labels, the web UI
-from go-fabric-ui and the stable entity identity in 0.2.0 (brief H3). Written 2026-10-24
+from go-fabric-ui and the stable entity identity in 0.2.0 (brief H3); the
+current release is 0.7.0, its changes in `changelog.md`. Written 2026-10-24
 from go-fabric's concept v6 part B (2026-10-20) and the owner's decisions
 of 2026-10-24 (go-fabric concept v8: `go-fabric-server`; evening: this
 daemon embeds go-fabric). Changes to this document follow those decisions.

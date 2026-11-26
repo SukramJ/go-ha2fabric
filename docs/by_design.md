@@ -111,7 +111,9 @@ re-mounts the endpoints on a change (`services/bridges/bridge-service.ts:318-330
 add-on options and only the web UI's per-entity overrides in a file it
 owns, `/data/selection.json` (go-fabric concept v9 decision 0.4), written
 atomically beside the node's store, so the add-on's cold backup holds both
-and the options stay the single place for the rule.
+and, for the configured node, the options stay the single place for the
+rule. A node the web UI creates has no options: its rule is its selection
+alone (`selection-<key>.json`; `docs/operations.md`, Nodes).
 
 ## Volume as a level
 
