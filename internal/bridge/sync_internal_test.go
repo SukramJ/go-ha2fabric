@@ -115,7 +115,7 @@ func TestCancelledCommandIsNoFailure(t *testing.T) {
 	b, up := rangeBridge(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	up.call = func(ha.ServiceCall) error { cancel(); return context.Canceled }
-	b.command(ctx, rangeCmd("temperature_low", "19"))
+	b.command(ctx, rangeCmd("temperature_range", `{"target_temp_low":19,"target_temp_high":24}`))
 	if s := b.Status(); s.CommandErrs != 0 || s.LastCommand != "" {
 		t.Fatalf("a cancelled call_service counted as a failure: %+v", s)
 	}
@@ -206,9 +206,9 @@ func TestDroppedCommandRestoresTheState(t *testing.T) {
 	t.Run("queue full", func(t *testing.T) {
 		b, _ := rangeBridge(t)
 		for range cap(b.cmds) {
-			b.cmds <- rangeCmd("temperature_low", "19")
+			b.cmds <- rangeCmd("temperature_range", `{"target_temp_low":19,"target_temp_high":24}`)
 		}
-		b.onCommand(rangeCmd("temperature_low", "20"))
+		b.onCommand(rangeCmd("temperature_range", `{"target_temp_low":20,"target_temp_high":24}`))
 		if len(b.work) == 0 && !b.owed.Load() {
 			t.Fatal("a dropped command leaves the device at the controller's value: no re-apply and no sync owed")
 		}
@@ -271,7 +271,7 @@ func TestCommandDroppedLogsASummary(t *testing.T) {
 	b.log = slog.New(rec)
 	b.drops.cmds.log, b.drops.cmds.every = b.log, 30*time.Millisecond
 	for range cap(b.cmds) + 10 {
-		b.onCommand(rangeCmd("temperature_low", "19"))
+		b.onCommand(rangeCmd("temperature_range", `{"target_temp_low":19,"target_temp_high":24}`))
 	}
 	if recs := rec.named("bridge.command_dropped"); len(recs) != 1 {
 		t.Fatalf("10 dropped commands wrote %d command_dropped lines", len(recs))

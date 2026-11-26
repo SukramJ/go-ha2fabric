@@ -257,12 +257,13 @@ func TestService(t *testing.T) {
 		{cmd("cover.a", "tilt", "120"), nil, ha.ServiceCall{Domain: "cover", Service: "set_cover_tilt_position", EntityID: "cover.a", Data: map[string]any{"tilt_position": 100}}},
 		{cmd("cover.a", hamapping.MethodOpenTilt, "OPEN"), nil, ha.ServiceCall{Domain: "cover", Service: "open_cover_tilt", EntityID: "cover.a"}},
 		{cmd("cover.a", hamapping.MethodCloseTilt, "CLOSE"), nil, ha.ServiceCall{Domain: "cover", Service: "close_cover_tilt", EntityID: "cover.a"}},
+		{cmd("cover.a", hamapping.MethodStopTilt, "STOP"), nil, ha.ServiceCall{Domain: "cover", Service: "stop_cover_tilt", EntityID: "cover.a"}},
 		{cmd("lock.a", "", "LOCK"), nil, ha.ServiceCall{Domain: "lock", Service: "lock", EntityID: "lock.a"}},
 		{cmd("lock.a", "", "UNLOCK"), nil, ha.ServiceCall{Domain: "lock", Service: "unlock", EntityID: "lock.a"}},
 		{cmd("climate.a", "mode", "heat_cool"), nil, ha.ServiceCall{Domain: "climate", Service: "set_hvac_mode", EntityID: "climate.a", Data: map[string]any{"hvac_mode": "heat_cool"}}},
 		{cmd("climate.a", "temperature", "21.5"), nil, ha.ServiceCall{Domain: "climate", Service: "set_temperature", EntityID: "climate.a", Data: map[string]any{"temperature": 21.5}}},
-		{cmd("climate.a", "temperature_low", "18"), climate, ha.ServiceCall{Domain: "climate", Service: "set_temperature", EntityID: "climate.a", Data: map[string]any{"target_temp_low": 18.0, "target_temp_high": 24.0}}},
-		{cmd("climate.a", "temperature_high", "25"), climate, ha.ServiceCall{Domain: "climate", Service: "set_temperature", EntityID: "climate.a", Data: map[string]any{"target_temp_high": 25.0, "target_temp_low": 19.0}}},
+		{cmd("climate.a", hamapping.MethodTemperatureRange, `{"target_temp_low":18,"target_temp_high":25.5}`), climate, ha.ServiceCall{Domain: "climate", Service: "set_temperature", EntityID: "climate.a", Data: map[string]any{"target_temp_low": 18.0, "target_temp_high": 25.5}}},
+		{cmd("climate.a", hamapping.MethodTemperatureRange, `{"target_temp_low":17,"target_temp_high":21}`), nil, ha.ServiceCall{Domain: "climate", Service: "set_temperature", EntityID: "climate.a", Data: map[string]any{"target_temp_low": 17.0, "target_temp_high": 21.0}}},
 		{cmd("climate.a", hamapping.MethodMode, "dry"), nil, ha.ServiceCall{Domain: "climate", Service: "set_hvac_mode", EntityID: "climate.a", Data: map[string]any{"hvac_mode": "dry"}}},
 		{cmd("climate.a", hamapping.MethodFanMode, "medium"), nil, ha.ServiceCall{Domain: "climate", Service: "set_fan_mode", EntityID: "climate.a", Data: map[string]any{"fan_mode": "medium"}}},
 		{cmd("climate.a", hamapping.MethodToggle, "TOGGLE"), nil, ha.ServiceCall{Domain: "climate", Service: "toggle", EntityID: "climate.a"}},
@@ -313,6 +314,9 @@ func TestService(t *testing.T) {
 		cmd("light.a", "", "not json"),
 		cmd("cover.a", "set_position", "x"),
 		cmd("climate.a", "temperature_low", "18"),
+		cmd("climate.a", hamapping.MethodTemperatureRange, "18"),
+		cmd("climate.a", hamapping.MethodTemperatureRange, `{"target_temp_low":18}`),
+		cmd("climate.a", hamapping.MethodTemperatureRange, `{"target_temp_low":"18","target_temp_high":24}`),
 		cmd("climate.a", "mode", ""),
 		cmd("fan.a", "direction", "sideways"),
 		cmd("fan.a", "oscillation", "maybe"),
@@ -402,31 +406,6 @@ func TestAppliedStateIsNotACommand(t *testing.T) {
 	p.Apply(context.Background(), "switch.coffee", adapt.State(st))
 	if len(got) != 0 {
 		t.Fatalf("an applied state was handed out: %+v", got)
-	}
-}
-
-// TestServiceRangeNeverInverted (HR-P1-adpt-30): a bound that crosses the
-// other moves the other with it, so the call is never one Home Assistant
-// refuses for a low above its high (climate/services.py:121-131 at
-// 2026.10.3); the controller's next write of the other bound follows.
-func TestServiceRangeNeverInverted(t *testing.T) {
-	climate := state("climate.a", "heat_cool", map[string]any{"target_temp_low": 18.0, "target_temp_high": 24.0})
-	for _, c := range []struct {
-		method, payload string
-		low, high       float64
-	}{
-		{"temperature_low", "25", 25, 25},
-		{"temperature_high", "16", 16, 16},
-		{"temperature_low", "24", 24, 24},
-		{"temperature_high", "30", 18, 30},
-	} {
-		sc, err := adapt.Service(cmd("climate.a", c.method, c.payload), climate)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if lo, hi := sc.Data["target_temp_low"], sc.Data["target_temp_high"]; lo != c.low || hi != c.high {
-			t.Errorf("%s %s: low %v high %v, want %v %v", c.method, c.payload, lo, hi, c.low, c.high)
-		}
 	}
 }
 

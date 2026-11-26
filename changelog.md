@@ -22,12 +22,36 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- go-hamapping `v0.8.0` → `v0.9.0`. What a controller sees:
+  - A cover without a position (no SET_POSITION) now reports its position
+    from its state (closed 100 %, open 0 %) and serves GoToLiftPercentage
+    0 % and 100 % only; a position between is refused with FAILURE instead
+    of closing the cover. A tilting cover without SET_TILT_POSITION does
+    the same for its tilt. **The FeatureMap of such a cover changes once on
+    upgrade** (PositionAwareLift, PositionAwareTilt).
+  - A cover that can stop its tilt but has no stop (STOP_TILT without STOP)
+    now stops on StopMotion (`cover.stop_cover_tilt`) instead of answering
+    success and doing nothing.
+  - A thermostat in heat/cool gets its range as one
+    `climate.set_temperature` with both bounds, the pair it holds after its
+    deadband adjustment; the bridge no longer completes one bound from the
+    one it sent before.
+  - A climate or water heater without `min_temp` / `max_temp` gets Home
+    Assistant's own default bounds; one whose bounds go-fabric cannot
+    build is unmappable with a reason instead of failing at the node.
+  - The primary endpoint of a device is its entity with the smallest
+    stable key, whatever the order Home Assistant lists them in. **A
+    battery can move once to another endpoint on upgrade.**
+  - When go-fabric refuses an endpoint, only the entity whose declarations
+    it refused is left out (go-hamapping's `BuildError.Owner`); the primary
+    and the other riders stay. `bridge.build_refused` names it as
+    `entity` and the endpoint as `endpoint` (was `riders`).
 - go-fabric `v0.26.0` → `v0.27.0`.
 - Cameras: one fabric holds at most 4 of a camera's 8 WebRTC sessions, and
   an offer at either bound ends only an idle session of its own fabric,
   else it is answered RESOURCE_EXHAUSTED; another ecosystem's live view is
   no longer ended for it (HR-P4-bound-20).
-- Dependencies moved to their vanity import paths: `sukramj.dev/go-ha-catalog` v0.4.0, `sukramj.dev/go-hamapping` v0.8.0, `sukramj.dev/go-hamqtt` v0.41.0.
+- Dependencies moved to their vanity import paths: `sukramj.dev/go-ha-catalog` v0.4.0, `sukramj.dev/go-hamapping` v0.8.0 (now v0.9.0, above), `sukramj.dev/go-hamqtt` v0.41.0.
 - Add-on: the web UI binds to the address the Supervisor gives the add-on
   (the Supervisor network's gateway, where the Ingress proxy connects),
   read at start; when it cannot be read, every interface as before, with

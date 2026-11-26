@@ -217,49 +217,20 @@ func bounds(sc ha.ServiceCall) [2]any {
 	return [2]any{sc.Data["target_temp_low"], sc.Data["target_temp_high"]}
 }
 
-// TestRangeSetpointsInSequence (HR-P1-adpt-30): a controller's two
-// setpoint writes in Auto are two commands; the second completes from
-// the bounds the first sent, not from the state Home Assistant has not
-// reported yet, and no call carries a low above its high.
-func TestRangeSetpointsInSequence(t *testing.T) {
-	t.Run("raise past the old high", func(t *testing.T) {
-		b, up := rangeBridge(t)
-		calls := rangeCalls(t, b, up, rangeCmd(hamapping.MethodTemperatureLow, "25"), rangeCmd(hamapping.MethodTemperatureHigh, "28"))
-		for _, c := range calls {
-			if lo, hi := c.Data["target_temp_low"].(float64), c.Data["target_temp_high"].(float64); lo > hi {
-				t.Errorf("a call with low %v above high %v", lo, hi)
-			}
-		}
-		if got := bounds(calls[len(calls)-1]); got != [2]any{25.0, 28.0} {
-			t.Fatalf("last call %v", got)
-		}
-		if s := b.Status(); s.CommandErrs != 0 {
-			t.Fatalf("status %+v", s)
-		}
-	})
-	t.Run("state not yet reported", func(t *testing.T) {
-		b, up := rangeBridge(t)
-		calls := rangeCalls(t, b, up, rangeCmd(hamapping.MethodTemperatureLow, "20"), rangeCmd(hamapping.MethodTemperatureHigh, "26"))
-		if got := bounds(calls[1]); got != [2]any{20.0, 26.0} {
-			t.Fatalf("last call %v", got)
-		}
-	})
-	t.Run("state shows them, then moves", func(t *testing.T) {
-		b, up := rangeBridge(t)
-		rangeCalls(t, b, up, rangeCmd(hamapping.MethodTemperatureLow, "20"))
-		// Home Assistant reports the call, then the range moves there.
-		report := func(low, high float64) {
-			b.stateChanged(t.Context(), ha.StateChanged{EntityID: "climate.a", NewState: &ha.State{EntityID: "climate.a", State: "heat_cool", Attributes: map[string]any{"target_temp_low": low, "target_temp_high": high}}})
-		}
-		report(20, 24)
-		rangeCalls(t, b, up, rangeCmd(hamapping.MethodTemperatureHigh, "25"))
-		report(20, 25)
-		report(17, 25)
-		calls := rangeCalls(t, b, up, rangeCmd(hamapping.MethodTemperatureHigh, "23"))
-		if got := bounds(calls[0]); got != [2]any{17.0, 23.0} {
-			t.Fatalf("after the state moved %v", got)
-		}
-	})
+// TestRangeCommandIsOneCall: each range command go-hamapping hands out is
+// one set_temperature with the pair it carries, whatever Home Assistant's
+// state shows: the bridge completes no bound of its own.
+func TestRangeCommandIsOneCall(t *testing.T) {
+	b, up := rangeBridge(t)
+	calls := rangeCalls(t, b, up,
+		rangeCmd(hamapping.MethodTemperatureRange, `{"target_temp_low":25,"target_temp_high":28}`),
+		rangeCmd(hamapping.MethodTemperatureRange, `{"target_temp_low":20,"target_temp_high":26}`))
+	if got := [][2]any{bounds(calls[0]), bounds(calls[1])}; got[0] != [2]any{25.0, 28.0} || got[1] != [2]any{20.0, 26.0} {
+		t.Fatalf("calls %v", got)
+	}
+	if s := b.Status(); s.CommandErrs != 0 {
+		t.Fatalf("status %+v", s)
+	}
 }
 
 // TestStateChangedOversizedLogged (HR-P2-bound-38, the bridge half): a

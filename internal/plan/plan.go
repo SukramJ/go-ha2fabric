@@ -367,9 +367,8 @@ func Candidates(s *ha.Snapshot, in Input) map[string]*Verdict {
 }
 
 // RemovedKey is the stable key go-hamapping gives entityID's endpoint
-// (its device's UID, "/", the registry entry id; see [MapOptions] and
-// hamapping's Plan.options), or nil when s is nil or has no registry
-// entry for it.
+// (hamapping.StableKey with [MapOptions]), read from s, or nil when s is
+// nil or has no registry entry for it.
 func RemovedKey(s *ha.Snapshot, entityID string) device.SourceKey {
 	if s == nil {
 		return nil
@@ -389,7 +388,8 @@ func RemovedKey(s *ha.Snapshot, entityID string) device.SourceKey {
 				md = adapt.Device(&s.Devices[j], areas)
 			}
 		}
-		return device.StringKey(md.UID() + "/" + r.ID)
+		regs := map[string]*ha.EntityEntry{entityID: r}
+		return hamapping.StableKey(md, &model.Basic{EntityKey: entityID}, MapOptions(regs, nil, nil))
 	}
 	return nil
 }

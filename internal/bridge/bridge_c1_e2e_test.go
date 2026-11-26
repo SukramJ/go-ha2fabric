@@ -4,12 +4,14 @@
 package bridge_test
 
 import (
+	"errors"
 	"fmt"
 	"testing"
 	"time"
 
 	"thingfabric.dev/go-fabric/cluster/spec"
 	wcdef "thingfabric.dev/go-fabric/cluster/spec/windowcovering"
+	"thingfabric.dev/go-fabric/contract"
 	"thingfabric.dev/go-fabric/controller/client"
 	"thingfabric.dev/go-fabric/fabrictest"
 
@@ -24,6 +26,20 @@ func (e *env) coverInvoke(ep uint16, cmd uint32, fields spec.Encodable) int {
 	mark := len(e.ha.Calls())
 	if _, err := fabrictest.Invoke(e.ctx, e.pair, client.CommandAt(ep, wcdef.ClusterID, cmd), fields); err != nil {
 		e.t.Fatalf("endpoint %d command %#x: %v", ep, cmd, err)
+	}
+	return mark
+}
+
+// coverRefused sends a WindowCovering command to ep that the row must
+// refuse with FAILURE, and returns the mark of the calls recorded before
+// it.
+func (e *env) coverRefused(ep uint16, cmd uint32, fields spec.Encodable) int {
+	e.t.Helper()
+	mark := len(e.ha.Calls())
+	_, err := fabrictest.Invoke(e.ctx, e.pair, client.CommandAt(ep, wcdef.ClusterID, cmd), fields)
+	var se *fabrictest.StatusError
+	if !errors.As(err, &se) || se.Status != contract.StatusFailure {
+		e.t.Fatalf("endpoint %d command %#x: %v, want FAILURE", ep, cmd, err)
 	}
 	return mark
 }
@@ -64,17 +80,18 @@ func (e *env) noCall(mark int, entityID string) {
 }
 
 // TestCoverCommandGates drives go-hamapping's cover rows
-// (rows/cover.yaml at v0.8.0, the commands of window_covering since
-// v0.4.4, #42): StopMotion
-// calls stop_cover only with STOP, GoToLiftPercentage calls
+// (rows/cover.yaml at v0.9.0, the commands of window_covering since
+// v0.4.4, #42, PositionAwareLift on every cover since v0.9.0, #44):
+// StopMotion calls stop_cover only with STOP, GoToLiftPercentage calls
 // set_cover_position only with SET_POSITION, and without it
-// LiftPercent100thsValue 0 opens and any other value closes. The
-// feature flags are Home Assistant's (cover/const.py:44-54 @2026.10.3).
+// LiftPercent100thsValue 0 opens, 10000 closes and any value between is
+// refused with FAILURE and calls nothing. The feature flags are Home
+// Assistant's (cover/const.py:44-54 @2026.10.3).
 func TestCoverCommandGates(t *testing.T) {
 	e := newEnv(t, expose.Rule{Assist: true})
 	e.commission()
 
-	// OPEN|CLOSE (3), no position: Lift without PositionAwareLift.
+	// OPEN|CLOSE (3), no position: Lift with PositionAwareLift.
 	scene := e.mustEndpoint("cover.scene_blind")
 	values, err := fabrictest.ReadCluster(e.ctx, e.pair, scene, wcdef.ClusterID)
 	if err != nil {
@@ -88,7 +105,7 @@ func TestCoverCommandGates(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if f := wcdef.Feature(fm); f&wcdef.FeatureLift == 0 || f&wcdef.FeaturePositionAwareLift != 0 {
+	if f := wcdef.Feature(fm); f&wcdef.FeatureLift == 0 || f&wcdef.FeaturePositionAwareLift == 0 {
 		t.Fatalf("cover.scene_blind FeatureMap %#x", fm)
 	}
 
@@ -100,6 +117,8 @@ func TestCoverCommandGates(t *testing.T) {
 	if c := e.nextCall(mark, "cover.scene_blind"); c.Domain != "cover" || c.Service != "close_cover" {
 		t.Fatalf("GoToLiftPercentage 10000: %v", c)
 	}
+	mark = e.coverRefused(scene, wcdef.CmdGoToLiftPercentage, wcdef.GoToLiftPercentageRequest{LiftPercent100thsValue: 5000})
+	e.noCall(mark, "cover.scene_blind")
 	// StopMotion without STOP answers success and calls nothing; the
 	// UpOrOpen after it is the next call on the entity.
 	mark = e.coverInvoke(scene, wcdef.CmdStopMotion, nil)
