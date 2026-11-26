@@ -187,3 +187,9 @@ if the pre-merge read adds none.
 | 76 | Decision 72's share and a third fabric (two ecosystems at 4 each can lock a third out until go-fabric proves their controllers lost) | **4 of 8 kept**; the lock-out goes into go-hamapping #50 (a total that follows the share times the fabrics, or a fair-share eviction) |
 | 77 | HR-P4-err-93, Create's rollback stop fails | **Fixed**: the unstopped node goes to the fleet's close list, its files stay, Create answers the error |
 | 78 | HR-P4-bound-98, a controller's ICE candidate over 1024 bytes | **CONSTRAINT_ERROR kept**; the comment and docs say it is the host's own bound |
+
+## 2026-11-26, phase 4's pull request #84
+
+| # | Subject | Decision |
+| --- | --- | --- |
+| 79 | HR-P4-conc-69's fix (`began.After(since)`) failed `TestSnapshotsShared` on CI's Windows runner: there every read of one trigger begins in the trigger's clock tick, so no read was shared (HR-P2-bound-62's purpose) | **Reverted, conc-69 accepted**: a read of the trigger's tick is shared again; an event missed within that tick is corrected by the next trigger; the comment and `TestSnapshotsSameTickIsReused` say so. A sequence mark instead of time was the alternative, not taken |

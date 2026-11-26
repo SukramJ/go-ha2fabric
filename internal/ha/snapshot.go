@@ -132,10 +132,13 @@ func (s *Snapshots) Read(ctx context.Context, since time.Time, assist bool) (*Sn
 	s.mu.Lock()
 	var f *flight
 	for _, c := range s.last[b2i(assist):] {
-		// After, not at: a read sent in the trigger's clock tick may have
-		// left before the event arrived (HR-P4-conc-69); an equal time
-		// costs one read more, never a stale one.
-		if c != nil && c.began.After(since) {
+		// At or after: a read that began in the trigger's clock tick is
+		// shared. On a coarse clock (Windows) every read of one trigger
+		// begins in its tick, so "after" alone would make each node read
+		// on its own (HR-P2-bound-62). The read may have left just before
+		// the event in that tick; the next trigger corrects it
+		// (HR-P4-conc-69, accepted: decision 79).
+		if c != nil && !c.began.Before(since) {
 			f = c
 			break
 		}

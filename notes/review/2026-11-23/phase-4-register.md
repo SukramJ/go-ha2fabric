@@ -33,8 +33,8 @@ read re-read 24 ranges at v0.27.0: all hold.
 
 Totals, run 1 after verification: 0 high · 0 medium · 11 low · 14 note =
 25. Pre-merge read: 0 high · 0 medium · 6 low · 3 note = 9 (no ID 92).
-Phase 4: 0 high · 0 medium · 17 low · 17 note = 34; closed as 32 fixed,
-1 accepted (bound-98, its comment fixed), 1 upstream (adpt-42); none
+Phase 4: 0 high · 0 medium · 17 low · 17 note = 34; closed as 31 fixed,
+2 accepted (bound-98, its comment fixed; conc-69, decision 79), 1 upstream (adpt-42); none
 open. The carried rows below are not counted again.
 
 **Verdict: run 1 has no confirmed high or medium**, neither after
@@ -69,7 +69,7 @@ No tag with this pull request (decision 71); the owner decides 0.7.1 /
 | HR-P4-err-66 | note | fixed `79268ce` | an erase stops a node an earlier erase kept stale, or refuses before touching the run; `TestEraseStopsAnEarlierStaleNode` |
 | HR-P4-test-67 | note | fixed `cb7b540` | `TestVersionBannerFindsItsModules` in a binary that links go-fabric and go-hamapping |
 | HR-P4-test-68 | note | fixed `86f0ae6` | MATCH_ALL, a lossless `WaitCall`, the still's own type; the one difference left (core's 401 before the entity check) named in a comment |
-| HR-P4-conc-69 | note | fixed `86f0ae6` | a read that began in the trigger's tick is not reused; `TestSnapshotsSameTickIsNotReused` |
+| HR-P4-conc-69 | note | accepted (decision 79); the fix `86f0ae6` reverted | "after, not at" made every read of one trigger its own on Windows' coarse clock (CI: `TestSnapshotsShared`, 9 reads); a read of the trigger's tick is shared again, the next trigger corrects a missed event; `TestSnapshotsSameTickIsReused` |
 | HR-P4-sup-70 | note | fixed `923785a` | decision 75: `gosec` on `cmd/`, one reasoned `nolint` (G101 on a warning code) |
 | HR-P4-test-90 | low | fixed `730821f` | pre-merge read: `TestEvictionTakesTheFabricsOwnIdlest` on a plain upstream, deterministic (`-race -count=50` ok) |
 | HR-P4-test-91 | low | fixed `6743f75` | pre-merge read: the `closePlan` seam; the stale plan not closed while refused, the refused build's plan closed once, the stale plan once when the Replace applies; the reader's mutation fails it |
