@@ -21,15 +21,15 @@ import (
 )
 
 // snapshot is the recorded fixtures as one sync reads them.
-func snapshot(t *testing.T) *ha.Snapshot {
-	t.Helper()
+func snapshot(tb testing.TB) *ha.Snapshot {
+	tb.Helper()
 	var s ha.Snapshot
 	for name, v := range map[string]any{
 		"entity_registry_list.json": &s.Entities, "device_registry_list.json": &s.Devices, "area_registry_list.json": &s.Areas, "label_registry_list.json": &s.Labels,
 		"get_states.json": &s.States, "get_config.json": &s.Config, "expose_entity_list.json": &s.Exposed,
 	} {
-		if err := json.Unmarshal(hatest.Fixture(t, name), v); err != nil {
-			t.Fatalf("%s: %v", name, err)
+		if err := json.Unmarshal(hatest.Fixture(tb, name), v); err != nil {
+			tb.Fatalf("%s: %v", name, err)
 		}
 	}
 	return &s

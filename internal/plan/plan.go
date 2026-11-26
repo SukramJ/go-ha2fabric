@@ -242,11 +242,23 @@ func Assess(s *ha.Snapshot, in Input) ([]Verdict, []*Group) {
 	for _, k := range keys {
 		g := groups[k]
 		dev, _ := json.Marshal(g.Device)
-		sig := string(dev)
+		// One builder, grown once: concatenation copied the whole
+		// signature per entity, quadratic in a device's entities
+		// (HR-P4-bound-43).
+		n := len(dev)
 		for _, e := range g.Entities {
-			sig += "|" + e.Key() + "=" + g.Descs[e.Key()]
+			n += 2 + len(e.Key()) + len(g.Descs[e.Key()])
 		}
-		g.Sig = sig
+		var sig strings.Builder
+		sig.Grow(n)
+		sig.Write(dev)
+		for _, e := range g.Entities {
+			sig.WriteString("|")
+			sig.WriteString(e.Key())
+			sig.WriteString("=")
+			sig.WriteString(g.Descs[e.Key()])
+		}
+		g.Sig = sig.String()
 		out = append(out, g)
 	}
 	return verdicts, out
