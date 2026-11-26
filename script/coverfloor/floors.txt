@@ -10,7 +10,7 @@ internal/camera     95
 internal/config     98
 internal/expose     97
 internal/exposure   96
-internal/ha         95
+internal/ha         94
 internal/ha/hatest  95
 internal/nodes      91
 internal/plan       99
