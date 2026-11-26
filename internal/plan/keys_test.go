@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	hamapping "sukramj.dev/go-hamapping"
-	"thingfabric.dev/go-fabric/endpoint"
 
 	"thingfabric.dev/go-ha2fabric/internal/expose"
 	"thingfabric.dev/go-ha2fabric/internal/ha"
@@ -39,7 +38,9 @@ func TestNoEmptyKey(t *testing.T) {
 			continue
 		}
 		for _, d := range devs {
-			stack := []endpoint.Spec{d.Spec()}
+			spec := d.Spec()
+			// Typed by Parts, so the test stays on go-fabric's facade.
+			stack := append(spec.Parts[:0:0], spec)
 			for len(stack) > 0 {
 				sp := stack[len(stack)-1]
 				stack = stack[:len(stack)-1]
