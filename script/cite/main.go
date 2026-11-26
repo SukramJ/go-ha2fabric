@@ -117,6 +117,9 @@ type citation struct {
 	path    string // as written
 	spans   []span
 	version string // the pin, "" when none
+	// missing is a path the module named before it does not have
+	// (HR-P4-test-63).
+	missing bool
 }
 
 // line is one line of a block: its number and its text.
@@ -387,7 +390,7 @@ func cites(file string, b []line, mods map[string]*module, local []string) []cit
 	for i, m := range paths {
 		p := s[m[2]:m[3]]
 		version := versionOrMarker(s[m[1]:min(len(s), m[1]+versionReach)])
-		key := attribute(s[:m[0]], s[m[0]:m[2]], p, version, mods, local)
+		key, missing := attribute(s[:m[0]], s[m[0]:m[2]], p, version, mods, local)
 		if key == "" {
 			continue
 		}
@@ -396,13 +399,22 @@ func cites(file string, b []line, mods map[string]*module, local []string) []cit
 			end = paths[i+1][0]
 		}
 		spans, rest := readSpans(s[m[1]:end])
+		if missing {
+			// Only a pin of this path: lines, and no other module named
+			// between the path and the version ("… (rows/camera.yaml at
+			// v0.8.0)" after a go-hamapping mention is not this path's).
+			tail := s[m[1]:min(len(s), m[1]+versionReach)]
+			if len(spans) == 0 || mention.MatchString(tail[:strings.Index(tail, version)]) {
+				continue
+			}
+		}
 		// Continuations cite the same file again: ", :122-127".
 		after := m[1] + rest
 		for _, c := range contRe.FindAllStringSubmatchIndex(s[after:end], -1) {
 			sp, _ := readSpans(s[after+c[2] : end])
 			spans = append(spans, sp...)
 		}
-		out = append(out, citation{file: file, line: lineAt(m[0]), mod: key, path: p, spans: spans, version: version})
+		out = append(out, citation{file: file, line: lineAt(m[0]), mod: key, path: p, spans: spans, version: version, missing: missing})
 	}
 	return out
 }
@@ -412,31 +424,60 @@ func cites(file string, b []line, mods map[string]*module, local []string) []cit
 // before it, when the path resolves there and is not this repository's
 // own (a path this repository has, with no version, is its own); else
 // the one module whose tree has the path exactly, when it has a
-// directory and this repository has no such file.
-func attribute(before, prefix, p, version string, mods map[string]*module, local []string) string {
+// directory and this repository has no such file. missing is a path with
+// a directory and a vX.Y.Z pin after the module the block names last,
+// which neither that module nor any other nor this repository has: a
+// file a bump renamed, moved or deleted, or a typo (HR-P4-test-63); the
+// caller counts it only when it cites lines.
+func attribute(before, prefix, p, version string, mods map[string]*module, local []string) (key string, missing bool) {
 	if prefix != "" {
-		return strings.TrimSuffix(prefix, ":")
+		return strings.TrimSuffix(prefix, ":"), false
 	}
 	own := hasSuffixPath(local, p)
+	named := ""
 	if ms := mention.FindAllString(before, -1); len(ms) > 0 {
-		key := mentionKey(ms[len(ms)-1])
-		if _, ok := resolve(mods[key].files, p); ok && (version != "" || !own) {
-			return key
+		named = mentionKey(ms[len(ms)-1])
+		if _, ok := resolve(mods[named].files, p); ok && (version != "" || !own) {
+			return named, false
 		}
 	}
 	if !strings.Contains(p, "/") || own {
-		return ""
+		return "", false
 	}
 	hit := ""
 	for _, k := range modules {
 		if _, ok := slices.BinarySearch(mods[k.key].files, p); ok {
 			if hit != "" {
-				return ""
+				return "", false
 			}
 			hit = k.key
 		}
 	}
-	return hit
+	if hit == "" && named != "" && strings.HasPrefix(version, "v") && !anySuffix(mods, p) {
+		return named, true
+	}
+	return hit, false
+}
+
+// moduleName is the last element of the module path of key:
+// "go-fabric" for gf.
+func moduleName(key string) string {
+	for _, k := range modules {
+		if k.key == key {
+			return k.path[strings.LastIndex(k.path, "/")+1:]
+		}
+	}
+	return key
+}
+
+// anySuffix reports whether a module's tree has p as the end of a path.
+func anySuffix(mods map[string]*module, p string) bool {
+	for _, k := range modules {
+		if hasSuffixPath(mods[k.key].files, p) {
+			return true
+		}
+	}
+	return false
 }
 
 // readSpans reads ":12-34, 56" at the start of s and returns the spans
@@ -525,6 +566,9 @@ func hasSuffixPath(files []string, path string) bool {
 // check says what is wrong with c at go.mod's version, or "".
 func check(c citation, mods map[string]*module) string {
 	mod := mods[c.mod]
+	if c.missing {
+		return "not in " + moduleName(c.mod) + " at " + mod.version
+	}
 	var problems []string
 	switch {
 	case c.version == goModVersion && len(c.spans) == 0:
