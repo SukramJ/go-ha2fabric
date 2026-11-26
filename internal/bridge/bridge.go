@@ -962,6 +962,10 @@ func (b *Bridge) keepStale(g *group, key string, ep node.Endpoint) {
 	}
 }
 
+// closePlan is (*hamapping.Plan).Close; a test counts the closes
+// (HR-P4-test-91).
+var closePlan = (*hamapping.Plan).Close
+
 // closePlans closes the plans of the groups in b.groups, and of the
 // groups they keep stale, that no group of next uses any more, as its
 // own or kept stale.
@@ -977,7 +981,7 @@ func (b *Bridge) closePlans(next map[string]*group) {
 		for _, c := range append([]*group{g}, slices.Collect(maps.Values(g.stale))...) {
 			if c.plan != nil && !used[c.plan] {
 				used[c.plan] = true
-				c.plan.Close()
+				closePlan(c.plan)
 			}
 		}
 	}
