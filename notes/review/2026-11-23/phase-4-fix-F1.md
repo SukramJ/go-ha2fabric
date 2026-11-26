@@ -300,3 +300,36 @@ fuzz target, dependency or 32-bit-sensitive code moved).
 ## Tokens
 
 About 450 k.
+
+## Fix round (pre-merge IDs 90–99, decisions 76–78)
+
+Base `73546e6` (F2 integrated; F1 owns every path). Commits
+`730821f..c018dc6`.
+
+| ID | Commit | What |
+| --- | --- | --- |
+| test-90 | `730821f` | `TestEvictionTakesTheFabricsOwnIdlest` on a plain `&upstream{}`: no event moves `last`, the offer order is the idle order. `-race -count=50` of `TestEviction*`/`TestFabricShare`: ok |
+| test-91 | `6743f75` | Seam `closePlan` (bridge.go); `export_test.go` `PlanCloses` and `Plans` (own and live plan, read on the worker); `TestRefusedReplaceKeepsServedEndpointLive` now holds: the stale plan is not closed while refused (also across the retries), the refused build's plan is closed once, the stale plan once when the Replace applies. The pre-merge's mutation (`used[s.plan] = true` → `_ = s`) fails it ("closed 1 times"). An e2e test through the seam, not an internal one: the refused Replace needs the real node of the env (package `bridge_test`) |
+| err-93 | `375c4c4` | Decision 77: a rollback whose stop fails puts the node into `fleet.orphans` (under `op`), keeps its files, logs `ha2fabric.node_stop` at warn with a hint; `fleet.Close` stops the orphans with the members. `TestCreateRollbackBounded` (helper only) became `TestCreateRollbackStopFails`, at the call site: the stop's deadline within `stopBudget` (red with `WithCancel` in place of `WithTimeout`), the files stay (red before), the daemon's stop stops the node again |
+| test-99 | `bd88458` | `eventually` clears the last client error first |
+| bound-98 | `18bfe8b` | Decision 78: `MaxCandidateBytes`' comment says the bound is the host's (the spec bounds the line not at all and `SdpMid` only below, `definition_gen.go:256-257, 282 at v0.27.0`), CONSTRAINT_ERROR kept |
+| doc-97 | `2d53731`, `c018dc6` | `docs/by_design.md`, "Cameras behind an option": matter-hub bounds no session (`webrtc-provider-server.ts:25-34, 88-96, 291-315`, `webrtc-bridge.ts:90, 141, 216`, re-read at `664575a`; the search for `max|limit|evict|ResourceExhausted` over the four plugin files finds only sensor and stream parameters); go-ha2fabric's 8 per camera, 4 per fabric, eviction within the fabric |
+| doc-94, -95, -96 | `5a33929` | operations.md: Delete has left the fabrics before a failed stop (listed not enabled, `fabrics_removed=0` on the retry); `addon/DOCS.md` the same; the candidate bullet names line plus `sdpMid`, both directions, the host's bound; `camera.session_evicted` logs `fabric`. changelog: bound-21 both ways; lines for err-41, bound-43, conc-65/err-93/err-66 and the Delete clause (F2 had carried the others) |
+
+Decision 76 needs no code (4 of 8 kept).
+
+### Guards at `c018dc6`
+
+| Guard | Result |
+| --- | --- |
+| `make ci` | exit 0 (build, vet, test, lint 0 issues, cite, licenses-check) |
+| `make cite` | exit 0 |
+| `make race` (full) | exit 0 |
+| `make cover-check` | exit 0 (`cmd/ha2fabric` 88.6, `internal/bridge` 93.3, `internal/camera` 95.1, `internal/ha` 95.2) |
+
+Not rerun: fuzz-smoke, vuln, licenses, secrets, 386 (no fuzz target,
+dependency or 32-bit-sensitive code moved since `f9b484b`).
+
+### Left
+
+Nothing of IDs 90–99.
