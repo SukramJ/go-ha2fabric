@@ -91,6 +91,9 @@ var (
 	// before Home Assistant named its session, or one beyond the
 	// session's MaxSessionCandidates; it travels with RESOURCE_EXHAUSTED.
 	ErrTooManyCandidates = errors.New("camera: too many ICE candidates")
+	// ErrCandidateTooLong refuses a controller's ICE candidate over
+	// MaxCandidateBytes; it travels with CONSTRAINT_ERROR.
+	ErrCandidateTooLong = errors.New("camera: an ICE candidate over MaxCandidateBytes")
 	// ErrTooManySessions refuses an offer beyond MaxSessions or its
 	// fabric's MaxSessionsPerFabric while none of that fabric's sessions
 	// is idle; it travels with RESOURCE_EXHAUSTED.
@@ -120,12 +123,13 @@ const MaxPendingCandidates = 64
 // restarts.
 const MaxSessionCandidates = 256
 
-// MaxCandidateBytes bounds one of Home Assistant's ICE candidates on its
-// way to the controller (HR-P2-bound-40). A candidate line is a
+// MaxCandidateBytes bounds one ICE candidate, its line and its sdpMid
+// together (HR-P2-bound-40, HR-P4-bound-21). A candidate line is a
 // foundation, a component, a transport, a priority, an address, a port,
 // a type and a few extensions (RFC 8839 section 5.1) — a real one is
-// under 300 bytes; a longer one is refused and logged, the session
-// stays.
+// under 300 bytes — and a media id is a short token. A longer one of Home
+// Assistant's is refused and logged, the session stays; a controller's
+// is refused with CONSTRAINT_ERROR.
 const MaxCandidateBytes = 1024
 
 // MaxSessions bounds a camera's WebRTC sessions. Each is a session of
@@ -590,6 +594,13 @@ func (h *Host) ProvideIceCandidates(ctx context.Context, sessionID uint16, candi
 		return fmt.Errorf("%w: %s %d, %d more, session %d: %w", ErrTooManyCandidates, what, n, len(candidates), sessionID,
 			contract.StatusError{Status: contract.StatusResourceExhausted, Message: ErrTooManyCandidates.Error()})
 	}
+	for _, c := range candidates {
+		if n := len(c.Candidate) + len(c.SdpMid.Value); n > MaxCandidateBytes {
+			h.mu.Unlock()
+			return fmt.Errorf("%w: %d bytes, session %d: %w", ErrCandidateTooLong, n, sessionID,
+				contract.StatusError{Status: contract.StatusConstraintError, Message: ErrCandidateTooLong.Error()})
+		}
+	}
 	switch {
 	case len(candidates) > MaxPendingCandidates:
 		h.mu.Unlock()
@@ -636,6 +647,15 @@ func (h *Host) EndSession(ctx context.Context, sessionID uint16, reason uint8) e
 		h.unsubscribe(ctx, ss)
 	}
 	return nil
+}
+
+// candidateBytes is what MaxCandidateBytes counts of a candidate: its
+// line and its sdpMid.
+func candidateBytes(line string, mid *string) int {
+	if mid == nil {
+		return len(line)
+	}
+	return len(line) + len(*mid)
 }
 
 func toHA(c wpdef.ICECandidateStruct) ha.ICECandidate {
@@ -755,7 +775,7 @@ func (h *Host) event(ctx context.Context, ss *session, ev ha.WebRTCEvent) bool {
 			h.end(ctx, ss, ReasonICEFailed)
 			return false
 		}
-		if n := len(ev.Candidate.Candidate); n > MaxCandidateBytes {
+		if n := candidateBytes(ev.Candidate.Candidate, ev.Candidate.SdpMid); n > MaxCandidateBytes {
 			h.log.Warn("camera.candidate_refused", slog.Int("session", int(ss.id)), slog.Int("bytes", n), slog.Int("max", MaxCandidateBytes))
 			return true
 		}

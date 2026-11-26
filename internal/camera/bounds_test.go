@@ -507,3 +507,37 @@ func TestFabricShareRefused(t *testing.T) {
 		t.Fatalf("ends %q", e)
 	}
 }
+
+// TestCandidateMidIsBounded (HR-P4-bound-21): MaxCandidateBytes bounds a
+// candidate with its sdpMid. Home Assistant's candidate with a long
+// sdpMid is refused and logged, the session stays; a controller's is
+// refused with CONSTRAINT_ERROR before Home Assistant is asked.
+func TestCandidateMidIsBounded(t *testing.T) {
+	up := &upstream{}
+	h := boundedHost(t, up, camera.Options{})
+	sig := &signaller{}
+	h.Attach(sig)
+	ctx := context.Background()
+	if _, err := h.ProvideOffer(ctx, offer(5)); err != nil {
+		t.Fatal(err)
+	}
+	st := up.stream(0)
+	st.push(session("ha-1"))
+	mid := strings.Repeat("M", camera.MaxCandidateBytes)
+	st.push(candidate("candidate:long", mid, 0))
+	st.push(candidate("candidate:short", "0", 0))
+	eventually(t, "the short candidate", func() bool {
+		return slices.ContainsFunc(sig.seen(), func(s string) bool { return strings.HasPrefix(s, "candidate 5 candidate:short") })
+	})
+	for _, s := range sig.seen() {
+		if strings.Contains(s, "candidate:long") {
+			t.Fatalf("a candidate with a %d-byte sdpMid reached the controller", len(mid))
+		}
+	}
+	var c wpdef.ICECandidateStruct
+	c.Candidate, c.SdpMid, c.SdpmLineIndex = "candidate:a", spec.ValueOf(mid), spec.ValueOf[uint16](0)
+	err := h.ProvideIceCandidates(ctx, 5, []wpdef.ICECandidateStruct{c})
+	if se, ok := errors.AsType[contract.StatusError](err); !ok || se.Status != contract.StatusConstraintError {
+		t.Fatalf("a controller's candidate over MaxCandidateBytes: %v", err)
+	}
+}
