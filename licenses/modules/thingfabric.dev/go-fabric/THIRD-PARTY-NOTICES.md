@@ -1,0 +1,186 @@
+# Third-Party Notices
+
+go-fabric is licensed under the Apache License 2.0 (see [`LICENSE`](./LICENSE)
+and [`NOTICE`](./NOTICE); `v0.4.0` and earlier were MIT). It is a semantic port
+of `matter.js` for the Matter side and depends on a small set of Go modules.
+No third-party source is copied verbatim into this tree; the Go code is
+written from scratch and cites the upstream file + function it mirrors in a
+file-top or inline comment, so the lineage stays auditable.
+
+This file records the upstream projects, their licenses, and the verbatim
+copyright notices they carry, so that the people behind them are credited and
+the license obligations travel with any redistribution.
+
+Full license texts referenced below live under [`licenses/`](./licenses/):
+[`MIT.txt`](./licenses/MIT.txt), [`Apache-2.0.txt`](./licenses/Apache-2.0.txt)
+and [`LICENSE-filippo.io-nistec.txt`](./licenses/LICENSE-filippo.io-nistec.txt),
+alongside the reproduced upstream
+[`NOTICE-matter.js.txt`](./licenses/NOTICE-matter.js.txt).
+
+---
+
+## The Matter-side gold standard
+
+### matter.js — Apache-2.0
+
+Everything in this module is a semantic port of matter.js HEAD: cluster IDs,
+revisions, attribute IDs, constraints, defaults, and wire shape are mirrored
+from it. Well over a hundred Go files cite the matter.js `path:function` they
+mirror.
+
+- Source: <https://github.com/matter-js/matter.js>
+- Copyright: Copyright 2022-2026 Matter.js Authors (`LICENSE:189`).
+  The project began under the Connectivity Standards Alliance organisation
+  (`project-chip`, which still redirects) and now lives in its own
+  `matter-js` organisation, self-described as an unofficial implementation
+  of the Matter protocol. It is not a CSA project and is not certified.
+- License: Apache License 2.0 — see [`licenses/Apache-2.0.txt`](./licenses/Apache-2.0.txt).
+- Upstream `NOTICE`, reproduced verbatim as required by its own final line:
+  [`licenses/NOTICE-matter.js.txt`](./licenses/NOTICE-matter.js.txt).
+- No matter.js source code is reproduced verbatim. What does ship inside every
+  binary built from this module is the parity schema snapshot — the matter.js
+  element model extracted from HEAD — embedded from `parity/schema.json`
+  (3,422,318 bytes) by the `//go:embed` in `parity/parity.go`.
+
+### connectedhomeip — test vectors only, nothing distributed
+
+`controller/attestation/testdata/chip-commissioner-dut/vectors.json` holds
+connectedhomeip's commissioner DUT attestation vectors
+(`credentials/development/commissioner_dut/*/test_case_vector.json`), the
+`TestCredentials-FFF1-8001.json` credentials and the CD certificates of
+`credentials/development/cd-certs` at commit `6170af84` (Apache-2.0), as
+hex; the file names its source. They are test data only and reach no
+build of a consumer.
+
+The CHIP data model cross-check (`internal/chipdm`,
+[ADR 0015](./docs/adr/0015-chip-data-model-read-at-run-time.md)) reads
+connectedhomeip's spec-derived data model, `data_model/<version>/`, from a
+checkout at test time. No file of it and nothing derived from it is in this
+tree or in any binary built from this module: the XML files carry a
+Connectivity Standards Alliance notice that forbids publishing them or
+creating derivative works from them. The XML fixtures in
+`internal/chipdm/*_test.go` are written for those tests and reproduce no
+CSA document.
+
+### CSA Distributed Compliance Ledger — public root certificates
+
+`controller/dcl/snapshot/data/` holds the production Product Attestation
+Authority certificates and Certification Declaration signer certificates of
+the CSA Distributed Compliance Ledger (`https://on.dcl.csa-iot.org`), as DER
+files with a `SOURCE` file naming the ledger, the fetch time and the SHA-256
+of every file; they are embedded in every binary that imports
+`controller/dcl/snapshot` (and so `controller`, whose `ProductionTrust` loads
+them). They are public root certificates whose
+publication the Matter PKI Certificate Policy requires (§2.2, Table 5: PAA
+certificates — Public; §4.4.2: "published in a publicly available
+repository"),
+<https://csa-iot.org/wp-content/uploads/2024/02/pki-certificate-policy-2025.pdf>.
+connectedhomeip (Apache-2.0) commits the same certificates under
+`credentials/production/`. Revocation information is not redistributed: the
+CRL check stays online. The same directory holds `vendors.json`, the
+ledger's public vendor records (id, name, company names, landing page,
+creator address), fetched from the ledger's `/dcl/vendorinfo/vendors`.
+
+### matterjs-server — test fixtures
+
+`controller/client/testdata/compat/` holds JSON examples from the
+documentation of matterjs-server (`docs/websockets_api.md`,
+<https://github.com/matter-js/matterjs-server>, Apache-2.0, commit
+`a7922e85f4b94a5db94a1dbee1a02c685c2ec71d`), which the JSON value route's
+tests round-trip; the directory's README names the source. They are test
+data only and reach no build of a consumer.
+
+---
+
+## Go module dependencies
+
+The dependency graph is entirely permissive (MIT / BSD-3-Clause); there is no
+copyleft (GPL / LGPL / MPL / AGPL) module in the build. Each license family
+below was read from the module's own `LICENSE` file in the module cache, and
+each copyright line is quoted verbatim from it.
+
+### Linked into a build that imports this module
+
+Measured with `go list -deps` over every package outside `script/`,
+`internal/` and `examples/`, as the union over linux (amd64, arm64, arm,
+386), darwin (arm64, amd64) and windows (amd64) with `CGO_ENABLED=0`
+(`script/docscheck`, `TestNoticesListEveryLinkedModule`). The set differs
+by platform: a linux build does not link `github.com/mattn/go-isatty` and
+`github.com/ncruces/go-strftime`, a windows build does not link
+`github.com/google/uuid`. The first four are the direct runtime
+dependencies in `go.mod`; the rest are reached through them. `modernc.org/sqlite` is the pure-Go SQLite driver:
+`store.OpenSQLite` (`store/sqlite.go`) imports it, and the node
+(`Config.Store.Path`) and the controller (`controller.OpenDB`) open their
+databases with it, so a build that imports `node` or `controller` links it
+and the modules it depends on.
+
+| Module | License |
+| --- | --- |
+| `filippo.io/nistec` | BSD-3-Clause |
+| `github.com/miekg/dns` | BSD-3-Clause |
+| `golang.org/x/net` | BSD-3-Clause |
+| `modernc.org/sqlite` | BSD-3-Clause |
+| `golang.org/x/sys` | BSD-3-Clause |
+| `modernc.org/libc` | BSD-3-Clause |
+| `modernc.org/mathutil` | BSD-3-Clause |
+| `modernc.org/memory` | BSD-3-Clause |
+| `github.com/dustin/go-humanize` | MIT |
+| `github.com/google/uuid` | BSD-3-Clause |
+| `github.com/mattn/go-isatty` | MIT |
+| `github.com/ncruces/go-strftime` | MIT |
+| `github.com/remyoudompheng/bigfft` | BSD-3-Clause |
+
+### Developer tools (the guards under `script/`, never in a consumer's build)
+
+`golang.org/x/tools` is the reachability guard's analysis library;
+`golang.org/x/exp` provides `cmd/apidiff`, the API-break guard's
+comparison (`make apidiff`), declared as a tool dependency in `go.mod`.
+Neither is imported by a package outside `script/`.
+
+| Module | License |
+| --- | --- |
+| `golang.org/x/tools` | BSD-3-Clause ("Copyright 2009 The Go Authors.") |
+| `golang.org/x/exp` | BSD-3-Clause ("Copyright 2009 The Go Authors.") |
+| `golang.org/x/mod`, `golang.org/x/sync` | BSD-3-Clause (their dependencies) |
+
+To regenerate an exhaustive, machine-verified list, run a tool such as
+`go-licenses report ./...` against the module graph.
+
+### Verbatim copyright notices
+
+```
+filippo.io/nistec                  Copyright 2009 The Go Authors.
+github.com/dustin/go-humanize      Copyright (c) 2005-2008  Dustin Sallings <dustin@spy.net>
+github.com/google/uuid             Copyright (c) 2009,2014 Google Inc. All rights reserved.
+github.com/mattn/go-isatty         Copyright (c) Yasuhiro MATSUMOTO <mattn.jp@gmail.com>
+github.com/miekg/dns               Copyright (c) 2009, The Go Authors. Extensions copyright (c) 2011, Miek Gieben.
+github.com/ncruces/go-strftime     Copyright (c) 2022 Nuno Cruces
+github.com/remyoudompheng/bigfft   Copyright (c) 2012 The Go Authors. All rights reserved.
+golang.org/x/net                   Copyright 2009 The Go Authors.
+golang.org/x/sys                   Copyright 2009 The Go Authors.
+modernc.org/libc                   Copyright (c) 2017 The Libc Authors. All rights reserved.
+modernc.org/mathutil               Copyright (c) 2014 The mathutil Authors. All rights reserved.
+modernc.org/memory                 Copyright (c) 2017 The Memory Authors. All rights reserved.
+modernc.org/sqlite                 Copyright (c) 2017 The Sqlite Authors. All rights reserved.
+```
+
+One of these carries a per-module notice obligation and is therefore recorded
+in full below.
+
+### filippo.io/nistec — BSD-3-Clause
+
+An exported build of the standard library's internal NIST P-curve
+implementation. Linked into the binary and used for the P-256 point arithmetic
+of the Matter SPAKE2+ handshake (`secure/spake2/spake2.go`); the stdlib
+exposes no public API for the operations that handshake needs.
+
+- Source: <https://filippo.io/nistec>
+- Copyright notice (verbatim from upstream `LICENSE`):
+
+  ```
+  Copyright 2009 The Go Authors.
+  ```
+
+- License: BSD-3-Clause — the upstream text is reproduced at
+  [`licenses/LICENSE-filippo.io-nistec.txt`](./licenses/LICENSE-filippo.io-nistec.txt),
+  and its third clause names Google LLC and its contributors.
