@@ -22,6 +22,7 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- go-fabric `v0.26.0` → `v0.27.0`.
 - Dependencies moved to their vanity import paths: `sukramj.dev/go-ha-catalog` v0.4.0, `sukramj.dev/go-hamapping` v0.8.0, `sukramj.dev/go-hamqtt` v0.41.0.
 - Add-on: the web UI binds to the address the Supervisor gives the add-on
   (the Supervisor network's gateway, where the Ingress proxy connects),
