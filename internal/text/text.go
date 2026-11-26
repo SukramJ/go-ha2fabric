@@ -23,7 +23,9 @@ import (
 // (C0, DEL, C1: unicode.IsControl) or a bidirectional control — the
 // Arabic letter mark U+061C, the marks U+200E and U+200F, the embeddings
 // and overrides U+202A to U+202E and the isolates U+2066 to U+2069
-// (Unicode Standard Annex #9, table 4).
+// (Unicode Standard Annex #9, table 4) — or the line and paragraph
+// separators U+2028 and U+2029 (Zl, Zp), which break a line as LF does
+// (HR-P4-data-22).
 func Unsafe(r rune) bool {
 	switch {
 	case unicode.IsControl(r):
@@ -31,6 +33,8 @@ func Unsafe(r rune) bool {
 	case r == 0x061C, r == 0x200E, r == 0x200F:
 		return true
 	case r >= 0x202A && r <= 0x202E, r >= 0x2066 && r <= 0x2069:
+		return true
+	case r == 0x2028, r == 0x2029:
 		return true
 	}
 	return false
