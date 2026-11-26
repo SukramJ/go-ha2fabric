@@ -326,7 +326,7 @@ The lines to know:
 | `camera.signal_failed` | warn | A signal did not reach the controller (`command`, `error`); the session ends. |
 | `camera.snapshot_failed` | warn | A controller's snapshot failed at the camera proxy (`error`: off, refused, too large). |
 | `camera.session_lost` | info | The Home Assistant connection dropped; its camera sessions ended with it. |
-| `camera.session_evicted` | info | A session ended to make room for a new offer at the camera's 8 (`session`, `for`; Cameras). |
+| `camera.session_evicted` | info | A session ended to make room for a new offer of its fabric at the camera's 8 or the fabric's 4 (`session`, `for`; Cameras). |
 | `camera.answer_empty` | warn | Home Assistant's answer carried no SDP; the session ends. |
 
 ## Labels
@@ -445,17 +445,19 @@ Limits:
   Home Assistant scales a JPEG down only, by fixed factors
   (`camera/img_util.py:18-36`): a controller that asks for a large
   resolution of a large camera may get no snapshot.
-- A camera holds at most 8 WebRTC sessions. A further offer ends the
-  session idle longest — no command and no Home Assistant event for a
-  minute — with `End` (reason 12) to its controller
-  (`camera.session_evicted`), or, when every session is more recent, is
-  answered RESOURCE_EXHAUSTED. A session has no idle end of its own: a
+- A camera holds at most 8 WebRTC sessions, and one fabric (one
+  ecosystem's controllers) at most 4 of them. An offer beyond either
+  bound ends the offering fabric's own session idle longest — no command
+  and no Home Assistant event for a minute — with `End` (reason 12) to its
+  controller (`camera.session_evicted`), or, when that fabric has none so
+  idle, is answered RESOURCE_EXHAUSTED; another fabric's session is never
+  ended for it. A session has no idle end of its own: a
   live view signals nothing once it stands, and it stays open as long as
   the controller keeps it. The sessions of a controller go-fabric's node
   proved lost — an exchange the node opened to it went unanswered and no
   session with it is left — end through the node (`camera.session_ended`,
   and Home Assistant's session closes); a controller still on Matter
-  that abandoned its view ends only by the eviction above.
+  that abandoned its view ends only by its own fabric's eviction above.
 - A controller's `ProvideIceCandidates` carries at most 64 candidates and
   a session at most 256; beyond, the call is answered RESOURCE_EXHAUSTED.
   Before Home Assistant names its session at most 64 wait. Home
@@ -670,7 +672,10 @@ for all its fabrics, so a different scope is a different node.
   that writes a name later wins in turn.
 - **Delete** is final: the node leaves every fabric it holds (its
   controllers lose it), stops, and its store, its selection (with its
-  `.bak` and any copy moved aside) and its record are removed (`ha2fabric.node_deleted`). The configured node
+  `.bak` and any copy moved aside) and its record are removed (`ha2fabric.node_deleted`). A node that does not
+  stop (`ha2fabric.node_stop` at warn with `error`) is not deleted: the
+  Delete answers 500, its record and its files stay, and a second Delete
+  tries the stop again. The configured node
   cannot be deleted (409 `node_is_default`).
 - **Erase** starts the node over for the controllers and keeps it: as
   for the configured node (Erase and factory reset), its fabrics, its
@@ -719,7 +724,8 @@ and the erase answers the error — Erase again. When it cannot be stopped
 either, it is kept: the come-back fails on the port it holds, and the
 next Erase resets that node again. An erase runs while the status pages
 keep answering. A registry node in that
-state is listed as not enabled; its Delete works.
+state is listed as not enabled; its Delete stops it first, and is
+refused (500) while it cannot be stopped.
 
 A stop (SIGTERM, the add-on's stop) has one budget of 25 seconds: the web
 server and the Home Assistant connection end first, then every node stops
