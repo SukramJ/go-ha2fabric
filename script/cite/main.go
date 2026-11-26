@@ -29,6 +29,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -97,9 +98,9 @@ func versionOrMarker(s string) string {
 	v := versionRe.FindStringIndex(s)
 	m := strings.Index(s, goModVersion)
 	switch {
-	case m >= 0 && (v == nil || m < v[0]):
+	case m >= 0 && (len(v) == 0 || m < v[0]):
 		return goModVersion
-	case v != nil:
+	case len(v) == 2:
 		return s[v[0]:v[1]]
 	}
 	return ""
@@ -127,7 +128,7 @@ type line struct {
 func main() {
 	list := flag.Bool("list", false, "print every recognised citation")
 	flag.Parse()
-	mods, err := loadModules()
+	mods, err := loadModules(context.Background())
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "cite:", err)
 		os.Exit(2)
@@ -193,12 +194,13 @@ func orOK(p string) string {
 
 // loadModules reads go.mod's version and directory of each cited module
 // (go mod download, which fetches it when the cache lacks it).
-func loadModules() (map[string]*module, error) {
-	args := []string{"mod", "download", "-json"}
+func loadModules(ctx context.Context) (map[string]*module, error) {
+	args := make([]string, 0, 3+len(modules))
+	args = append(args, "mod", "download", "-json")
 	for _, m := range modules {
 		args = append(args, m.path)
 	}
-	out, err := exec.Command("go", args...).Output() //nolint:gosec // fixed arguments
+	out, err := exec.CommandContext(ctx, "go", args...).Output() //nolint:gosec // fixed arguments
 	if err != nil {
 		var ee *exec.ExitError
 		if errors.As(err, &ee) {
@@ -369,7 +371,7 @@ func textBlocks(src string) [][]line {
 // cites are the module citations of one block.
 func cites(file string, b []line, mods map[string]*module, local []string) []citation {
 	var text strings.Builder
-	var starts []int
+	starts := make([]int, 0, len(b))
 	for _, l := range b {
 		starts = append(starts, text.Len())
 		text.WriteString(l.text)
@@ -440,7 +442,7 @@ func attribute(before, prefix, p, version string, mods map[string]*module, local
 // readSpans reads ":12-34, 56" at the start of s and returns the spans
 // and how far it read; a number followed by "." and a digit is a version,
 // not a line.
-func readSpans(s string) ([]span, int) {
+func readSpans(s string) (spans []span, read int) {
 	i := 0
 	skip := func() {
 		for i < len(s) && (s[i] == ' ' || s[i] == '`') {
@@ -451,8 +453,7 @@ func readSpans(s string) ([]span, int) {
 		return nil, 0
 	}
 	i++
-	var out []span
-	read := i
+	read = i
 	for {
 		skip()
 		j := i
@@ -477,7 +478,7 @@ func readSpans(s string) ([]span, int) {
 		if k+1 < len(s) && s[k] == '.' && s[k+1] >= '0' && s[k+1] <= '9' {
 			break // a version such as 2026.10.3
 		}
-		out = append(out, span{from, to})
+		spans = append(spans, span{from, to})
 		i, read = k, k
 		if i < len(s) && s[i] == ',' {
 			n := i + 1
@@ -491,7 +492,7 @@ func readSpans(s string) ([]span, int) {
 		}
 		break
 	}
-	return out, read
+	return spans, read
 }
 
 // resolve finds path in files: as it is, or as the one file whose path

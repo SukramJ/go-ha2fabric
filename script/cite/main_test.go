@@ -171,7 +171,7 @@ func TestRepository(t *testing.T) {
 	if testing.Short() {
 		t.Skip("reads the module cache")
 	}
-	mods, err := loadModules()
+	mods, err := loadModules(t.Context())
 	if err != nil {
 		t.Skip("module cache:", err)
 	}

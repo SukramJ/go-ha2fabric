@@ -18,10 +18,10 @@ func profile(pkg string, pct int) map[string]block {
 	}
 }
 
-func run(t *testing.T, blocks map[string]block, floors map[string]float64) (bool, string) {
+func run(t *testing.T, blocks map[string]block, floors map[string]float64) (ok bool, out string) {
 	t.Helper()
 	var b strings.Builder
-	ok := check(&b, blocks, floors)
+	ok = check(&b, blocks, floors)
 	return ok, b.String()
 }
 

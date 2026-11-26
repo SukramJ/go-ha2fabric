@@ -206,8 +206,9 @@ func fuzzTargets(t *testing.T, makefile string) []string {
 	if err := sc.Err(); err != nil {
 		t.Fatal(err)
 	}
-	var out []string
-	for _, tgt := range strings.Fields(value.String()) {
+	fields := strings.Fields(value.String())
+	out := make([]string, 0, len(fields))
+	for _, tgt := range fields {
 		dir, name, ok := strings.Cut(tgt, ":")
 		if !ok {
 			t.Fatalf("FUZZ_TARGETS entry %q is not <package>:<name>", tgt)
