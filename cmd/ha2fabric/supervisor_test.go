@@ -262,3 +262,29 @@ func TestAddonWebListen(t *testing.T) {
 		}
 	}
 }
+
+// TestSupervisorGateBadAnswers (HR-P3-test-12): a 200 answer whose body
+// does not decode, whose result is not "ok" or that names no Supervisor
+// version leaves the gate closed with warningSupervisorUnknown.
+func TestSupervisorGateBadAnswers(t *testing.T) {
+	for name, body := range map[string]string{
+		"undecodable":   `<html>starting</html>`,
+		"result error":  `{"result":"error","message":"busy","data":{"supervisor":"2026.11.0"}}`,
+		"no supervisor": `{"result":"ok","data":{"homeassistant":"2026.10.3"}}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				_, _ = w.Write([]byte(body))
+			}))
+			t.Cleanup(srv.Close)
+			g, _ := runGate(t, srv.URL, "sup-token")
+			eventually(t, "a warning with the read's error", func() bool {
+				w := g.Warnings()
+				return len(w) == 1 && strings.Contains(w[0].Message, "supervisor:")
+			})
+			if g.open() || g.Warnings()[0].Code != warningSupervisorUnknown {
+				t.Fatalf("open %v, %+v", g.open(), g.Warnings())
+			}
+		})
+	}
+}

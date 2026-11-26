@@ -23,25 +23,12 @@ func TestImageDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	for _, p := range imageListenProblems(string(b)) {
+		t.Error(p)
+	}
 	var expose []string
-	for line := range strings.Lines(string(b)) {
-		f := strings.Fields(line)
-		if len(f) == 0 {
-			continue
-		}
-		switch strings.ToUpper(f[0]) {
-		case "ENV":
-			for _, kv := range f[1:] {
-				k, v, _ := strings.Cut(kv, "=")
-				if k != "WEB_LISTEN" {
-					continue
-				}
-				host, _, err := net.SplitHostPort(v)
-				if ip := net.ParseIP(host); err != nil || ip == nil || !ip.IsLoopback() {
-					t.Errorf("the image sets WEB_LISTEN=%s, which is not loopback", v)
-				}
-			}
-		case "EXPOSE":
+	for _, in := range instructions(string(b)) {
+		if f := strings.Fields(in); len(f) > 0 && strings.EqualFold(f[0], "EXPOSE") {
 			expose = append(expose, f[1:]...)
 		}
 	}
@@ -61,6 +48,89 @@ func TestImageDefaults(t *testing.T) {
 	for _, p := range []string{".git", "notes", "held", "dist", ".env", "*.db"} {
 		if !have[p] {
 			t.Errorf(".dockerignore lacks %s", p)
+		}
+	}
+}
+
+// instructions are a Dockerfile's instructions with their continuation
+// lines joined and the comments left out.
+func instructions(dockerfile string) []string {
+	var out []string
+	var cur strings.Builder
+	for line := range strings.Lines(dockerfile) {
+		t := strings.TrimSpace(line)
+		if strings.HasPrefix(t, "#") || t == "" && cur.Len() == 0 {
+			continue
+		}
+		if c, ok := strings.CutSuffix(t, "\\"); ok {
+			cur.WriteString(c + " ")
+			continue
+		}
+		cur.WriteString(t)
+		out = append(out, cur.String())
+		cur.Reset()
+	}
+	if cur.Len() > 0 {
+		out = append(out, cur.String())
+	}
+	return out
+}
+
+// imageListenProblems are the Dockerfile's settings of the web UI's
+// listener beyond loopback (HR-P3-test-14): WEB_LISTEN in an ENV, in
+// either form and on a continuation line, and --web-listen in an
+// ENTRYPOINT or CMD.
+func imageListenProblems(dockerfile string) []string {
+	var out []string
+	check := func(v string) {
+		v = strings.Trim(v, `"'`)
+		host, _, err := net.SplitHostPort(v)
+		if ip := net.ParseIP(host); err != nil || ip == nil || !ip.IsLoopback() {
+			out = append(out, "the image sets WEB_LISTEN="+v+", which is not loopback")
+		}
+	}
+	for _, in := range instructions(dockerfile) {
+		f := strings.Fields(in)
+		if len(f) == 0 {
+			continue
+		}
+		switch strings.ToUpper(f[0]) {
+		case "ENV":
+			if len(f) == 3 && !strings.Contains(f[1], "=") {
+				if f[1] == "WEB_LISTEN" {
+					check(f[2])
+				}
+				continue
+			}
+			for _, kv := range f[1:] {
+				if k, v, _ := strings.Cut(kv, "="); k == "WEB_LISTEN" {
+					check(v)
+				}
+			}
+		case "ENTRYPOINT", "CMD":
+			if strings.Contains(in, "--web-listen") || strings.Contains(in, "-web-listen") {
+				out = append(out, "the image's "+strings.ToUpper(f[0])+" passes --web-listen: "+in)
+			}
+		}
+	}
+	return out
+}
+
+// TestImageListenProblems holds the reading of the Dockerfile on the
+// forms that escaped it.
+func TestImageListenProblems(t *testing.T) {
+	for src, want := range map[string]int{
+		"ENV STORE_PATH=/data/x.db\nENTRYPOINT [\"/ha2fabric\"]\n":          0,
+		"ENV WEB_LISTEN=127.0.0.1:8099\n":                                   0,
+		"ENV WEB_LISTEN=0.0.0.0:8099\n":                                     1,
+		"ENV A=1 \\\n    WEB_LISTEN=0.0.0.0:8099\n":                         1,
+		"ENV WEB_LISTEN :8099\n":                                            1,
+		"# ENV WEB_LISTEN=0.0.0.0:8099\n":                                   0,
+		"ENTRYPOINT [\"/ha2fabric\", \"--web-listen\", \"0.0.0.0:8099\"]\n": 1,
+		"CMD [\"-web-listen=:8099\"]\n":                                     1,
+	} {
+		if got := imageListenProblems(src); len(got) != want {
+			t.Errorf("%q: %v, want %d problems", src, got, want)
 		}
 	}
 }
