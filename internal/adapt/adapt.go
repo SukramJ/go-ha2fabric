@@ -20,8 +20,8 @@ import (
 	"maps"
 	"strings"
 
-	hacatalog "github.com/SukramJ/go-ha-catalog"
-	"github.com/SukramJ/go-hamqtt/model"
+	hacatalog "sukramj.dev/go-ha-catalog"
+	"sukramj.dev/go-hamqtt/model"
 
 	"thingfabric.dev/go-ha2fabric/internal/ha"
 	"thingfabric.dev/go-ha2fabric/internal/text"

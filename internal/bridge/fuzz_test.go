@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	hamapping "github.com/SukramJ/go-hamapping"
+	hamapping "sukramj.dev/go-hamapping"
 	"thingfabric.dev/go-fabric/eligibility"
 
 	"thingfabric.dev/go-ha2fabric/internal/adapt"

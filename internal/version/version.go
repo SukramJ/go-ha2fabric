@@ -30,7 +30,7 @@ func GoFabric() string { return dep("thingfabric.dev/go-fabric") }
 
 // GoHamapping is the version of the go-hamapping module the binary is
 // built with.
-func GoHamapping() string { return dep("github.com/SukramJ/go-hamapping") }
+func GoHamapping() string { return dep("sukramj.dev/go-hamapping") }
 
 func dep(path string) string {
 	info, ok := debug.ReadBuildInfo()

@@ -101,9 +101,9 @@ var testLayers = map[string][]string{
 // catalog, the WebSocket library. Anything else outside the standard
 // library is refused.
 var thirdParty = []string{
-	"github.com/SukramJ/go-hamapping",
-	"github.com/SukramJ/go-hamqtt/model",
-	"github.com/SukramJ/go-ha-catalog",
+	"sukramj.dev/go-hamapping",
+	"sukramj.dev/go-hamqtt/model",
+	"sukramj.dev/go-ha-catalog",
 	"github.com/coder/websocket",
 	"thingfabric.dev/go-fabric-ui/fabricui",
 }
@@ -269,7 +269,7 @@ func TestGuardRefuses(t *testing.T) {
 	if facadeImport("internal/plan", "node", false) || !facadeImport("internal/plan", "device", false) || !facadeImport("internal/plan", "eligibility", false) {
 		t.Error("the pure core's rule: no node")
 	}
-	if allowedThirdParty("internal/bridge", "gopkg.in/yaml.v3", false) || !allowedThirdParty("internal/bridge", "github.com/SukramJ/go-hamqtt/model", false) || allowedThirdParty("internal/bridge", "github.com/SukramJ/go-hamqtt/discovery", false) {
+	if allowedThirdParty("internal/bridge", "gopkg.in/yaml.v3", false) || !allowedThirdParty("internal/bridge", "sukramj.dev/go-hamqtt/model", false) || allowedThirdParty("internal/bridge", "sukramj.dev/go-hamqtt/discovery", false) {
 		t.Error("third-party list")
 	}
 	// go-fabric-ui is the web UI's: the provider, the handler and the

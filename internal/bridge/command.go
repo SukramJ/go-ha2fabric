@@ -9,8 +9,8 @@ import (
 	"maps"
 	"time"
 
-	"github.com/SukramJ/go-hamapping"
-	"github.com/SukramJ/go-hamqtt/model"
+	"sukramj.dev/go-hamapping"
+	"sukramj.dev/go-hamqtt/model"
 
 	"thingfabric.dev/go-ha2fabric/internal/adapt"
 	"thingfabric.dev/go-ha2fabric/internal/ha"

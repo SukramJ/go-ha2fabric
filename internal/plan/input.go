@@ -8,7 +8,7 @@ import (
 	"maps"
 	"slices"
 
-	"github.com/SukramJ/go-hamqtt/model"
+	"sukramj.dev/go-hamqtt/model"
 
 	"thingfabric.dev/go-ha2fabric/internal/expose"
 )

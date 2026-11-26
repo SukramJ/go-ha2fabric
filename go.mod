@@ -3,10 +3,10 @@ module thingfabric.dev/go-ha2fabric
 go 1.27.4
 
 require (
-	github.com/SukramJ/go-ha-catalog v0.3.2-0.20261024093528-d9582e022b8f
-	github.com/SukramJ/go-hamapping v0.7.1
-	github.com/SukramJ/go-hamqtt v0.40.0
 	github.com/coder/websocket v1.8.15
+	sukramj.dev/go-ha-catalog v0.4.0
+	sukramj.dev/go-hamapping v0.8.0
+	sukramj.dev/go-hamqtt v0.41.0
 	thingfabric.dev/go-fabric v0.26.0
 	thingfabric.dev/go-fabric-ui v0.14.1
 )

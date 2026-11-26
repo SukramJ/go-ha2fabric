@@ -12,9 +12,9 @@ import (
 	"strconv"
 	"strings"
 
-	hacatalog "github.com/SukramJ/go-ha-catalog"
-	hamapping "github.com/SukramJ/go-hamapping"
-	"github.com/SukramJ/go-hamqtt/model"
+	hacatalog "sukramj.dev/go-ha-catalog"
+	hamapping "sukramj.dev/go-hamapping"
+	"sukramj.dev/go-hamqtt/model"
 	keypadinputdef "thingfabric.dev/go-fabric/cluster/spec/keypadinput"
 	levelcontroldef "thingfabric.dev/go-fabric/cluster/spec/levelcontrol"
 

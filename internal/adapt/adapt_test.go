@@ -10,8 +10,8 @@ import (
 	"slices"
 	"testing"
 
-	hamapping "github.com/SukramJ/go-hamapping"
-	"github.com/SukramJ/go-hamqtt/model"
+	hamapping "sukramj.dev/go-hamapping"
+	"sukramj.dev/go-hamqtt/model"
 	"thingfabric.dev/go-fabric/eligibility"
 
 	"thingfabric.dev/go-ha2fabric/internal/adapt"

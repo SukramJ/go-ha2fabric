@@ -8,7 +8,7 @@ import (
 	"maps"
 	"slices"
 
-	"github.com/SukramJ/go-hamqtt/model"
+	"sukramj.dev/go-hamqtt/model"
 )
 
 // HeldStates is how many states the bridge holds beside its last
