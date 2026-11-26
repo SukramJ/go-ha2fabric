@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1
 # SPDX-License-Identifier: Apache-2.0
 # The daemon's plain image: distroless, non-root, static (CGO_ENABLED=0). Run it
 # on the host's network, the store on a volume, with a stop timeout above the

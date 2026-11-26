@@ -38,6 +38,11 @@ All notable changes to this project are documented here. The format follows
   manual image build any more (a published image is never rebuilt, a base
   update ships as a patch release), and `:latest` moves only with the
   newest release (HR-P3-sup-32).
+- The image's build no longer names a BuildKit frontend
+  (`# syntax=docker/dockerfile:1`, an unpinned image the build ran); CI
+  refuses one not pinned by digest (HR-P4-sup-03), and holds the Go
+  version of `go.mod`, both Dockerfiles and every workflow together
+  (HR-P4-sup-04).
 
 ### Removed
 

@@ -54,7 +54,9 @@ updates:
         patterns: ["*"]
 
   # Base images (pinned by tag and digest in Dockerfile and addon/Dockerfile;
-  # decision 62, HR-P3-sup-34). Dependabot bumps tag and digest together.
+  # decision 62, HR-P3-sup-34). Dependabot bumps tag and digest together. A
+  # golang: bump stays red in CI's lint job until go.mod's go line and every
+  # workflow's GO_VERSION follow in the same pull request (HR-P4-sup-04).
   - package-ecosystem: docker
     directories:
       - "/"
