@@ -6,10 +6,44 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- The licence and notice texts of everything linked into the daemon —
+  each Go module's, Go's own, go-fabric's `NOTICE` with matter.js's, the
+  npm licences of go-fabric-ui's web bundle — in a generated `licenses/`
+  tree, shipped in the release archives and in both images under
+  `/usr/share/doc/go-ha2fabric/`; CI fails when it is stale
+  (HR-P3-sup-37).
+- Release archives and both images carry a build provenance and an SBOM
+  (CycloneDX) attestation, checkable with `gh attestation verify`; the
+  archives' SBOM is also a release asset (HR-P3-sup-36).
+- `SECURITY.md`: report a vulnerability privately through GitHub's
+  private vulnerability reporting (HR-P3-sup-44).
 
 ### Changed
 
 - Dependencies moved to their vanity import paths: `sukramj.dev/go-ha-catalog` v0.4.0, `sukramj.dev/go-hamapping` v0.8.0, `sukramj.dev/go-hamqtt` v0.41.0.
+- Add-on: the web UI binds to the address the Supervisor gives the add-on
+  (the Supervisor network's gateway, where the Ingress proxy connects),
+  read at start; when it cannot be read, every interface as before, with
+  the warning `ha2fabric.web_listen`. The client filter is unchanged
+  (HR-P0-cfg-27).
+- Base images are pinned by digest: the add-on's Home Assistant base
+  `3.24-2026.11.1` (armv7: `3.22-2025.11.1`, the last Home Assistant
+  publishes) instead of `latest`; a local add-on build takes `BUILD_ARCH`,
+  not `BUILD_FROM` (HR-P3-sup-34).
+- Images and archives are published only for a tag on `main`; a manual
+  image build starts from `main` and rebuilds an existing release tag from
+  its own source, and `:latest` moves only with the newest release
+  (HR-P3-sup-32).
+
+### Fixed
+
+- Docs: the add-on's "Mapped today" lists what go-hamapping v0.8.0 maps
+  (scenes, media players, an air conditioner's fan modes and more were
+  listed as not mapped); `THIRD-PARTY-NOTICES.md` names `go.mod`'s
+  modules and versions; the co-installed add-ons an operator should trust
+  (`docs/operations.md`, The web UI).
 
 ## [0.7.0] - 2026-11-25
 
