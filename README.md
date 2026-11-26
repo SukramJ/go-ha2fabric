@@ -128,6 +128,15 @@ docker run --network host -v ha2fabric:/data \
   ghcr.io/thingfabric/go-ha2fabric
 ```
 
+The images moved with 0.7.0: `ghcr.io/sukramj/go-ha2fabric` and
+`ghcr.io/sukramj/go-ha2fabric-addon-<arch>` stay at 0.6.3 and receive no
+update; pull `ghcr.io/thingfabric/go-ha2fabric`. From the release after
+0.7.0, the archives and images carry a build provenance and an SBOM attestation
+(`gh attestation verify oci://ghcr.io/thingfabric/go-ha2fabric:<version> -R thingfabric/go-ha2fabric`;
+for an archive, its file instead of the `oci://` reference) and the
+licence texts of everything linked (`licenses/`, in the images
+`/usr/share/doc/go-ha2fabric/`).
+
 The image's web UI listens on loopback (`127.0.0.1:8099`); to reach it from
 another machine add `-e WEB_LISTEN=0.0.0.0:8099`, and with `WEB_ADMIN=true`
 also `-e WEB_ALLOW=<the administrators' addresses>`

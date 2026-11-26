@@ -142,7 +142,11 @@ passes on with every Ingress request. That needs **Supervisor 2026.10.4 or
 later**, which the add-on reads at start; on an older Supervisor, or until
 it has read the version, the web UI shows the status page only, with a
 warning (`supervisor_too_old`, `supervisor_unknown`). Any other Home
-Assistant user sees the status page only.
+Assistant user sees the status page only. The check rests on the address
+of the Supervisor's Ingress proxy, which another add-on on the same Home
+Assistant can claim on the Supervisor's internal network: install only
+add-ons you trust as an administrator, and remove a fabric on the Fabrics
+page that nobody paired ([operations page, "Co-installed add-ons"](https://github.com/thingfabric/go-ha2fabric/blob/main/docs/operations.md#the-web-ui)).
 
 ## More
 

@@ -128,7 +128,13 @@ Assistant's Ingress requires that only its proxy reaches it
 `WEB_ALLOW=172.30.32.2` and the daemon refuses every other client with 403.
 In add-on mode (`SUPERVISOR_TOKEN` set) the daemon holds that itself:
 `WEB_ALLOW` defaults to `172.30.32.2`, and any other value is refused at
-start. Stand-alone, `WEB_ALLOW` takes any list of client addresses. A
+start. The add-on also binds the web UI to the address the Supervisor
+gives it (`ip_address` of `GET /addons/self/info`, the Supervisor
+network's gateway, where the Ingress proxy connects), read at start
+(`ha2fabric.web_listen` in Logs); when it cannot read it, the web UI
+listens on every interface as before, with that line at warn. The bind
+takes the listener off the addresses the LAN reaches; the client filter
+stays either way. Stand-alone, `WEB_ALLOW` takes any list of client addresses. A
 peer on the LAN that forges the source address `172.30.32.2` cannot
 complete a connection: that address is on the Supervisor's internal
 network (`172.30.32.0/23`), so the host sends its answer there and not
@@ -264,6 +270,7 @@ The lines to know:
 | `ha2fabric.passcode_test_value` | warn | `PASSCODE` is the public test value 20202021 (Pairing). |
 | `ha2fabric.token_in_clear` | warn | `HA_URL` is `ws://` to a host that is neither loopback nor the Supervisor (`host`; The token). |
 | `ha2fabric.supervisor` | info, warn | Add-on: the Supervisor's `version` and whether the web UI has an `admin` (2026.10.4 or later; a pre-release of 2026.10.4 counts as older); at warn when it is older; read again every 10 minutes (`recheck_in`), also once it passed: a Supervisor downgraded below 2026.10.4 takes the administrator away again. Logged when the version or the verdict changes. |
+| `ha2fabric.web_listen` | info, warn | Add-on: the web UI's address, the Supervisor's address of the add-on (`listen`); at warn when it was not read (`error`) and the web UI listens on every interface (Ports and addresses). |
 | `ha2fabric.supervisor_unreadable` | warn, then debug | Add-on: `GET /info` failed (`error`); retried every 30 s, every 10 minutes once a version was read; until a version is read the web UI is the status page only, and a gate that passed stays open. |
 | `ha2fabric.node_erased` | info | A node was erased in the web UI (`node=<key>` for a registry node): `fabrics_removed`, `elapsed`; the node comes back next, with `ha2fabric.fabrics count=0` and `ha2fabric.pairing`. At warn with `error` when the reset failed part-way. |
 | `ha2fabric.node_limit` | warn | At start: `nodes.json` holds more nodes (`nodes`) than `NODE_LIMIT` (`limit`) allows; all start, the web UI creates no more (Nodes). |
@@ -476,6 +483,31 @@ mode (every request carries a per-process token the page reads from
 `/api/v1/node/status`, so anyone who can reach the port is the
 administrator). Stand-alone without `WEB_ADMIN` the UI is the status page
 only.
+
+**Co-installed add-ons.** In the add-on the administrator is told apart
+by the source address of the Ingress proxy, `172.30.32.2`, alone: the
+groups header and the Supervisor's version describe a request the
+Supervisor really sent, and nothing the Supervisor forwards is a secret
+the add-on could verify (the header is a plain value; the Ingress session
+is Home Assistant's to validate, Supervisor `supervisor/api/ingress.py:47-64`
+at `fe91b8db`). Every other add-on on the same Home Assistant runs on the
+same Supervisor network (`hassio`, `172.30.32.0/23`), sharing its layer 2
+with the proxy, and the Supervisor leaves add-ons the `NET_RAW`
+capability unless a feature flag that is off by default drops it
+(`supervisor/docker/app.py:402-407` at `fe91b8db`: "NET_RAW allows ARP and
+MAC spoofing on the shared internal network"). With it, such an add-on
+can claim the proxy's address: on a real Home Assistant OS the
+interception of that address was observed; a complete forged exchange
+with the web UI was not run on a live system. An add-on that succeeds is
+the web UI's administrator — the pairing codes (a fabric of its own, and
+with it the exposed entities), the selection, erase, the nodes and the
+log — and the daemon cannot tell its requests from the proxy's. The bind
+to the Supervisor's address (Ports and addresses) takes the listener off
+the LAN's addresses; it does not stop an add-on on the Supervisor network.
+What the operator can do: install only add-ons trusted as much as a Home
+Assistant administrator (one with `homeassistant_api` or `hassio_api`
+reaches Home Assistant itself without this), and check the Fabrics page for a controller
+nobody paired — removing it ends that controller's access.
 
 `WEB_ADMIN=true` on a `WEB_LISTEN` that is not a loopback address
 (`0.0.0.0:8099`, for example) is refused at start (exit 2) unless
