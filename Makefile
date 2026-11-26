@@ -90,6 +90,14 @@ fuzz-smoke: ## every fuzz target, $(FUZZTIME) each
 	  $(GO) test -run '^$$' -fuzz "^$$name$$" -fuzztime $(FUZZTIME) $$pkg; \
 	done
 
+# The paths whose go-fabric, go-fabric-ui and go-hamapping citations name
+# go.mod's version and exist there (script/cite; decision 61 of the
+# 2026-11-23 review).
+CITE_PATHS ?= cmd internal script testdata
+
+cite: ## fail on a go-fabric, go-fabric-ui or go-hamapping citation that does not hold at go.mod's version
+	$(GO) run ./script/cite $(CITE_PATHS)
+
 vuln: ## govulncheck ./...
 	govulncheck ./...
 
@@ -133,7 +141,7 @@ release: version-check ## stage the cross-compiled release archives and notes in
 	@script/extract-release-notes.sh $(RELEASE_VERSION) > $(DIST_DIR)/RELEASE_NOTES.md
 	@ls -lh $(DIST_DIR)
 
-ci: build vet test lint ## everything the pipeline's main jobs run
+ci: build vet test lint cite ## everything the pipeline's main jobs run
 
 clean: ## remove build artefacts
 	rm -rf $(BIN_DIR) $(DIST_DIR) coverage.out
@@ -143,4 +151,4 @@ version: ## print the resolved build metadata
 	@echo "COMMIT     = $(COMMIT)"
 	@echo "BUILD_DATE = $(BUILD_DATE)"
 
-.PHONY: help setup build vet test race fmt fmt-check lint tidy-check cover cover-check fuzz-smoke vuln licenses secrets docker addon-image version-check release ci clean version
+.PHONY: help setup build vet test race fmt fmt-check lint tidy-check cover cover-check fuzz-smoke cite vuln licenses secrets docker addon-image version-check release ci clean version
