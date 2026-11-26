@@ -143,6 +143,18 @@ has passed (go-fabric `docs/guides/camera.md:581-603` at v0.27.0). The gate
 is go-fabric's rule, and a default that breaks it would ship an unverified
 device type to every user.
 
+matter-hub bounds no WebRTC session of a camera: `provideOffer` mints an id
+and appends the session to `currentSessions` with no count, per camera or
+per fabric (`backend/src/plugins/builtin/camera/webrtc-provider-server.ts:25-34, 88-96, 291-315`),
+and its relay keeps every session in an unbounded map
+(`webrtc-bridge.ts:90, 141, 216`); nothing is evicted or refused.
+go-ha2fabric holds a camera to 8 sessions, each one a Home Assistant
+WebRTC session and a relay, and a fabric to 4 of them; at either bound a
+new offer ends only its own fabric's session idle for a minute, else it
+is answered RESOURCE_EXHAUSTED (decisions 23, 72). One controller
+ecosystem can neither exhaust Home Assistant's provider nor end another
+ecosystem's live view.
+
 ## Signalling only
 
 matter-hub runs two WebRTC peer connections per session, one to Home
