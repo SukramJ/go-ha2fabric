@@ -144,3 +144,12 @@ Baseline of phase 3: origin/main `0a47095` (phase 2 `d16f3ab`, the move to
 | 61 | Citation pins (HR-P3-cite-60..62, -66, -67) | **`go.mod`'s version** for every go-fabric, go-fabric-ui and go-hamapping citation, with unit C's citation check in `make ci` (file and lines exist at `go.mod`'s version), so a bump re-pins them |
 | 62 | HR-P3-sup-34, -35, -36 | **All three**: base images by digest, actions by full SHA (Dependabot keeps both current), build provenance and an SBOM attested for the release archive and the images |
 | 63 | HR-P3-test-03, -sup-33, -cfg-68, the rest | **test-03 accepted** (no clock seam for a timer that no longer exists; decision 31); sup-33 a note (its fix comes with decision 58); `label: str(1,32)` in the add-on schema; every other low and note in phase 3's pull request |
+
+## 2026-11-26, during phase 3's fix wave
+
+| # | Subject | Decision |
+| --- | --- | --- |
+| 64 | armv7: Home Assistant publishes no armv7 base image after `3.22-2025.11.1` | **Dropped**: the add-on builds for amd64 and aarch64 only; a changelog line and the docs say so |
+| 65 | The image workflows' manual rebuild of an existing release tag | **Dropped**: a published image is never rebuilt; a base update ships as a patch release |
+| 66 | A required reviewer on the `ghcr` environment | **No**: `v*` tags and `main` only, and only an admin creates a `v*` tag |
+| 67 | HR-P3-test-15's test seam `buildPlan` in `internal/bridge`; `docs/roadmap.md` in `make cite` | **The seam goes**: a real fixture go-hamapping refuses whole (a shape of go-hamapping #45), else test-15 accepted as a note; the roadmap stays out of `make cite` as history, like `docs/reports/` |
