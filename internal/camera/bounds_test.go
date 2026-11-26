@@ -453,7 +453,9 @@ func TestEvictionStaysInTheFabric(t *testing.T) {
 // share evicts its own session idle longest, even when another fabric's
 // session has been idle longer.
 func TestEvictionTakesTheFabricsOwnIdlest(t *testing.T) {
-	up := answeringUp()
+	// A plain upstream: no event moves a session's last, so the offers'
+	// order is the idle order (HR-P4-test-90).
+	up := &upstream{}
 	h := boundedHost(t, up, camera.Options{EvictIdle: 20 * time.Millisecond})
 	sig := &signaller{}
 	h.Attach(sig)
