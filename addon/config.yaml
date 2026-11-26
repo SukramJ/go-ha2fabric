@@ -42,7 +42,8 @@ host_network: true
 backup: cold
 
 # The Supervisor's SIGKILL follows SIGTERM after this many seconds (its
-# default 10). The daemon stops within 25 s: the web server, the Home
+# default 10). The daemon gets the SIGTERM itself (S6_CMD_RECEIVE_SIGNALS=1
+# in addon/Dockerfile) and stops within 25 s: the web server, the Home
 # Assistant connection, then every node at once.
 timeout: 30
 

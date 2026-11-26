@@ -48,13 +48,21 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- Add-on: the daemon gets the stop signal itself
+  (`S6_CMD_RECEIVE_SIGNALS=1`), so a stop has the daemon's 25 s budget —
+  an erase finishes, the nodes and camera sessions end in order — instead
+  of s6-overlay's 3 s before it kills the daemon (HR-P4-cfg-01).
 - A Home Assistant reply that is not a result with `success` fails its
   command instead of passing as a success (HR-P3-ha-09).
 - Docs: the add-on's "Mapped today" lists what go-hamapping v0.8.0 maps
   (scenes, media players, an air conditioner's fan modes and more were
   listed as not mapped); `THIRD-PARTY-NOTICES.md` names `go.mod`'s
   modules and versions; the co-installed add-ons an operator should trust
-  (`docs/operations.md`, The web UI).
+  (`docs/operations.md`, The web UI). The container image's examples
+  run it with `--stop-timeout 30` (Compose: `stop_grace_period: 30s`),
+  since Docker kills after 10 s, inside the stop's budget (HR-P4-cfg-02);
+  `docs/operations.md` names `SSL_CERT_FILE` / `SSL_CERT_DIR` for `wss://`
+  to a Home Assistant with a private certificate authority (HR-P4-doc-24).
 
 ## [0.7.0] - 2026-11-25
 

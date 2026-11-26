@@ -124,7 +124,7 @@ Create a long-lived access token for an administrator (the user's profile,
 host networking:
 
 ```sh
-docker run --network host -v ha2fabric:/data \
+docker run --network host --stop-timeout 30 -v ha2fabric:/data \
   -e HA_URL=ws://homeassistant.local:8123/api/websocket \
   -e HA_TOKEN=<token> -e PASSCODE=<8 digits> \
   ghcr.io/thingfabric/go-ha2fabric

@@ -217,6 +217,13 @@ request take a proxy from the environment (`HTTP_PROXY`, `HTTPS_PROXY`,
 or list Home Assistant's host in `NO_PROXY`. The add-on's call to the
 Supervisor (`GET /info`) takes no proxy and follows no redirect.
 
+`wss://` verifies Home Assistant's certificate against the system's roots;
+there is no option to skip the check. A certificate from a private
+certificate authority (a home CA, a self-signed one) is trusted on Linux
+through Go's `SSL_CERT_FILE` (a PEM bundle, in place of the system's) or
+`SSL_CERT_DIR` (a directory of them); in the image, mount the bundle and
+set the variable (`-v /path/ca.pem:/ca.pem:ro -e SSL_CERT_FILE=/ca.pem`).
+
 ## What the daemon reads and writes
 
 | Command | When | Home Assistant core at 2026.10.3 |
@@ -725,7 +732,12 @@ the budget, nor is a node's bridge that does not end in it
 (`ha2fabric.bridge_stop_overrun`): a camera's sessions end together
 within the budget, each in at most 10 seconds (`camera.close_overrun`
 when some do not). The add-on's
-manifest gives the stop 30 seconds before the Supervisor kills it. A
+manifest gives the stop 30 seconds before the Supervisor kills it, and
+its image hands the signal to the daemon (`S6_CMD_RECEIVE_SIGNALS=1`), so
+the budget is the daemon's and not s6-overlay's grace of 3 seconds. The
+container image's daemon gets the signal as PID 1, but `docker stop` and
+Compose kill after 10 seconds unless told otherwise: run it with
+`--stop-timeout 30` (Compose: `stop_grace_period: 30s`). A
 second signal ends the process at once; a signal during the start is an
 ordinary stop (exit 0).
 

@@ -4,7 +4,9 @@
 #
 # Home Assistant add-on entrypoint for go-ha2fabric: maps the add-on options
 # (/data/options.json, read with bashio) onto the daemon's environment and
-# exec's the daemon, which becomes PID 1 and receives the signals.
+# exec's the daemon in its own process. s6-overlay's /init stays PID 1;
+# S6_CMD_RECEIVE_SIGNALS=1 (addon/Dockerfile) hands it the container's
+# SIGTERM, and the add-on ends when the daemon exits.
 # SUPERVISOR_TOKEN is already in the environment (with-contenv); the daemon
 # reads it, connects to ws://supervisor/core/websocket, and never logs or
 # stores it.
