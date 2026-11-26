@@ -16,11 +16,11 @@ LDFLAGS    := -s -w -X $(PKG_VER).Version=$(VERSION) -X $(PKG_VER).Commit=$(COMM
 # changelog section and addon/config.yaml's version happen in one commit.
 RELEASE_TARGETS ?= linux/amd64 linux/arm64 linux/arm/v7
 RELEASE_VERSION ?= $(shell awk -F'"' '/^[[:space:]]*Version = /{print $$2; exit}' internal/version/version.go)
-RELEASE_PAYLOAD := README.md LICENSE changelog.md THIRD-PARTY-NOTICES.md
+RELEASE_PAYLOAD := README.md LICENSE SECURITY.md changelog.md THIRD-PARTY-NOTICES.md licenses
 
 DOCKER       ?= docker
 DOCKER_IMAGE ?= go-ha2fabric
-ADDON_BASE   ?= ghcr.io/home-assistant/amd64-base:latest
+ADDON_ARCH   ?= amd64
 FUZZTIME     ?= 10000x
 
 GOFUMPT_VERSION       ?= v0.12.0
@@ -93,7 +93,7 @@ fuzz-smoke: ## every fuzz target, $(FUZZTIME) each
 # The paths whose go-fabric, go-fabric-ui and go-hamapping citations name
 # go.mod's version and exist there (script/cite; decision 61 of the
 # 2026-11-23 review).
-CITE_PATHS ?= cmd internal script testdata
+CITE_PATHS ?= cmd internal script testdata docs/operations.md docs/by_design.md CONCEPT.md README.md addon/DOCS.md CLAUDE.md
 
 cite: ## fail on a go-fabric, go-fabric-ui or go-hamapping citation that does not hold at go.mod's version
 	$(GO) run ./script/cite $(CITE_PATHS)
@@ -115,8 +115,8 @@ secrets: ## scan the tracked git history for committed secrets (gitleaks)
 docker: ## build the distroless daemon image (Dockerfile)
 	$(DOCKER) build --build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) --build-arg BUILD_DATE=$(BUILD_DATE) -t $(DOCKER_IMAGE):$(VERSION) .
 
-addon-image: ## build the add-on image for amd64 (addon/Dockerfile on ADDON_BASE)
-	$(DOCKER) build --build-arg BUILD_FROM=$(ADDON_BASE) --build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) --build-arg BUILD_DATE=$(BUILD_DATE) -f addon/Dockerfile -t $(DOCKER_IMAGE)-addon:$(VERSION) .
+addon-image: ## build the add-on image for ADDON_ARCH (addon/Dockerfile, its pinned base-<arch>)
+	$(DOCKER) build --build-arg BUILD_ARCH=$(ADDON_ARCH) --build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) --build-arg BUILD_DATE=$(BUILD_DATE) -f addon/Dockerfile -t $(DOCKER_IMAGE)-addon:$(VERSION) .
 
 version-check: ## fail when internal/version, addon/config.yaml and changelog.md disagree
 	@v=$(RELEASE_VERSION); a=$$(awk -F'"' '/^version:/{print $$2; exit}' addon/config.yaml); \
@@ -134,14 +134,14 @@ release: version-check ## stage the cross-compiled release archives and notes in
 	  name="go-ha2fabric-$$version-$$goos-$$goarch$${goarm:+v$$goarm}"; stage="$(DIST_DIR)/$$name"; \
 	  mkdir -p "$$stage"; echo "==> $$tgt -> $$stage"; \
 	  CGO_ENABLED=0 GOOS=$$goos GOARCH=$$goarch GOARM=$$goarm $(GO) build -trimpath -ldflags="$$ldflags" -o "$$stage/ha2fabric" ./cmd/ha2fabric || exit 1; \
-	  cp $(RELEASE_PAYLOAD) "$$stage/"; \
+	  cp -R $(RELEASE_PAYLOAD) "$$stage/"; \
 	  ( cd $(DIST_DIR) && tar -czf "$$name.tar.gz" "$$name" ); rm -rf "$$stage"; \
 	done
 	@cd $(DIST_DIR) && sha256sum *.tar.gz > SHA256SUMS
 	@script/extract-release-notes.sh $(RELEASE_VERSION) > $(DIST_DIR)/RELEASE_NOTES.md
 	@ls -lh $(DIST_DIR)
 
-ci: build vet test lint cite ## everything the pipeline's main jobs run
+ci: build vet test lint cite licenses-check ## everything the pipeline's main jobs run
 
 clean: ## remove build artefacts
 	rm -rf $(BIN_DIR) $(DIST_DIR) coverage.out
@@ -151,4 +151,10 @@ version: ## print the resolved build metadata
 	@echo "COMMIT     = $(COMMIT)"
 	@echo "BUILD_DATE = $(BUILD_DATE)"
 
-.PHONY: help setup build vet test race fmt fmt-check lint tidy-check cover cover-check fuzz-smoke cite vuln licenses secrets docker addon-image version-check release ci clean version
+.PHONY: help setup build vet test race fmt fmt-check lint tidy-check cover cover-check fuzz-smoke cite licenses-check licenses-tree vuln licenses secrets docker addon-image version-check release ci clean version
+
+licenses-check: ## fail when licenses/ or THIRD-PARTY-NOTICES.md is stale against go.mod (script/licenses)
+	script/licenses/generate.sh --check
+
+licenses-tree: ## regenerate licenses/ after a dependency change
+	script/licenses/generate.sh
