@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	hamapping "github.com/SukramJ/go-hamapping"
-	"github.com/SukramJ/go-hamqtt/model"
+	hamapping "sukramj.dev/go-hamapping"
+	"sukramj.dev/go-hamqtt/model"
 	onoffdef "thingfabric.dev/go-fabric/cluster/spec/onoff"
 	"thingfabric.dev/go-fabric/controller/client"
 	"thingfabric.dev/go-fabric/fabrictest"

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	hamapping "github.com/SukramJ/go-hamapping"
+	hamapping "sukramj.dev/go-hamapping"
 	"thingfabric.dev/go-fabric/cluster/spec"
 	wcdef "thingfabric.dev/go-fabric/cluster/spec/windowcovering"
 	"thingfabric.dev/go-fabric/eligibility"

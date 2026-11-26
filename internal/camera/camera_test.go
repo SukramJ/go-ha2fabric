@@ -17,7 +17,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SukramJ/go-hamqtt/model"
+	"sukramj.dev/go-hamqtt/model"
 	gfcamera "thingfabric.dev/go-fabric/cluster/camera"
 	"thingfabric.dev/go-fabric/cluster/spec"
 	csdef "thingfabric.dev/go-fabric/cluster/spec/cameraavstreammanagement"

@@ -37,8 +37,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	hamapping "github.com/SukramJ/go-hamapping"
-	"github.com/SukramJ/go-hamqtt/model"
+	hamapping "sukramj.dev/go-hamapping"
+	"sukramj.dev/go-hamqtt/model"
 	"thingfabric.dev/go-fabric/device"
 	"thingfabric.dev/go-fabric/eligibility"
 	"thingfabric.dev/go-fabric/node"

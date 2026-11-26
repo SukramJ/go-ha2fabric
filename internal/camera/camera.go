@@ -36,7 +36,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/SukramJ/go-hamqtt/model"
+	"sukramj.dev/go-hamqtt/model"
 	gfcamera "thingfabric.dev/go-fabric/cluster/camera"
 	csdef "thingfabric.dev/go-fabric/cluster/spec/cameraavstreammanagement"
 	wpdef "thingfabric.dev/go-fabric/cluster/spec/webrtctransportprovider"
