@@ -302,7 +302,7 @@ The lines to know:
 | `bridge.command_dropped` | error | The command queue was full; the command was not sent and the device shows Home Assistant's state again. Logged as `bridge.queue_full` is: the first (`entity`), then a count every 10 seconds. |
 | `ha2fabric.bridge_stop_overrun` | warn | A node's bridge did not end within a stop's or an erase's budget (a camera session whose controller went away); the node is stopped without waiting for it. |
 | `bridge.upstream_unusable` | warn | Home Assistant is away; every endpoint is unreachable. |
-| `bridge.build_refused` | warn | go-fabric refused one entity's endpoint (`entity`, with the entities riding on it, `riders`); they are unmappable with the refusal as their reason, and the device's other entities are built without them. |
+| `bridge.build_refused` | warn | go-fabric refused one entity's declarations (`entity`, on the endpoint of `endpoint`: the entity itself, or the primary it rides on); that entity is unmappable with the refusal as its reason, and the device's other entities, its endpoint's primary and other riders included, are built without it. |
 | `bridge.build_failed` | warn | go-fabric refused a device go-hamapping planned and named no entity; its entities have no endpoint (the plan says why). |
 | `bridge.call_service_failed` | warn | A controller's command failed in Home Assistant; the entity's state goes back onto its endpoint. |
 | `bridge.command_unserved` | warn | A controller's command waited in the queue while a sync took its entity off the bridge; it was dropped and counted as a command error. |

@@ -48,7 +48,7 @@ See go-fabric's README, section "Not certified".
 
 - **One bridge for every exposed entity.** Each Home Assistant device
   becomes bridged endpoints of one go-fabric node; go-hamapping decides the
-  device types and clusters ([go-hamapping v0.8.0](https://github.com/SukramJ/go-hamapping/blob/v0.8.0/docs/rows.md)): lights (on/off, dimmable, colour
+  device types and clusters ([go-hamapping v0.9.0](https://github.com/SukramJ/go-hamapping/blob/v0.9.0/docs/rows.md)): lights (on/off, dimmable, colour
   temperature, extended colour), switches, scenes, scripts, automations
   and buttons, sensors (temperature, humidity, pressure, illuminance,
   power, voltage, current, energy, air quality and more, with a device's

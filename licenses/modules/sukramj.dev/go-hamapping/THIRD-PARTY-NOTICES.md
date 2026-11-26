@@ -14,7 +14,7 @@ The Matter side: the device kit (`device`), `contract`, `eligibility` and
 the generated `<cluster>def` packages the rows are typed by; in tests its
 in-process controller (`fabrictest`).
 
-- Source: <https://github.com/thingfabric/go-fabric>, module `thingfabric.dev/go-fabric`, pinned `v0.26.0`.
+- Source: <https://github.com/thingfabric/go-fabric>, module `thingfabric.dev/go-fabric`, pinned `v0.27.0`.
 - Copyright (C) 2026 SukramJ. Apache License 2.0; its own notices
   (matter.js, filippo.io/nistec, modernc.org/sqlite, …) travel in its
   `THIRD-PARTY-NOTICES.md` and `licenses/`.

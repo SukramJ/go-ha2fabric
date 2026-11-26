@@ -6,7 +6,6 @@ package bridge
 import (
 	"context"
 	"log/slog"
-	"maps"
 	"time"
 
 	"sukramj.dev/go-hamapping"
@@ -20,19 +19,6 @@ import (
 // service call when the service has run (websocket_api/commands.py:283-292
 // at 2026.10.3, blocking=True).
 const commandTimeout = 30 * time.Second
-
-// rangeHold bounds how long the range a call sent stands in for Home
-// Assistant's state ([Bridge.ranges]): long enough for a thermostat that
-// reports after a device round trip or a cloud poll, short enough that a
-// report that never matches (a rounded or clamped bound) is not held for
-// good.
-const rangeHold = 30 * time.Second
-
-// sentRange is the heat/cool range a set_temperature carried and when.
-type sentRange struct {
-	low, high float64
-	at        time.Time
-}
 
 // onCommand is the plans' OnChange: it runs inline in the controller's
 // request, so it only queues (go-hamapping plan.go OnChange).
@@ -93,9 +79,6 @@ func (b *Bridge) command(ctx context.Context, c model.Command) {
 		return
 	}
 	cur := b.states[id]
-	if c.Method == hamapping.MethodTemperatureLow || c.Method == hamapping.MethodTemperatureHigh {
-		cur = b.sentRangeLocked(id, cur)
-	}
 	b.mu.Unlock()
 	sc, err := adapt.Service(c, cur)
 	if err != nil {
@@ -126,72 +109,7 @@ func (b *Bridge) command(ctx context.Context, c model.Command) {
 		b.restore(id)
 		return
 	}
-	b.noteRange(id, sc)
 	b.log.Debug("bridge.call_service", slog.String("call", sc.String()))
-}
-
-// sentRangeLocked is cur with the range the last set_temperature sent for
-// id, while Home Assistant's state has not shown it and rangeHold has not
-// passed (HR-P1-adpt-30). go-hamapping gives a controller's range write as
-// two commands, one per bound; the second completes from the first's
-// bound, not from a state Home Assistant has not reported yet. Called
-// with mu held.
-func (b *Bridge) sentRangeLocked(id string, cur *ha.State) *ha.State {
-	r, ok := b.ranges[id]
-	if !ok {
-		return cur
-	}
-	if time.Since(r.at) > rangeHold {
-		delete(b.ranges, id)
-		return cur
-	}
-	out := &ha.State{EntityID: id}
-	if cur != nil {
-		*out = *cur
-	}
-	out.Attributes = maps.Clone(out.Attributes)
-	if out.Attributes == nil {
-		out.Attributes = map[string]any{}
-	}
-	out.Attributes["target_temp_low"], out.Attributes["target_temp_high"] = r.low, r.high
-	return out
-}
-
-// noteRange keeps the range a successful set_temperature carried.
-func (b *Bridge) noteRange(id string, sc ha.ServiceCall) {
-	low, okL := sc.Data["target_temp_low"].(float64)
-	high, okH := sc.Data["target_temp_high"].(float64)
-	if sc.Service != "set_temperature" || !okL || !okH {
-		return
-	}
-	b.mu.Lock()
-	b.ranges[id] = sentRange{low: low, high: high, at: time.Now()}
-	b.mu.Unlock()
-}
-
-// settleRangeLocked drops id's sent range once st shows it: from then on
-// Home Assistant's state is the truth again. Called with mu held.
-func (b *Bridge) settleRangeLocked(id string, st *ha.State) {
-	r, ok := b.ranges[id]
-	if !ok || st == nil {
-		return
-	}
-	low, okL := toFloat(st.Attributes["target_temp_low"])
-	high, okH := toFloat(st.Attributes["target_temp_high"])
-	if okL && okH && low == r.low && high == r.high {
-		delete(b.ranges, id)
-	}
-}
-
-// toFloat is a JSON number of a state attribute.
-func toFloat(v any) (float64, bool) {
-	switch t := v.(type) {
-	case float64:
-		return t, true
-	case int:
-		return float64(t), true
-	}
-	return 0, false
 }
 
 var _ ha.Handler = (*Bridge)(nil)

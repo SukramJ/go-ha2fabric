@@ -51,23 +51,18 @@ func TestOversizedStateTakesTheEndpoint(t *testing.T) {
 // rebuild is dropped by the HR-P1-conc-33 guard and makes no call.
 func TestRefusedEntityIsNotServed(t *testing.T) {
 	e := newEnv(t, expose.Rule{Assist: true})
-	e.ha.UpdateEntity("climate.hall", map[string]any{"device_id": "dev-shelly-1"})
-	e.ha.SetState("climate.hall", "heat", map[string]any{"hvac_modes": []any{"off", "heat"}, "min_temp": 50, "temperature": 55, "supported_features": 1, "friendly_name": "Hall"})
-	e.eventually("the thermostat refused", func() bool {
-		v := e.verdict("climate.hall")
-		return strings.HasPrefix(v.Reason, "go-fabric refused")
-	})
-	if !bridge.Serving(e.br, "switch.coffee") {
-		t.Fatal("switch.coffee is not served")
+	refused, _ := e.secondBattery()
+	if !bridge.Serving(e.br, "sensor.living_temperature") {
+		t.Fatal("sensor.living_temperature is not served")
 	}
-	if bridge.Serving(e.br, "climate.hall") {
-		t.Fatal("the refused climate.hall counts as served")
+	if bridge.Serving(e.br, refused.EntityID) {
+		t.Fatalf("the refused %s counts as served", refused.EntityID)
 	}
-	st := &ha.State{EntityID: "climate.hall", State: "heat", Attributes: map[string]any{}}
-	ent := adapt.Entity(adapt.Input{EntityID: "climate.hall", State: st, Device: adapt.OwnDevice("climate.hall", "Hall"), TemperatureUnit: "°C"})
+	st := &ha.State{EntityID: refused.EntityID, State: "55", Attributes: map[string]any{}}
+	ent := adapt.Entity(adapt.Input{EntityID: refused.EntityID, State: st, Device: adapt.OwnDevice(refused.EntityID, "x"), TemperatureUnit: "°C"})
 	errs, mark := e.br.Status().CommandErrs, len(e.ha.Calls())
-	bridge.RunCommand(e.ctx, e.br, model.Command{Entity: ent, Method: hamapping.MethodTemperature, Payload: []byte("21")})
-	e.noCall(mark, "climate.hall")
+	bridge.RunCommand(e.ctx, e.br, model.Command{Entity: ent, Method: hamapping.MethodPress, Payload: []byte("PRESS")})
+	e.noCall(mark, refused.EntityID)
 	if got := e.br.Status().CommandErrs; got != errs+1 {
 		t.Fatalf("command errors %d, want %d", got, errs+1)
 	}

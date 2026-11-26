@@ -55,7 +55,7 @@ choices win over the lists, never over disabled or hidden, and live in
 settings. The web UI's selection page lists every candidate with its
 labels, what decided and go-hamapping's verdict.
 
-Mapped today (the rows of [go-hamapping v0.8.0](https://github.com/SukramJ/go-hamapping/blob/v0.8.0/docs/rows.md)): lights (on/off, dimmable, colour
+Mapped today (the rows of [go-hamapping v0.9.0](https://github.com/SukramJ/go-hamapping/blob/v0.9.0/docs/rows.md)): lights (on/off, dimmable, colour
 temperature, colour), switches, and scenes, scripts, automations and
 buttons as on/off plugs; sensors (temperature, humidity, pressure,
 illuminance, power, voltage, current, energy, frequency, flow, air quality;

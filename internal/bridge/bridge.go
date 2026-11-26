@@ -246,9 +246,6 @@ type Bridge struct {
 	failures    int
 	failure     string
 	failedSince time.Time
-	// ranges are the heat/cool ranges the command loop last sent, by
-	// entity id, until a state shows them ([Bridge.sentRangeLocked]).
-	ranges map[string]sentRange
 }
 
 // New returns the bridge of node n and upstream up. The node may be
@@ -274,7 +271,7 @@ func New(n *node.Node, up Upstream, opts Options) *Bridge {
 		wake:   make(chan struct{}, 1),
 		cmds:   make(chan model.Command, 256),
 		groups: map[string]*group{}, owner: map[string]*group{}, known: map[string]bool{},
-		forget: map[string]device.SourceKey{}, removedAt: map[string]uint64{}, ranges: map[string]sentRange{},
+		forget: map[string]device.SourceKey{}, removedAt: map[string]uint64{},
 		states: map[string]*ha.State{},
 		synced: make(chan struct{}),
 	}
@@ -755,7 +752,6 @@ func (b *Bridge) syncConnected(ctx context.Context, since time.Time) error {
 	for i := range snap.States {
 		if id := snap.States[i].EntityID; b.owner[id] != nil {
 			b.states[id] = &snap.States[i]
-			b.settleRangeLocked(id, &snap.States[i])
 		}
 	}
 	b.mu.Unlock()
@@ -1120,10 +1116,11 @@ func (b *Bridge) Resync(ctx context.Context) error {
 }
 
 // build maps and builds one device's plan. An endpoint go-fabric refuses
-// (go-hamapping's *BuildError) costs only its entity and the entities
-// riding on it: they are unmappable with the refusal as their reason, and
-// the device is mapped and built again without them, at most once per
-// entity (HR-P2-data-35, decision 40). Any other build failure leaves the
+// (go-hamapping's *BuildError) costs only the entity whose declarations
+// it refused (BuildError.Owner, the primary or one of its riders): it is
+// unmappable with the refusal as its reason, and the device is mapped and
+// built again without it, at most once per entity (HR-P2-data-35,
+// decision 40). Any other build failure leaves the
 // device without endpoints and says why in its verdicts.
 func (b *Bridge) build(ctx context.Context, p *plan.Group) (*group, []hamapping.Verdict) {
 	entities := p.Entities
@@ -1147,14 +1144,11 @@ func (b *Bridge) build(ctx context.Context, p *plan.Group) (*group, []hamapping.
 		reason := "go-fabric refused the device: " + err.Error()
 		var be *hamapping.BuildError
 		if errors.As(err, &be) {
-			drop := map[string]bool{be.Key: true}
-			for _, k := range be.Riders {
-				drop[k] = true
-			}
+			drop := map[string]bool{be.Owner: true}
 			rest := slices.DeleteFunc(slices.Clone(entities), func(e model.Entity) bool { return drop[e.Key()] })
 			if len(rest) < len(entities) {
-				b.log.Warn("bridge.build_refused", slog.String("device", p.Device.Name.Default), slog.String("entity", be.Key),
-					slog.Any("riders", be.Riders), slog.String("error", err.Error()))
+				b.log.Warn("bridge.build_refused", slog.String("device", p.Device.Name.Default), slog.String("entity", be.Owner),
+					slog.String("endpoint", be.Key), slog.String("error", err.Error()))
 				for i := range mv {
 					if drop[mv[i].Key] {
 						mv[i].State = eligibility.StateUnmappable
@@ -1232,7 +1226,6 @@ func (b *Bridge) stateChanged(ctx context.Context, sc ha.StateChanged) {
 		delete(b.states, sc.EntityID)
 	case g != nil:
 		b.states[sc.EntityID] = sc.NewState
-		b.settleRangeLocked(sc.EntityID, sc.NewState)
 	}
 	b.mu.Unlock()
 	if sc.NewState == nil || !b.known[sc.EntityID] {

@@ -141,9 +141,14 @@ const MaxCandidateBytes = 1024
 // Home Assistant's WebRTC provider (a go2rtc consumer, a peer connection)
 // and a relay here. go-fabric's kit has bounds of its own
 // (ProviderConfig.MaxSessions and MaxSessionsPerFabric,
-// cluster/camera/provider.go:65-86 at v0.27.0), but go-hamapping's camera
-// row sets only the ProviderPort (go-hamapping ports.go:59-65 at v0.8.0),
-// so the host's bounds are the ones in force. A controller ecosystem
+// cluster/camera/provider.go:65-86 at v0.27.0), and go-hamapping's camera
+// row passes them from a host that implements its WebRTCSessionBounds
+// (go-hamapping ports.go:56-88 at v0.9.0). This host does not: the kit
+// refuses an offer at its bound before the port is asked (go-fabric
+// cluster/camera/provider.go:518, :621-623 at v0.27.0) and evicts nothing,
+// so passing them would take away [MaxSessionsPerFabric]'s eviction; the
+// host's bounds are the ones in force until the kit can evict
+// (thingfabric/go-fabric#634). A controller ecosystem
 // opens one live view per viewer, and eight viewers of one camera is
 // beyond any household.
 const MaxSessions = 8
@@ -156,8 +161,9 @@ const MaxSessions = 8
 // never ends its session; one the node proved lost go-fabric ends through
 // [Host.EndSession]); otherwise the offer is refused with
 // RESOURCE_EXHAUSTED before Home Assistant is asked. Another fabric's
-// session is never evicted. It goes when go-hamapping passes the kit's
-// MaxSessionsPerFabric through the camera row.
+// session is never evicted. It moves to the kit, through go-hamapping's
+// WebRTCSessionBounds, once the kit evicts as this does
+// (thingfabric/go-fabric#634).
 const MaxSessionsPerFabric = MaxSessions / 2
 
 // Defaults of [Options].
@@ -299,7 +305,7 @@ var dryHost = New("", nil, Options{})
 // DryPorts is go-hamapping's Options.Ports for a plan without a node
 // (--dump-plan, the web UI's previews): a camera entity gets a host that
 // serves nothing, every other entity none. go-hamapping decides a camera
-// row on the ports' interfaces (go-hamapping plan.go:160-168 at v0.8.0),
+// row on the ports' interfaces (go-hamapping plan.go:171-179 at v0.9.0),
 // so the stand-in is a real *Host; the bridge's live hosts take its place
 // when it builds.
 func DryPorts(e model.Entity) any {

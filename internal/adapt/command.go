@@ -59,8 +59,9 @@ var services = map[string]map[string]string{
 	"climate": {hamapping.MethodTurnOn: "turn_on", hamapping.MethodTurnOff: "turn_off", hamapping.MethodToggle: "toggle"},
 	// cover/services.py:72-82 open_cover_tilt, close_cover_tilt, no
 	// fields; row cover/window_covering (a tilt without SET_TILT_POSITION,
-	// HR-P2-adpt-33).
-	"cover": {hamapping.MethodOpenTilt: "open_cover_tilt", hamapping.MethodCloseTilt: "close_cover_tilt"},
+	// HR-P2-adpt-33); stop_cover_tilt, no fields, the StopMotion of a
+	// cover with STOP_TILT and no STOP.
+	"cover": {hamapping.MethodOpenTilt: "open_cover_tilt", hamapping.MethodCloseTilt: "close_cover_tilt", hamapping.MethodStopTilt: "stop_cover_tilt"},
 	// vacuum/services.py:104-121 start, pause, return_to_base, no fields;
 	// row vacuum/robotic_vacuum_cleaner (Resume starts again).
 	"vacuum": {hamapping.MethodPause: "pause", hamapping.MethodResume: "start", hamapping.MethodGoHome: "return_to_base"},
@@ -140,31 +141,19 @@ func Service(cmd model.Command, cur *ha.State) (ha.ServiceCall, error) {
 		if f, ok := number(payload); ok {
 			return call("set_temperature", map[string]any{"temperature": f})
 		}
-	case domain == "climate" && (cmd.Method == hamapping.MethodTemperatureLow || cmd.Method == hamapping.MethodTemperatureHigh):
+	case domain == "climate" && cmd.Method == hamapping.MethodTemperatureRange:
 		// climate/services.py:49-62: target_temp_low and target_temp_high
-		// are Inclusive — both or neither; the other bound is the current
-		// (cur, which the bridge completes with the bounds it last sent).
-		// Home Assistant refuses a low above the high (:121-131), so a
-		// bound that crosses the other takes the other with it: a range
-		// moved past its old high is two commands (go-hamapping gives one
-		// per bound), and the first must not be refused.
-		f, ok := number(payload)
-		if !ok {
-			break
+		// are Inclusive — both or neither. go-hamapping hands out the pair
+		// the thermostat holds after its deadband adjustment, so one
+		// set_temperature carries both and a low above the high (refused
+		// at :121-131) cannot arise from it.
+		var r struct {
+			Low  *float64 `json:"target_temp_low"`
+			High *float64 `json:"target_temp_high"`
 		}
-		low := cmd.Method == hamapping.MethodTemperatureLow
-		set, other := "target_temp_low", "target_temp_high"
-		if !low {
-			set, other = other, set
+		if json.Unmarshal([]byte(payload), &r) == nil && r.Low != nil && r.High != nil {
+			return call("set_temperature", map[string]any{"target_temp_low": *r.Low, "target_temp_high": *r.High})
 		}
-		o, ok := toFloat(attrs[other])
-		if !ok {
-			return ha.ServiceCall{}, fmt.Errorf("%w: %s %s without a current %s", ErrCommand, id, set, other)
-		}
-		if low && f > o || !low && f < o {
-			o = f
-		}
-		return call("set_temperature", map[string]any{set: f, other: o})
 	case domain == "fan" && cmd.Method == hamapping.MethodPercentage:
 		// fan/services.yaml:16-29 set_percentage, percentage 0 to 100.
 		if n, ok := integer(payload, 0, 100); ok {
@@ -370,7 +359,7 @@ func light(id string, payload []byte) (ha.ServiceCall, error) {
 
 // catalogPayload is the payload the row rendered for a catalog key: the
 // entity's Extra[key], else the catalog's default for the platform
-// (go-hamapping value.go extra/catalogDefault at v0.8.0).
+// (go-hamapping value.go extra/catalogDefault at v0.9.0).
 func catalogPayload(e model.Entity, key string) (string, bool) {
 	if v, ok := e.Desc().Extra[key].(string); ok {
 		return v, true
@@ -405,10 +394,10 @@ func integer(s string, lo, hi int) (int, bool) {
 }
 
 // kelvinMin and kelvinMax bound color_temp_kelvin to what go-hamapping
-// renders: 1e6 / ColorTemperatureMireds (go-hamapping rows_gen.go:2365 at
-// v0.8.0, "reciprocal" with scale 1e6) with the mireds 1 to 65279 (the
+// renders: 1e6 / ColorTemperatureMireds (go-hamapping rows_gen.go:2412 at
+// v0.9.0, "reciprocal" with scale 1e6) with the mireds 1 to 65279 (the
 // row's bounds on the same line, Matter's 0xFEFF; 0 is refused by
-// "reciprocal", value.go:277-280 at v0.8.0), so 15 (1e6/65279, rounded) to
+// "reciprocal", value.go:282-285 at v0.9.0), so 15 (1e6/65279, rounded) to
 // 1000000. Home Assistant takes any int from 0 (light/const.py:173,
 // cv.positive_int at helpers/config_validation.py:185, 2026.10.3); both
 // bounds fit an int32.
