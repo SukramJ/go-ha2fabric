@@ -76,7 +76,9 @@ See go-fabric's README, section "Not certified".
   overrides. `--dump-plan` prints the same table. The terms the pages use
   are defined in go-fabric's [glossary](https://docs.thingfabric.dev/reference/glossary/).
 - **Pure Go**, `CGO_ENABLED=0`: a static binary, a distroless image, a Home
-  Assistant add-on for amd64, aarch64 and armv7.
+  Assistant add-on for amd64 and aarch64 (no armv7 after 0.7.0: Home
+  Assistant publishes no armv7 base image any more; the release archives
+  and the plain image still cover linux/arm/v7).
 
 ## The exposure rule
 

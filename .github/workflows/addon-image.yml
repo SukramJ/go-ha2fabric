@@ -3,20 +3,19 @@ name: "Add-on: Build and Push"
 # Builds the Home Assistant add-on image (addon/Dockerfile: HA base + bashio +
 # run.sh entrypoint) once per architecture and pushes per-arch tags to ghcr.io.
 # The add-on manifest references ghcr.io/thingfabric/go-ha2fabric-addon-{arch};
-# the Supervisor substitutes {arch} (amd64/aarch64/armv7) and pulls it.
+# the Supervisor substitutes {arch} (amd64/aarch64) and pulls it. No armv7:
+# Home Assistant publishes no armv7 base after 3.22-2025.11.1 (decision 64).
 #
 # This is deliberately separate from the distroless daemon image (./Dockerfile,
 # docker-build-push.yml): that image runs the binary directly and has no run.sh
 # to translate add-on options into the daemon's environment, so it is not a valid add-on
-# image. Triggered on tag pushes and via workflow_dispatch (a rebuild of a
-# released tag).
+# image. Triggered on tag pushes only: a published image is never rebuilt,
+# a base image update ships as a patch release (decision 65).
 #
 # The gate (decision 58 of the 2026-11-23 review, HR-P3-sup-32): the tagged
 # commit is on main and its version is addon/config.yaml's and
-# internal/version's; a manual run starts from main only and builds an
-# existing tag's own source, never the branch it was started from. The push
-# job runs in the `ghcr` environment. Each image gets a build provenance and
-# an SBOM attestation (decision 62, HR-P3-sup-36), kept in GitHub's
+# internal/version's. The push job runs in the `ghcr` environment. Each
+# image gets a build provenance and an SBOM attestation (decision 62, HR-P3-sup-36), kept in GitHub's
 # attestation store and not pushed to the registry, so the Supervisor still
 # pulls a plain image:
 # `gh attestation verify oci://ghcr.io/thingfabric/go-ha2fabric-addon-amd64:<version> -R thingfabric/go-ha2fabric`.
@@ -25,17 +24,12 @@ on:
   push:
     tags:
       - 'v*'
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: "Release tag to rebuild (e.g. 1.2.3 or v1.2.3); its own source is built."
-        required: true
 
 permissions:
   contents: read
 
 concurrency:
-  group: addon-${{ github.ref }}-${{ github.event.inputs.tag }}
+  group: addon-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -69,35 +63,18 @@ jobs:
           - arch: aarch64
             platform: linux/arm64
             goarch: arm64
-          - arch: armv7
-            platform: linux/arm/v7
-            goarch: arm
     steps:
-      # The input reaches the shell through env, never expanded into the
-      # script (HR-P3-sup-46).
-      - name: Resolve the release tag
-        id: ref
-        env:
-          INPUT_TAG: ${{ github.event.inputs.tag }}
+      - name: Resolve the release version
         run: |
-          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
-            if [ "$GITHUB_REF" != "refs/heads/main" ]; then
-              echo "::error::a manual run starts from main only, not $GITHUB_REF"; exit 1
-            fi
-            VERSION="${INPUT_TAG#v}"
-          else
-            VERSION="${GITHUB_REF_NAME#v}"
-          fi
+          VERSION="${GITHUB_REF_NAME#v}"
           if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "::error::not a release version: $VERSION"; exit 1
           fi
           echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
-          echo "ref=refs/tags/v${VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: Checkout the release tag
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ steps.ref.outputs.ref }}
           fetch-depth: 0
 
       # The Supervisor pulls <image>:<version> with the version of

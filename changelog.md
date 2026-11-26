@@ -29,13 +29,19 @@ All notable changes to this project are documented here. The format follows
   the warning `ha2fabric.web_listen`. The client filter is unchanged
   (HR-P0-cfg-27).
 - Base images are pinned by digest: the add-on's Home Assistant base
-  `3.24-2026.11.1` (armv7: `3.22-2025.11.1`, the last Home Assistant
-  publishes) instead of `latest`; a local add-on build takes `BUILD_ARCH`,
-  not `BUILD_FROM` (HR-P3-sup-34).
-- Images and archives are published only for a tag on `main`; a manual
-  image build starts from `main` and rebuilds an existing release tag from
-  its own source, and `:latest` moves only with the newest release
-  (HR-P3-sup-32).
+  `3.24-2026.11.1` instead of `latest`; a local add-on build takes
+  `BUILD_ARCH`, not `BUILD_FROM` (HR-P3-sup-34).
+- Images and archives are published only for a tag on `main`; there is no
+  manual image build any more (a published image is never rebuilt, a base
+  update ships as a patch release), and `:latest` moves only with the
+  newest release (HR-P3-sup-32).
+
+### Removed
+
+- **The add-on for armv7.** Home Assistant publishes no armv7 base image
+  after `3.22-2025.11.1`, so the add-on is built for amd64 and aarch64
+  only; an armv7 installation keeps 0.7.0. The release archives and the
+  plain image still cover linux/arm/v7.
 
 ### Fixed
 

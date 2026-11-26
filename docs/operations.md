@@ -9,6 +9,11 @@ this page is the daemon's version. Terms such as fabric, commissioning
 window, bridged node and served surface are defined in go-fabric's
 [glossary](https://docs.thingfabric.dev/reference/glossary/).
 
+Platforms: the release archives and the plain image for linux amd64,
+arm64 and arm/v7; the add-on for amd64 and aarch64 only, since Home
+Assistant publishes no armv7 base image after `3.22-2025.11.1` (an armv7
+add-on installation stays at 0.7.0).
+
 ## Files
 
 The daemon keeps two files for its configured node: the node's SQLite

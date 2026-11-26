@@ -13,7 +13,6 @@ url: https://github.com/thingfabric/go-ha2fabric
 arch:
   - amd64
   - aarch64
-  - armv7
 
 # Per-arch add-on image (HA base + bashio + run.sh) published by
 # .github/workflows/addon-image.yml; the Supervisor substitutes {arch} and

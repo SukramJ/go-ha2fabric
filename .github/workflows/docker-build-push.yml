@@ -1,16 +1,14 @@
 name: "Docker: Build and Push"
 #
 # Build a multi-arch container image with Buildx and push it to the
-# GitHub Container Registry (ghcr.io). Triggered on tag pushes (cutting
-# a release) and manually via workflow_dispatch (a rebuild of a released
-# tag). The image is tagged with the bare semver (leading 'v' stripped) and
-# :latest when that tag is the newest release.
+# GitHub Container Registry (ghcr.io). Triggered on tag pushes only (cutting
+# a release): a published image is never rebuilt, a base image update ships
+# as a patch release (decision 65). The image is tagged with the bare semver
+# (leading 'v' stripped) and :latest when that tag is the newest release.
 #
 # The gate (decision 58 of the 2026-11-23 review, HR-P3-sup-32): the tagged
 # commit is on main and its version is internal/version's and
-# addon/config.yaml's; a manual run starts from main only and builds an
-# existing tag's own source, never the branch it was started from. The push
-# job runs in the `ghcr` environment. The image gets a build provenance and
+# addon/config.yaml's. The push job runs in the `ghcr` environment. The image gets a build provenance and
 # an SBOM attestation in the registry (decision 62, HR-P3-sup-36):
 # `gh attestation verify oci://ghcr.io/thingfabric/go-ha2fabric:<version> -R thingfabric/go-ha2fabric`.
 # yamllint disable-line rule:truthy
@@ -18,17 +16,12 @@ on:
   push:
     tags:
       - 'v*'
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: "Release tag to rebuild (e.g. 1.2.3 or v1.2.3); its own source is built."
-        required: true
 
 permissions:
   contents: read
 
 concurrency:
-  group: docker-${{ github.ref }}-${{ github.event.inputs.tag }}
+  group: docker-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -52,31 +45,17 @@ jobs:
       attestations: write      # the attestations
       artifact-metadata: write # the storage record
     steps:
-      # The input reaches the shell through env, never expanded into the
-      # script (HR-P3-sup-46).
-      - name: Resolve the release tag
-        id: ref
-        env:
-          INPUT_TAG: ${{ github.event.inputs.tag }}
+      - name: Resolve the release version
         run: |
-          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
-            if [ "$GITHUB_REF" != "refs/heads/main" ]; then
-              echo "::error::a manual run starts from main only, not $GITHUB_REF"; exit 1
-            fi
-            VERSION="${INPUT_TAG#v}"
-          else
-            VERSION="${GITHUB_REF_NAME#v}"
-          fi
+          VERSION="${GITHUB_REF_NAME#v}"
           if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "::error::not a release version: $VERSION"; exit 1
           fi
           echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
-          echo "ref=refs/tags/v${VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: Checkout the release tag
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ steps.ref.outputs.ref }}
           fetch-depth: 0
 
       - name: The tag is on main and matches addon/config.yaml and internal/version

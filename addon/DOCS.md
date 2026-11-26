@@ -8,6 +8,10 @@ the add-on shows its verdict for every entity.
 The bridge is **uncertified**: it carries the CSA test vendor and a test
 attestation chain, and a controller may warn when you pair it.
 
+It runs on amd64 and aarch64 (64-bit ARM). There is no armv7 build after
+0.7.0: Home Assistant publishes no armv7 base image any more, so an
+armv7 installation stays at 0.7.0.
+
 ## Quickstart
 
 1. Install the add-on and start it.
