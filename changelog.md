@@ -39,11 +39,15 @@ to reach it from the network, run the image with
 - **The project moved to the thingfabric organisation.** The repository is
   `github.com/thingfabric/go-ha2fabric` (the old URLs redirect) and the
   module path `thingfabric.dev/go-ha2fabric`. Breaking for anyone who pulls
-  an image or added the add-on repository by its old address: the images
+  an image by its old name: the images
   are `ghcr.io/thingfabric/go-ha2fabric` and
   `ghcr.io/thingfabric/go-ha2fabric-addon-{arch}` (no `0.7.0` is published
-  under `ghcr.io/sukramj/`), and the add-on repository to add in Home
-  Assistant is `https://github.com/thingfabric/go-ha2fabric`.
+  under `ghcr.io/sukramj/`), and a new installation adds the add-on
+  repository `https://github.com/thingfabric/go-ha2fabric`. An add-on
+  installed from the old address keeps it and updates in place (the old
+  address redirects); removing the old repository and installing from the
+  new one installs a different add-on with empty data, so its controllers
+  must be paired again.
 - **The configured node's passcode is random unless set.** Without
   `PASSCODE` (the add-on's `passcode` option, now optional without a
   default) the node draws a valid passcode on its first start and keeps it
