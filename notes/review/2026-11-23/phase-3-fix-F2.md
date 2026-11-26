@@ -2,40 +2,40 @@
 
 Implementer F2 (Opus). Brief `notes/briefs/2026-11-26-review-p3-fix.md`,
 section F2. Worktree `go-ha2fabric-review-F2`, branch `review/p3-F2`, base
-`88358bf` (`review/p3`).
+`2f11edd` (`review/p3`).
 
 ## Commits
 
 | Commit | Rows |
 | --- | --- |
-| `8fbfa25` | licenses: generated licence tree and current third-party notices (sup-37, doc-38) |
-| `32502fc` | images: base images by digest, licence texts and OCI labels in both images (sup-34, sup-37, sup-48) |
-| `eebd45d` | ci: Dependabot auto-merge for patch updates outside the family only, gated on the author (sup-31, sup-47) |
-| `67bddc2` | ci: actions by full SHA, pin and licence guards, CodeQL for actions (sup-35, sup-34, sup-37, sup-45) |
-| `88e1f01` | ci: publish only tags on main, dispatch from main for a release tag, attested provenance and SBOM (sup-32, sup-36, sup-46) |
-| `e828d98` | docs: security policy and the maintainer address (sup-44, doc-50) |
-| `5f85b39` | docs: mapped entities from go-hamapping v0.8.0, README leftovers, the 0.7.0 camera eviction line (doc-39, doc-40, doc-41) |
-| `b6a8f07` | docs: roadmap markers, the web UI node's rule, CONCEPT's status (doc-42, doc-43) |
-| `d77e217` | docs: citations at go.mod's versions, matter-hub's composition, the adapter's Matter knowledge by symbol, CLAUDE.md's state (cite-60, -63..-67) |
-| `e606aff` | docs: the last two citations at go.mod's versions (cite-60, -62) |
-| `0f009f4` | docs: co-installed add-ons and the Supervisor-address bind, the old image names, attestations (decisions 53, 54; sup-49, sup-36) |
-| `3b0f978` | changelog: the wave's supply chain and docs lines |
+| `913d8a2` | licenses: generated licence tree and current third-party notices (sup-37, doc-38) |
+| `03e8b1f` | images: base images by digest, licence texts and OCI labels in both images (sup-34, sup-37, sup-48) |
+| `8461530` | ci: Dependabot auto-merge for patch updates outside the family only, gated on the author (sup-31, sup-47) |
+| `76d2b59` | ci: actions by full SHA, pin and licence guards, CodeQL for actions (sup-35, sup-34, sup-37, sup-45) |
+| `3640556` | ci: publish only tags on main, dispatch from main for a release tag, attested provenance and SBOM (sup-32, sup-36, sup-46) |
+| `2e908b7` | docs: security policy and the maintainer address (sup-44, doc-50) |
+| `b93fb2e` | docs: mapped entities from go-hamapping v0.8.0, README leftovers, the 0.7.0 camera eviction line (doc-39, doc-40, doc-41) |
+| `06ebd36` | docs: roadmap markers, the web UI node's rule, CONCEPT's status (doc-42, doc-43) |
+| `b2bcc99` | docs: citations at go.mod's versions, matter-hub's composition, the adapter's Matter knowledge by symbol, CLAUDE.md's state (cite-60, -63..-67) |
+| `1957bd3` | docs: the last two citations at go.mod's versions (cite-60, -62) |
+| `bcf1ad8` | docs: co-installed add-ons and the Supervisor-address bind, the old image names, attestations (decisions 53, 54; sup-49, sup-36) |
+| `7fda407` | changelog: the wave's supply chain and docs lines |
 | (this file) | review: phase 3 fix report F2 |
 
 ## Guards
 
 | Guard | HEAD | Result |
 | --- | --- | --- |
-| `make ci` | `3b0f978` | exit 0 |
-| `make version-check` | `3b0f978` | exit 0 |
-| `licenses-check` (`script/licenses/generate.sh --check`) | `3b0f978` | exit 0 |
-| `make release` | `3b0f978` | exit 0 |
-| every archive holds `licenses/MODULES.txt` | `3b0f978` | exit 0 |
-| `actionlint` v1.7.12 | `3b0f978` | exit 0 |
-| `make docker` | `3b0f978` | exit 0 |
-| `make addon-image` (`BUILD_ARCH=amd64`) | `3b0f978` | exit 0 |
-| both images: `MODULES.txt` equals the tree; OCI labels present | `3b0f978` | exit 0 |
-| F1's `script/cite` over the docs (not roadmap) | `e606aff` | 0 findings |
+| `make ci` | `7fda407` | exit 0 |
+| `make version-check` | `7fda407` | exit 0 |
+| `licenses-check` (`script/licenses/generate.sh --check`) | `7fda407` | exit 0 |
+| `make release` | `7fda407` | exit 0 |
+| every archive holds `licenses/MODULES.txt` | `7fda407` | exit 0 |
+| `actionlint` v1.7.12 | `7fda407` | exit 0 |
+| `make docker` | `7fda407` | exit 0 |
+| `make addon-image` (`BUILD_ARCH=amd64`) | `7fda407` | exit 0 |
+| both images: `MODULES.txt` equals the tree; OCI labels present | `7fda407` | exit 0 |
+| F1's `script/cite` over the docs (not roadmap) | `1957bd3` | 0 findings |
 
 `make release`, `docker`, `addon-image` and `licenses-check` ran with a
 scratch copy of the Makefile carrying exactly the lines of "Makefile lines
@@ -237,7 +237,7 @@ that I could verify).
 
 ### Citations (cite-60, -62..-67) — docs fixed; roadmap open
 
-Checked with F1's `script/cite` (its commit `1320514`, run from F1's
+Checked with F1's `script/cite` (its commit `e258c5b`, run from F1's
 worktree over this branch's files): `docs/operations.md`,
 `docs/by_design.md`, `CONCEPT.md`, `README.md`, `addon/DOCS.md`,
 `CLAUDE.md`, `THIRD-PARTY-NOTICES.md`, `SECURITY.md` — **0 findings**.
@@ -295,7 +295,7 @@ sentences and a link. The held files were read only.
 
 ### Decision 54 — docs lines written here
 
-F1's commit `3192856` read for the shape: `docs/operations.md` Ports and
+F1's commit `4d2da0a` read for the shape: `docs/operations.md` Ports and
 addresses (the bind to `GET /addons/self/info`'s `ip_address`, the
 fallback with a warning) and a Logs row `ha2fabric.web_listen` (info,
 warn). F1: check the wording against the code; I did not see F1's
@@ -390,7 +390,7 @@ first use).
 
 `changelog.md` `[Unreleased]`: Added (licence tree, attestations,
 `SECURITY.md`), Changed (the add-on's bind — written from F1's commit
-`3192856`, F1's own line replaces it if different; digests and
+`4d2da0a`, F1's own line replaces it if different; digests and
 `BUILD_ARCH`; the publishing gate), Fixed (docs). Not added: F1's other
 rows (cfg-68 `label: str(1,32)`, test and guard rows are not
 user-visible except cfg-68) — the coordinator merges F1's lines.
@@ -412,7 +412,7 @@ user-visible except cfg-68) — the coordinator merges F1's lines.
   the `ghcr` environment's branch policy is `v*` tags only (the `main`
   policy is dropped with the dispatch).
 - **Decision 66**: no reviewer; call 3's optional reviewer line removed.
-- **Decision 67**: `docs/roadmap.md` is not in `CITE_PATHS` (f4734f9) and
+- **Decision 67**: `docs/roadmap.md` is not in `CITE_PATHS` (ecf166e) and
   nothing else references it for the check.
 
 Supersedes above: the sup-32 dispatch paragraph and its "Difference",
