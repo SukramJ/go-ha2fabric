@@ -404,7 +404,8 @@ func cites(file string, b []line, mods map[string]*module, local []string) []cit
 			// between the path and the version ("… (rows/camera.yaml at
 			// v0.8.0)" after a go-hamapping mention is not this path's).
 			tail := s[m[1]:min(len(s), m[1]+versionReach)]
-			if len(spans) == 0 || mention.MatchString(tail[:strings.Index(tail, version)]) {
+			before, _, _ := strings.Cut(tail, version)
+			if len(spans) == 0 || mention.MatchString(before) {
 				continue
 			}
 		}
