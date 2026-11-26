@@ -40,7 +40,8 @@ func TestNoEmptyKey(t *testing.T) {
 		for _, d := range devs {
 			spec := d.Spec()
 			// Typed by Parts, so the test stays on go-fabric's facade.
-			stack := append(spec.Parts[:0:0], spec)
+			stack := spec.Parts[:0:0]
+			stack = append(stack, spec)
 			for len(stack) > 0 {
 				sp := stack[len(stack)-1]
 				stack = stack[:len(stack)-1]

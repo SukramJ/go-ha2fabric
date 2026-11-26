@@ -52,6 +52,7 @@ type daemon struct {
 
 // newDaemon is a daemon on web that is not started yet.
 func newDaemon(t *testing.T, web string) *daemon {
+	t.Helper()
 	return &daemon{
 		t: t, web: web, logs: &safeBuffer{}, done: make(chan int, 1),
 		client: &http.Client{Transport: &http.Transport{DisableKeepAlives: true}},
@@ -99,7 +100,7 @@ func (d *daemon) stop() {
 // its status and body, or the client's error with the method, the path
 // and the time it took; the error is also kept for eventually. It does
 // not touch d.t, so a goroutine may call it.
-func (d *daemon) do(method, path, body string) (int, []byte, error) {
+func (d *daemon) do(method, path, body string) (code int, resp []byte, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), nodeStart)
 	defer cancel()
 	began := time.Now()
