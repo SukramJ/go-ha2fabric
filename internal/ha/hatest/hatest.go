@@ -448,6 +448,27 @@ func (s *Server) UpdateDevice(deviceID string, changes map[string]any) {
 	s.fire(ha.EventDeviceRegistryUpdated, map[string]any{"action": "update", "device_id": deviceID, "changes": old})
 }
 
+// RemoveDevice removes a device's registry entry and fires
+// device_registry_updated with action remove and the removed entry
+// (homeassistant/helpers/device_registry.py:177-182 at 2026.10.3). It
+// removes the device entry only; its entities are the test's to remove
+// (RemoveEntity).
+func (s *Server) RemoveDevice(deviceID string) {
+	s.mu.Lock()
+	var removed map[string]any
+	s.devices = slices.DeleteFunc(s.devices, func(d map[string]any) bool {
+		if d["id"] == deviceID {
+			removed = d
+			return true
+		}
+		return false
+	})
+	s.mu.Unlock()
+	if removed != nil {
+		s.fire(ha.EventDeviceRegistryUpdated, map[string]any{"action": "remove", "device_id": deviceID, "device": removed})
+	}
+}
+
 // RenameEntity changes an entity's id in its registry entry and state,
 // keeping the entry's id, and fires entity_registry_updated with
 // old_entity_id (homeassistant/helpers/entity_registry.py:171-189,

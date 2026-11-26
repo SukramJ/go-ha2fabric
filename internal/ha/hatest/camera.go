@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -43,6 +44,7 @@ type camera struct {
 	script       func(o Offer) []map[string]any
 	images       map[string][]byte
 	off          map[string]bool
+	noWebRTC     map[string]bool
 	offers       []Offer
 	candidates   []Candidate
 	unsubscribed []int64
@@ -106,6 +108,39 @@ func (s *Server) SetCameraOff(entityID string, off bool) {
 	s.cam.off[entityID] = off
 }
 
+// SetWebRTC says whether a camera supports WebRTC (its
+// frontend_stream_types hold web_rtc); every camera does until set. One
+// without it has its offers and candidates refused, as core's
+// require_webrtc_support does (camera/webrtc.py:213-248 at 2026.10.3).
+func (s *Server) SetWebRTC(entityID string, supported bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.cam.noWebRTC == nil {
+		s.cam.noWebRTC = map[string]bool{}
+	}
+	s.cam.noWebRTC[entityID] = !supported
+}
+
+// cameraRefusal is core's refusal of a WebRTC command for entity, or nil
+// (camera/webrtc.py:213-248 require_webrtc_support, camera/helper.py:14-26
+// get_camera_from_entity_id, websocket_api/connection.py:303-305 the
+// HomeAssistantError's code, at 2026.10.3): an unknown camera and one
+// that is off are home_assistant_error, one without WebRTC failCode.
+func (s *Server) cameraRefusal(entity, failCode string) map[string]any {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	known := slices.ContainsFunc(s.states, func(st map[string]any) bool { return st["entity_id"] == entity })
+	switch {
+	case !known || !strings.HasPrefix(entity, "camera."):
+		return map[string]any{"code": "home_assistant_error", "message": "Camera not found"}
+	case s.cam.off[entity]:
+		return map[string]any{"code": "home_assistant_error", "message": "Camera is off"}
+	case s.cam.noWebRTC[entity]:
+		return map[string]any{"code": failCode, "message": "Camera does not support WebRTC, frontend_stream_types={<StreamType.HLS: 'hls'>}"}
+	}
+	return nil
+}
+
 // Offers returns the offers the fake received so far.
 func (s *Server) Offers() []Offer {
 	s.mu.Lock()
@@ -161,6 +196,10 @@ func (s *Server) cameraCommand(ctx context.Context, c *conn, id int64, typ strin
 	case "camera/webrtc/offer":
 		entity, _ := cmd["entity_id"].(string)
 		sdp, _ := cmd["offer"].(string)
+		if e := s.cameraRefusal(entity, "webrtc_offer_failed"); e != nil {
+			c.send(ctx, map[string]any{"id": id, "type": "result", "success": false, "error": e})
+			return
+		}
 		s.mu.Lock()
 		o := Offer{ID: id, EntityID: entity, SDP: sdp, SessionID: "01JBSESSION" + strconv.Itoa(len(s.cam.offers)+1), c: c}
 		s.cam.offers = append(s.cam.offers, o)
@@ -179,6 +218,18 @@ func (s *Server) cameraCommand(ctx context.Context, c *conn, id int64, typ strin
 		cd.EntityID, _ = cmd["entity_id"].(string)
 		cd.SessionID, _ = cmd["session_id"].(string)
 		cd.Candidate, _ = cmd["candidate"].(map[string]any)
+		// The schema runs first: a candidate that is not an
+		// RTCIceCandidateInit (its "candidate" string is required) is
+		// invalid_format (camera/webrtc.py:325-339,
+		// websocket_api/connection.py:296-298 at 2026.10.3).
+		if _, ok := cd.Candidate["candidate"].(string); !ok {
+			c.send(ctx, map[string]any{"id": id, "type": "result", "success": false, "error": map[string]any{"code": "invalid_format", "message": "candidate is not an RTCIceCandidateInit"}})
+			return
+		}
+		if e := s.cameraRefusal(cd.EntityID, "webrtc_candidate_failed"); e != nil {
+			c.send(ctx, map[string]any{"id": id, "type": "result", "success": false, "error": e})
+			return
+		}
 		s.mu.Lock()
 		s.cam.candidates = append(s.cam.candidates, cd)
 		s.mu.Unlock()
