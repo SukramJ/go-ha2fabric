@@ -138,7 +138,8 @@ func (d *daemon) note(err error) {
 	d.lastErr = err
 }
 
-// lastError is the last error do or endpointIDs met, or nil.
+// lastError is the last error do or endpointIDs met since eventually
+// began, or nil.
 func (d *daemon) lastError() error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -166,6 +167,8 @@ func (d *daemon) want(method, path, body string, code int) []byte {
 
 func (d *daemon) eventually(what string, cond func() bool) {
 	d.t.Helper()
+	// Only this wait's errors (HR-P4-test-99).
+	d.note(nil)
 	deadline := time.Now().Add(nodeStart)
 	for !cond() {
 		if time.Now().After(deadline) {
