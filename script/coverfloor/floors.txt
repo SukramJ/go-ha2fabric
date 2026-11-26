@@ -1,15 +1,22 @@
-# Statement coverage floors per package (script/coverfloor). A ratchet:
-# raise a floor with the change that raises the coverage.
-cmd/ha2fabric       75
-internal/adapt      95
-internal/bridge     82
-internal/camera     90
-internal/config     92
-internal/expose     95
+# Statement coverage floors per package (script/coverfloor). A ratchet,
+# held both ways: below its floor fails, more than 3 points above it fails
+# too, and a package with statements needs a floor. A floor is the whole
+# percent below the lower of two runs (the spread between runs is
+# 0.3-0.5 points); raise it with the change that raises the coverage.
+cmd/ha2fabric       88
+internal/adapt      96
+internal/bridge     95
+internal/camera     95
+internal/config     98
+internal/expose     97
 internal/exposure   96
-internal/nodes      88
-internal/plan       98
-internal/ha         80
-internal/selection  90
-internal/version    75
-internal/web        85
+internal/ha         95
+internal/ha/hatest  95
+internal/nodes      91
+internal/plan       99
+internal/selection  93
+internal/text       100
+internal/version    90
+internal/web        96
+script/cite         79
+script/coverfloor   81
