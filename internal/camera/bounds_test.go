@@ -40,6 +40,19 @@ func exhausted(err error) bool {
 	return ok && se.Status == contract.StatusResourceExhausted
 }
 
+// fill is the i-th offer of a camera filled to MaxSessions: the first
+// MaxSessionsPerFabric of fabric 1, the next of fabric 2.
+func fill(i int) wpdef.OfferArgs {
+	return offerOf(uint16(i+1), uint8(1+i/camera.MaxSessionsPerFabric))
+}
+
+// offerOf is offer(id) from fabric's controller.
+func offerOf(id uint16, fabric uint8) wpdef.OfferArgs {
+	o := offer(id)
+	o.FabricIndex, o.PeerNodeID = fabric, 0x70+uint64(fabric)
+	return o
+}
+
 func (u *upstream) streamCount() int {
 	u.mu.Lock()
 	defer u.mu.Unlock()
@@ -57,7 +70,7 @@ func TestSessionsPerCameraAreBounded(t *testing.T) {
 	h.Attach(&signaller{})
 	ctx := context.Background()
 	for i := range camera.MaxSessions {
-		if _, err := h.ProvideOffer(ctx, offer(uint16(i+1))); err != nil {
+		if _, err := h.ProvideOffer(ctx, fill(i)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -89,7 +102,7 @@ func TestIdleSessionEvictedAtTheBound(t *testing.T) {
 	h.Attach(sig)
 	ctx := context.Background()
 	for i := range camera.MaxSessions {
-		if _, err := h.ProvideOffer(ctx, offer(uint16(i+1))); err != nil {
+		if _, err := h.ProvideOffer(ctx, fill(i)); err != nil {
 			t.Fatal(err)
 		}
 		time.Sleep(2 * time.Millisecond)
@@ -351,7 +364,7 @@ func TestIgnoredEventsDoNotKeepTheSession(t *testing.T) {
 	h.Attach(sig)
 	ctx := context.Background()
 	for i := range camera.MaxSessions {
-		if _, err := h.ProvideOffer(ctx, offer(uint16(i+1))); err != nil {
+		if _, err := h.ProvideOffer(ctx, fill(i)); err != nil {
 			t.Fatal(err)
 		}
 		time.Sleep(2 * time.Millisecond)
@@ -389,5 +402,144 @@ func TestHAErrorTextIsCut(t *testing.T) {
 	h.Close(context.Background())
 	if n := len(logs.String()); n > 4*ha.MaxErrorText+2048 || !strings.Contains(logs.String(), "camera.ha_error") {
 		t.Fatalf("the log holds %d bytes", n)
+	}
+}
+
+// answeringUp is an upstream whose every session answers at once: a
+// standing live view, which signals nothing after.
+func answeringUp() *upstream {
+	return &upstream{script: func(s *stream) {
+		s.push(session("ha"))
+		s.push(map[string]any{"type": "answer", "answer": "v=0 answer"})
+	}}
+}
+
+func ends(sig *signaller) []string {
+	return slices.DeleteFunc(sig.seen(), func(s string) bool { return !strings.HasPrefix(s, "end ") })
+}
+
+// TestEvictionStaysInTheFabric (decision 72, HR-P4-bound-20): at
+// MaxSessions an offer of a fabric that holds none of the sessions is
+// refused with RESOURCE_EXHAUSTED; the other fabrics' standing live
+// views, idle beyond EvictIdle, are not ended.
+func TestEvictionStaysInTheFabric(t *testing.T) {
+	up := answeringUp()
+	h := boundedHost(t, up, camera.Options{EvictIdle: 20 * time.Millisecond})
+	sig := &signaller{}
+	h.Attach(sig)
+	ctx := context.Background()
+	for i := range camera.MaxSessions {
+		if _, err := h.ProvideOffer(ctx, fill(i)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	eventually(t, "the answers", func() bool {
+		return len(slices.DeleteFunc(sig.seen(), func(s string) bool { return !strings.HasPrefix(s, "answer ") })) == camera.MaxSessions
+	})
+	time.Sleep(50 * time.Millisecond)
+	if _, err := h.ProvideOffer(ctx, offerOf(100, 3)); !errors.Is(err, camera.ErrTooManySessions) || !exhausted(err) {
+		t.Fatalf("fabric 3's offer at the bound: %v", err)
+	}
+	time.Sleep(20 * time.Millisecond)
+	if e := ends(sig); len(e) != 0 {
+		t.Fatalf("fabric 3's offer ended another fabric's live view: %q", e)
+	}
+	if n := up.streamCount(); n != camera.MaxSessions {
+		t.Fatalf("%d Home Assistant sessions", n)
+	}
+}
+
+// TestEvictionTakesTheFabricsOwnIdlest (decision 72): a fabric at its
+// share evicts its own session idle longest, even when another fabric's
+// session has been idle longer.
+func TestEvictionTakesTheFabricsOwnIdlest(t *testing.T) {
+	// A plain upstream: no event moves a session's last, so the offers'
+	// order is the idle order (HR-P4-test-90).
+	up := &upstream{}
+	h := boundedHost(t, up, camera.Options{EvictIdle: 20 * time.Millisecond})
+	sig := &signaller{}
+	h.Attach(sig)
+	ctx := context.Background()
+	// Fabric 2's session first: the idlest of the camera.
+	if _, err := h.ProvideOffer(ctx, offerOf(50, 2)); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(5 * time.Millisecond)
+	for i := range camera.MaxSessionsPerFabric {
+		if _, err := h.ProvideOffer(ctx, offerOf(uint16(i+1), 1)); err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+	time.Sleep(50 * time.Millisecond)
+	if _, err := h.ProvideOffer(ctx, offerOf(100, 1)); err != nil {
+		t.Fatalf("fabric 1's offer at its share: %v", err)
+	}
+	eventually(t, "the eviction", func() bool { return len(ends(sig)) > 0 })
+	time.Sleep(20 * time.Millisecond)
+	if e := ends(sig); !slices.Equal(e, []string{"end 1 12"}) {
+		t.Fatalf("ends %q, want fabric 1's idlest (session 1) only", e)
+	}
+}
+
+// TestFabricShareRefused (decision 72): a fabric holding
+// MaxSessionsPerFabric sessions, none idle, is refused with
+// RESOURCE_EXHAUSTED below MaxSessions; another fabric is still served.
+func TestFabricShareRefused(t *testing.T) {
+	up := &upstream{}
+	h := boundedHost(t, up, camera.Options{EvictIdle: time.Hour})
+	sig := &signaller{}
+	h.Attach(sig)
+	ctx := context.Background()
+	for i := range camera.MaxSessionsPerFabric {
+		if _, err := h.ProvideOffer(ctx, offerOf(uint16(i+1), 1)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := h.ProvideOffer(ctx, offerOf(100, 1)); !errors.Is(err, camera.ErrTooManySessions) || !exhausted(err) {
+		t.Fatalf("fabric 1's offer beyond its share: %v", err)
+	}
+	if _, err := h.ProvideOffer(ctx, offerOf(1, 1)); err != nil {
+		t.Fatalf("a re-offer at the share: %v", err)
+	}
+	if _, err := h.ProvideOffer(ctx, offerOf(101, 2)); err != nil {
+		t.Fatalf("fabric 2's offer: %v", err)
+	}
+	if e := ends(sig); len(e) != 0 {
+		t.Fatalf("ends %q", e)
+	}
+}
+
+// TestCandidateMidIsBounded (HR-P4-bound-21): MaxCandidateBytes bounds a
+// candidate with its sdpMid. Home Assistant's candidate with a long
+// sdpMid is refused and logged, the session stays; a controller's is
+// refused with CONSTRAINT_ERROR before Home Assistant is asked.
+func TestCandidateMidIsBounded(t *testing.T) {
+	up := &upstream{}
+	h := boundedHost(t, up, camera.Options{})
+	sig := &signaller{}
+	h.Attach(sig)
+	ctx := context.Background()
+	if _, err := h.ProvideOffer(ctx, offer(5)); err != nil {
+		t.Fatal(err)
+	}
+	st := up.stream(0)
+	st.push(session("ha-1"))
+	mid := strings.Repeat("M", camera.MaxCandidateBytes)
+	st.push(candidate("candidate:long", mid, 0))
+	st.push(candidate("candidate:short", "0", 0))
+	eventually(t, "the short candidate", func() bool {
+		return slices.ContainsFunc(sig.seen(), func(s string) bool { return strings.HasPrefix(s, "candidate 5 candidate:short") })
+	})
+	for _, s := range sig.seen() {
+		if strings.Contains(s, "candidate:long") {
+			t.Fatalf("a candidate with a %d-byte sdpMid reached the controller", len(mid))
+		}
+	}
+	var c wpdef.ICECandidateStruct
+	c.Candidate, c.SdpMid, c.SdpmLineIndex = "candidate:a", spec.ValueOf(mid), spec.ValueOf[uint16](0)
+	err := h.ProvideIceCandidates(ctx, 5, []wpdef.ICECandidateStruct{c})
+	if se, ok := errors.AsType[contract.StatusError](err); !ok || se.Status != contract.StatusConstraintError {
+		t.Fatalf("a controller's candidate over MaxCandidateBytes: %v", err)
 	}
 }

@@ -20,6 +20,7 @@ func TestClean(t *testing.T) {
 		"می\u200cخو":                   "می\u200cخو", // ZWNJ kept
 		"👩\u200d💻":                     "👩\u200d💻",   // ZWJ kept
 		"\xff":                         "�",
+		"Kitchen\u2028Light\u2029":     "Kitchen Light", // HR-P4-data-22
 	} {
 		if got := text.Clean(in); got != want {
 			t.Errorf("Clean(%q) = %q, want %q", in, got, want)
@@ -42,6 +43,8 @@ func TestSafe(t *testing.T) {
 		"a\u2069b": false,
 		"\xff":     false,
 		"\u0085":   false,
+		"a\u2028b": false,
+		"a\u2029b": false,
 		"plain  x": true,
 	} {
 		if got := text.Safe(s); got != want {

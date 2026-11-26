@@ -239,7 +239,7 @@ only for a convenience default. The facts:
   the WebRTC peer connection" (`cluster/camera/doc.go`, package comment).
 - The Camera device type makes CameraAvStreamManagement (VDO, ADO, SNP)
   and WebRtcTransportProvider mandatory (`device/camera_gen.go:34-45` at
-  go-fabric v0.26.0).
+  go-fabric v0.27.0).
 - Home Assistant at 2026.10.3 offers `camera/webrtc/offer`,
   `camera/webrtc/candidate`, `camera/webrtc/get_client_config`
   (`homeassistant/components/camera/webrtc.py:254, 335, 308`); the
@@ -260,7 +260,7 @@ on the go-fabric lines):
 - chip's AllocateVideoStream validation reads only the request's ranges
   and the declared stream usages, no sensor parameters
   (`CameraAVStreamManagementCluster.cpp:2066-2141`); go-fabric checks
-  the same (`cluster/camera/avstream.go:871-888` at v0.26.0,
+  the same (`cluster/camera/avstream.go:871-888` at v0.27.0,
   `videoStreamAllocate`). A placeholder stream
   declaration is possible.
 - H264 is the mandatory codec (`CameraAVStreamManagement.xml:173-185`,
@@ -309,9 +309,9 @@ Left open:
 - Closed: two questions to go-fabric, filed as go-fabric #356
   (2026-10-31) and answered by go-fabric `v0.15.6` (2026-11-01).
   `camera.ErrPayloadTooLarge` is the value of `bridge.ErrPayloadTooLarge`
-  (`cluster/camera/provider_peer.go:51-63` at v0.26.0), so `internal/camera` imports
+  (`cluster/camera/provider_peer.go:56-67` at v0.27.0), so `internal/camera` imports
   `cluster/camera` alone; the kit passes a port's `contract.StatusError`
-  through (`cluster/camera/chime.go:302-311` at v0.26.0), so `SolicitOffer` answers
+  through (`cluster/camera/chime.go:302-311` at v0.27.0), so `SolicitOffer` answers
   INVALID_IN_STATE.
 
 ## A — Architecture (owner, 2026-11-05)

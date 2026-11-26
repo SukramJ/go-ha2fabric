@@ -122,7 +122,7 @@ alone (`selection-<key>.json`; `docs/operations.md`, Nodes).
 
 A speaker's `volume_level` (0 to 1, `media_player/services.py:182-192` at
 2026.10.3) is LevelControl's CurrentLevel 0 to 254 (go-fabric
-`cluster/spec/levelcontrol/values.go:14-44` at v0.26.0, `LevelFromUnit` and
+`cluster/spec/levelcontrol/values.go:14-44` at v0.27.0, `LevelFromUnit` and
 `UnitFromLevel`), as matter-hub maps it
 (`matter/behaviors/speaker-level-control-server.ts:37-40, 55-59, 85-96,
 165-166`). One difference: matter-hub sends `level / 254` as it is;
@@ -139,9 +139,21 @@ plugin it calls experimental (`backend/src/plugins/builtin/camera/camera-plugin.
 (`camera/const.py:71-75` at 2026.10.3) through go-hamapping's camera row,
 but only with `CAMERA=true`, off by default: go-fabric's ecosystem gate
 keeps camera clusters out of host devices until a live test with Apple Home
-has passed (go-fabric `docs/guides/camera.md:577-599` at v0.26.0). The gate
+has passed (go-fabric `docs/guides/camera.md:581-603` at v0.27.0). The gate
 is go-fabric's rule, and a default that breaks it would ship an unverified
 device type to every user.
+
+matter-hub bounds no WebRTC session of a camera: `provideOffer` mints an id
+and appends the session to `currentSessions` with no count, per camera or
+per fabric (`backend/src/plugins/builtin/camera/webrtc-provider-server.ts:25-34, 88-96, 291-315`),
+and its relay keeps every session in an unbounded map
+(`webrtc-bridge.ts:90, 141, 216`); nothing is evicted or refused.
+go-ha2fabric holds a camera to 8 sessions, each one a Home Assistant
+WebRTC session and a relay, and a fabric to 4 of them; at either bound a
+new offer ends only its own fabric's session idle for a minute, else it
+is answered RESOURCE_EXHAUSTED. One controller
+ecosystem can neither exhaust Home Assistant's provider nor end another
+ecosystem's live view.
 
 ## Signalling only
 
@@ -166,7 +178,7 @@ go-ha2fabric refuses it: Home Assistant's WebRTC API takes the client's
 offer only (`camera/webrtc.py:252-258`), so the bridge has no offer of its
 own to give. The refusal carries INVALID_IN_STATE, which go-fabric's kit
 answers as is since `v0.15.6` (`cluster/camera/chime.go:302-311` at
-v0.26.0, `portError`, `spec.CarriesStatus`; go-fabric #356). chip's camera controller
+v0.27.0, `portError`, `spec.CarriesStatus`; go-fabric #356). chip's camera controller
 starts a live view with `ProvideOffer`
 (`examples/camera-controller/commands/liveview/LiveViewCommands.cpp:40` at
 1dc3b69ed5e), which is served.

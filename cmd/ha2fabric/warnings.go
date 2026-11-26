@@ -22,7 +22,7 @@ const (
 	warningPasscodeTestValue = "passcode_test_value"
 	// warningPasscodeNotKept: PASSCODE is unset and passcode.json could
 	// not be read or written; the passcode is this start's only.
-	warningPasscodeNotKept = "passcode_not_kept"
+	warningPasscodeNotKept = "passcode_not_kept" //nolint:gosec // G101: a warning code naming the passcode file's state, not a credential
 	// warningTokenRefused: Home Assistant answered the access token with
 	// auth_invalid; the client retries after minutes, then hourly
 	// (decision 28 of the 2026-11-23 review).

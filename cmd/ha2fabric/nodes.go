@@ -35,7 +35,7 @@ import (
 // (fabricui.NodeSwitch, go-fabric-ui v0.7.1). The run is the go-fabric
 // node and its bridge on the one Home Assistant connection; an erase
 // ends it and starts a new one (a Go node is single-use, go-fabric
-// node/node.go:42-46 at v0.26.0), so the web UI's handler, which keeps
+// node/node.go:42-46 at v0.27.0), so the web UI's handler, which keeps
 // the values it was given, follows the new node through the switch.
 type served struct {
 	base   context.Context
@@ -49,9 +49,12 @@ type served struct {
 	prov   *exposure.Provider
 	sw     *fabricui.NodeSwitch
 
-	// op serialises erase and close; closed is set by close.
-	op     sync.Mutex
-	closed bool
+	// op serialises erase and close; closed is set by close, unstopped
+	// when a stop of close failed, so a second close retries it
+	// (decision 74).
+	op        sync.Mutex
+	closed    bool
+	unstopped bool
 
 	// mu guards the current run and the last failed come-back; live
 	// mirrors n != nil for the fleet's List, which does not wait on an
@@ -85,6 +88,14 @@ var (
 
 // eraseTimeout bounds an erase: the reset and the come-back.
 const eraseTimeout = 30 * time.Second
+
+// rollbackContext is the context of Create's rollback: the request's
+// values, not its end — the started node must be stopped also when the
+// client left — bounded by the stop budget, so a bridge worker that does
+// not end does not hold the fleet's lock (HR-P4-conc-65).
+func rollbackContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(ctx), stopBudget)
+}
 
 // eraseGrace is how long a reset under way may still run once the daemon
 // stops: four fifths of the stop budget, so close still stops the nodes
@@ -123,7 +134,7 @@ func (s *served) start(base context.Context) error {
 }
 
 // launch runs a node and its bridge in the cookbook's order (go-fabric
-// docs/guides/embed-in-a-daemon.md §6 at v0.26.0): node.New and Start, the fabrics
+// docs/guides/embed-in-a-daemon.md §6 at v0.27.0): node.New and Start, the fabrics
 // and the pairing codes to the log, the bridge on the node and its worker
 // on base. It touches none of s's run, so it needs no lock.
 func (s *served) launch(base context.Context) (nodeRun, error) {
@@ -278,7 +289,7 @@ func (s *served) Warnings(ctx context.Context) []fabricui.Warning {
 // configuration on the erased store. Without a run — a come-back that
 // failed — it only starts, after resetting a node an earlier reset did
 // not stop (stale). A reset that fails may leave the node running
-// (go-fabric node/factory_reset.go:51-55 at v0.26.0: "the node is not
+// (go-fabric node/factory_reset.go:51-55 at v0.27.0: "the node is not
 // stopped and keeps its store"): it is stopped before the come-back, and
 // kept as stale when that fails too. A come-back that fails leaves s
 // without a run and the switch on the stopped node; the daemon keeps
@@ -311,6 +322,22 @@ func (s *served) erase(context.Context) error { //nolint:contextcheck // detache
 		}
 	})()
 	s.mu.Lock()
+	if s.n != nil && s.stale != nil {
+		// A node an earlier erase kept: stopped before this run is reset,
+		// so the run's reset does not drop it unstopped (HR-P4-err-66).
+		old := s.stale
+		s.mu.Unlock()
+		sctx, scancel := context.WithTimeout(ectx, 10*time.Second)
+		err := stopNode(old, sctx) //nolint:contextcheck // the daemon's base, above
+		scancel()
+		if err != nil {
+			s.log.Warn("ha2fabric.node_erased", slog.String("error", err.Error()),
+				slog.String("hint", "a node an earlier erase kept did not stop; the node is not erased"))
+			return fmt.Errorf("an earlier node did not stop: %w", err)
+		}
+		s.mu.Lock()
+		s.stale = nil
+	}
 	n := s.n
 	var done <-chan struct{}
 	if n != nil {
@@ -450,27 +477,40 @@ func logPairing(n *node.Node, fabrics int, logger *slog.Logger) {
 // close takes the bridge off the connection, ends its worker and stops
 // the node, and a node an erase kept (stale); an erase running meanwhile
 // ends first — its reset within eraseGrace of the daemon's stop —, and a
-// later one answers errStopping. It waits for the erase until ctx ends. A second call does
-// nothing.
+// later one answers errStopping. It waits for the erase until ctx ends.
+// The node is listed not enabled from then on. A second call does
+// nothing, unless a stop failed: then it stops what did not stop again
+// (decision 74: a registry node's Delete retries).
 func (s *served) close(ctx context.Context) error {
 	if !lockBy(ctx, &s.op) {
 		return fmt.Errorf("an erase or a delete still runs: %w", ctx.Err())
 	}
 	defer s.op.Unlock()
-	if s.closed {
+	if s.closed && !s.unstopped {
 		return nil
 	}
-	s.closed = true
+	retry := s.closed
+	s.closed, s.unstopped = true, false
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	var errs []error
 	if s.stale != nil {
-		errs = append(errs, stopNode(s.stale, ctx))
-		s.stale = nil
+		if err := stopNode(s.stale, ctx); err != nil {
+			errs = append(errs, err)
+			s.unstopped = true
+		} else {
+			s.stale = nil
+		}
 	}
 	if s.n != nil {
-		s.stopRun(ctx)
-		errs = append(errs, stopNode(s.n, ctx))
+		if !retry {
+			s.stopRun(ctx)
+			s.live.Store(false)
+		}
+		if err := stopNode(s.n, ctx); err != nil {
+			errs = append(errs, err)
+			s.unstopped = true
+		}
 	}
 	return errors.Join(errs...)
 }
@@ -524,6 +564,9 @@ type fleet struct {
 	mu      sync.RWMutex
 	members []*member
 	closed  bool
+	// orphans are nodes a Create started and could not record nor stop
+	// (decision 77, HR-P4-err-93): Close stops them; op guards them.
+	orphans []*served
 }
 
 // newFleet starts every node of reg on base; a node that does not start
@@ -547,7 +590,7 @@ func newFleet(base context.Context, cfg *config.Config, client *ha.Client, fan *
 }
 
 // nodeLabel is a registry label as the node's NodeLabel: at most 32 bytes
-// (go-fabric cluster/core/basic_information.go:651 at v0.26.0, as config's
+// (go-fabric cluster/core/basic_information.go:651 at v0.27.0, as config's
 // LABEL), cut
 // at a character boundary.
 func nodeLabel(label string) string {
@@ -638,7 +681,17 @@ func (f *fleet) Create(ctx context.Context, spec fabricui.NodeSpec) (fabricui.No
 		return fabricui.NodeEntry{}, fmt.Errorf("node %s: %w", rec.Key, err)
 	}
 	if err := f.reg.Add(rec); err != nil {
-		_ = s.close(context.WithoutCancel(ctx))
+		rctx, cancel := rollbackContext(ctx)
+		cerr := s.close(rctx)
+		cancel()
+		if cerr != nil {
+			// The node runs on: its files stay with it, and the daemon's
+			// stop stops it again (decision 77).
+			f.orphans = append(f.orphans, s)
+			f.log.Warn("ha2fabric.node_stop", slog.String("node", rec.Key), slog.String("error", cerr.Error()),
+				slog.String("hint", "the node did not stop after its record failed; the daemon's stop stops it, its files stay"))
+			return fabricui.NodeEntry{}, errors.Join(err, cerr)
+		}
 		_ = f.reg.RemoveFiles(&rec)
 		return fabricui.NodeEntry{}, err
 	}
@@ -662,7 +715,7 @@ func (f *fleet) find(key string) *member {
 
 // Rename implements [fabricui.NodeRegistry]: the label in the registry
 // and the selector, then the running node's own NodeLabel
-// (Node.SetNodeLabel, go-fabric node/node_label.go:39 at v0.26.0: a host
+// (Node.SetNodeLabel, go-fabric node/node_label.go:39 at v0.27.0: a host
 // write, persisted, reported to the controllers' subscriptions), cut as
 // at start (nodeLabel). The node's error is logged and leaves the
 // registry's rename standing; a node without a run takes the label from
@@ -702,8 +755,10 @@ func (f *fleet) Rename(ctx context.Context, key, label string) error {
 // Delete implements [fabricui.NodeRegistry], finally: the node leaves
 // every fabric it holds (node.RemoveFabric: the Leave event, the sessions
 // and subscriptions go, so the controllers lose it), stops, and its
-// store, selection and record are removed. A file that cannot be removed
-// leaves the record, listed as not enabled, for a second Delete.
+// store, selection and record are removed. A node whose stop fails, or a
+// file that cannot be removed, leaves the record, listed as not enabled,
+// for a second Delete (decision 74): a node that did not stop keeps its
+// files and its place in the fleet, whose Close stops it again.
 func (f *fleet) Delete(ctx context.Context, key string) error {
 	f.op.Lock()
 	defer f.op.Unlock()
@@ -720,7 +775,9 @@ func (f *fleet) Delete(ctx context.Context, key string) error {
 			left = leave(ctx, n, f.log.With(slog.String("node", key)))
 		}
 		if err := s.close(ctx); err != nil {
-			f.log.Warn("ha2fabric.node_stop", slog.String("node", key), slog.String("error", err.Error()))
+			f.log.Warn("ha2fabric.node_stop", slog.String("node", key), slog.String("error", err.Error()),
+				slog.String("hint", "the node is kept, listed not enabled; delete it again"))
+			return fmt.Errorf("node %s: stop: %w", key, err)
 		}
 		// An exposure apply that took the node before the delete writes no
 		// selection file after its removal (HR-P2-conc-68).
@@ -819,7 +876,7 @@ func leave(ctx context.Context, n *node.Node, log *slog.Logger) int {
 // running when ctx ends is not waited for further.
 func (f *fleet) Close(ctx context.Context) {
 	if !lockBy(ctx, &f.op) {
-		f.log.Warn("ha2fabric.node_stop", slog.String("error", "a create, rename or delete still runs: "+ctx.Err().Error()))
+		f.log.Warn("ha2fabric.node_stop", slog.String("error", "a create, rename, erase or delete still runs: "+ctx.Err().Error()))
 		return
 	}
 	defer f.op.Unlock()
@@ -835,6 +892,13 @@ func (f *fleet) Close(ctx context.Context) {
 		wg.Go(func() {
 			if err := m.s.close(ctx); err != nil {
 				f.log.Warn("ha2fabric.node_stop", slog.String("node", m.rec.Key), slog.String("error", err.Error()))
+			}
+		})
+	}
+	for _, s := range f.orphans {
+		wg.Go(func() {
+			if err := s.close(ctx); err != nil {
+				f.log.Warn("ha2fabric.node_stop", slog.String("error", err.Error()))
 			}
 		})
 	}

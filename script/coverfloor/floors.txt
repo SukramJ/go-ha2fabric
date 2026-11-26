@@ -2,7 +2,9 @@
 # held both ways: below its floor fails, more than 3 points above it fails
 # too, and a package with statements needs a floor. A floor is the whole
 # percent below the lower of two runs (the spread between runs is
-# 0.3-0.5 points); raise it with the change that raises the coverage.
+# 0.3-0.6 points, internal/ha's 1.8: 94.7-96.5, so its floor is 94, the
+# one whole percent that holds both ends); raise it with the change that
+# raises the coverage.
 cmd/ha2fabric       88
 internal/adapt      96
 internal/bridge     93
@@ -10,7 +12,7 @@ internal/camera     95
 internal/config     98
 internal/expose     97
 internal/exposure   96
-internal/ha         93
+internal/ha         94
 internal/ha/hatest  95
 internal/nodes      91
 internal/plan       99

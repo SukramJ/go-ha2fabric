@@ -85,6 +85,15 @@ func TestCites(t *testing.T) {
 		{"the kit (cluster/camera/state.go:13-28 at v0.26.0)", []string{"gf cluster/camera/state.go:13-28 ok"}},
 		// An ambiguous suffix is no citation.
 		{"go-fabric state.go:13-28 at v0.26.0", nil},
+		// A path the named module does not have at go.mod's version — a
+		// file a bump renamed, moved or deleted, or a typo — is a problem,
+		// not a citation dropped (HR-P4-test-63).
+		{"go-fabric node/gone.go:12 at v0.26.0", []string{"gf node/gone.go:12 PROBLEM: not in go-fabric at v0.26.0"}},
+		// Without lines or a version it is not a module citation.
+		{"go-fabric node/gone.go at v0.26.0", nil},
+		{"go-fabric node/gone.go:12", nil},
+		// The version is another module's.
+		{"go-fabric's camera.Provider (camera/webrtc.py:264-273), go-hamapping's row (rows/camera.yaml at v0.8.0)", nil},
 		// This repository's paths are not the module's.
 		{"go-fabric is wrapped in internal/config/config.go:12.", nil},
 		// A prefix names the module.

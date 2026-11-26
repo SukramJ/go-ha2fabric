@@ -153,3 +153,43 @@ Baseline of phase 3: origin/main `0a47095` (phase 2 `d16f3ab`, the move to
 | 65 | The image workflows' manual rebuild of an existing release tag | **Dropped**: a published image is never rebuilt; a base update ships as a patch release |
 | 66 | A required reviewer on the `ghcr` environment | **No**: `v*` tags and `main` only, and only an admin creates a `v*` tag |
 | 67 | HR-P3-test-15's test seam `buildPlan` in `internal/bridge`; `docs/roadmap.md` in `make cite` | **The seam goes**: a real fixture go-hamapping refuses whole (a shape of go-hamapping #45), else test-15 accepted as a note; the roadmap stays out of `make cite` as history, like `docs/reports/` |
+
+## 2026-11-26, phase 4 start
+
+All roles this plan gives Fable still run on Opus (owner, 2026-11-24).
+Baseline of phase 4 run 1: origin/main `c3a9770` (phase 3, #82); the delta
+`d16f3ab..c3a9770` is read first (`notes/reads/read-review-p4-delta.md`).
+
+| # | Subject | Decision |
+| --- | --- | --- |
+| 68 | The cut of phase 4's runs | **The security unit split upfront** (go-fabric-ui's phase 4 lesson: one security unit covered only part of its scope): S-web, S-ha, P (plan side), D (daemon side), each a full cut with the delta first, and one verifier — five agents, all Opus |
+| 69 | go-fabric v0.27.0 (released 2026-11-26; `make apidiff` clean against v0.26.0, five deprecations, none used here) | **Lifted in phase 4's fix wave**: the reviewers read the code at `c3a9770` (v0.26.0) and name what v0.27.0's *Changed* rows touch here; no deprecated identifier (SA1019); the pre-merge read reads the lift as delta |
+| 70 | The fix wave's scope | **Run 1's rows and the carried test-helper row** (`cmd/ha2fabric/nodes_test.go` `daemon.call` drops the client's error and answers status 0; phase 3's Windows flake); issues #71, #72, #73 stay outside, each its own wave after the review |
+| 71 | A release after phase 4 | **No tag**: phase 4's pull request lands untagged; the owner decides 0.7.1 / 0.8.0 after convergence (the bind's live check and the first attest and SBOM run come with that tag) |
+
+## 2026-11-26, after phase 4 run 1's verification
+
+Run 1: 0 high · 0 medium · 11 low · 14 note (`phase-4-verify.md`); no
+confirmed high or medium, so run 1 is the convergence run (README "Done")
+if the pre-merge read adds none.
+
+| # | Subject | Decision |
+| --- | --- | --- |
+| 72 | HR-P4-bound-20, the camera's eviction at the session cap crosses fabrics | **Fabric-scoped eviction plus a per-fabric share** in the host (half the cap, 4 of 8), otherwise RESOURCE_EXHAUSTED; a go-hamapping issue to pass go-fabric's `MaxSessionsPerFabric` through the camera row, after which the host's share goes; supersedes decision 23's eviction rule |
+| 73 | HR-P4-err-40, a refused Replace leaves the served endpoint without a live plan | **A stale plan for exactly the refused keys**, live until a later batch applies them; completes HR-P1-err-31 |
+| 74 | HR-P4-err-64, a Delete whose stop fails | **Refused** with 500, the record and files kept, a second Delete retries |
+| 75 | Every other row of run 1 | **As the verifier recommends**: cfg-01 `S6_CMD_RECEIVE_SIGNALS=1` with a guard test and the comments and docs (cfg-02's docs line with it); sup-03 the `# syntax=` line dropped and the lint grep extended; sup-04 a lint check that holds the Go version in its four places; test-62 floor 94 and the floors header; sup-70 `gosec` on `cmd/` with one reasoned `nolint`; P's `ErrNoStableKey` probe as a standing guard; adpt-42 a go-fabric issue beside #616, outside the fix wave; every other low and note fixed in phase 4's pull request |
+
+## 2026-11-26, after phase 4's pre-merge read
+
+| # | Subject | Decision |
+| --- | --- | --- |
+| 76 | Decision 72's share and a third fabric (two ecosystems at 4 each can lock a third out until go-fabric proves their controllers lost) | **4 of 8 kept**; the lock-out goes into go-hamapping #50 (a total that follows the share times the fabrics, or a fair-share eviction) |
+| 77 | HR-P4-err-93, Create's rollback stop fails | **Fixed**: the unstopped node goes to the fleet's close list, its files stay, Create answers the error |
+| 78 | HR-P4-bound-98, a controller's ICE candidate over 1024 bytes | **CONSTRAINT_ERROR kept**; the comment and docs say it is the host's own bound |
+
+## 2026-11-26, phase 4's pull request #84
+
+| # | Subject | Decision |
+| --- | --- | --- |
+| 79 | HR-P4-conc-69's fix (`began.After(since)`) failed `TestSnapshotsShared` on CI's Windows runner: there every read of one trigger begins in the trigger's clock tick, so no read was shared (HR-P2-bound-62's purpose) | **Reverted, conc-69 accepted**: a read of the trigger's tick is shared again; an event missed within that tick is corrected by the next trigger; the comment and `TestSnapshotsSameTickIsReused` say so. A sequence mark instead of time was the alternative, not taken |

@@ -126,3 +126,41 @@ func TestProviderSyncFailed(t *testing.T) {
 		t.Errorf("warning %q", ws[0].Message)
 	}
 }
+
+// TestItemKeepsPlanReason (HR-P4-err-41, decision 52): an exposed camera
+// with the camera option off and an exposed entity whose state is over
+// the cap are unmappable with the plan's reason (plan.CameraOff,
+// plan.OversizedReason), and the web UI's item carries it; enabling a
+// camera with the option off is refused with it.
+func TestItemKeepsPlanReason(t *testing.T) {
+	in := plan.Input{Rule: expose.Rule{Include: []string{"camera.front_door", "light.kitchen"}}}
+	m := synced(t, in, time.Now())
+	// light.kitchen's state over the cap, as ha.GetStates leaves it.
+	for i := range m.v.Snapshot.States {
+		if st := &m.v.Snapshot.States[i]; st.EntityID == "light.kitchen" {
+			st.Oversized, st.Attributes = 300000, nil
+		}
+	}
+	m.v.Verdicts, m.v.All = plan.Dry(m.v.Snapshot, in), plan.Candidates(m.v.Snapshot, in)
+	p := New(m, Options{Input: func() plan.Input { return in }})
+	items, err := p.List(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{"camera.front_door": plan.CameraOff, "light.kitchen": plan.OversizedReason(300000)}
+	for _, it := range items {
+		if r, ok := want[it.Key]; ok {
+			if it.Verdict.State.String() != "unmappable" || it.Verdict.Reason != r {
+				t.Errorf("%s: %s %q, want unmappable %q", it.Key, it.Verdict.State, it.Verdict.Reason, r)
+			}
+			delete(want, it.Key)
+		}
+	}
+	if len(want) != 0 {
+		t.Fatalf("no items of %v", want)
+	}
+	_, err = p.Preview(context.Background(), []fabricui.Update{{Key: "camera.doorbell_still", Enabled: true}})
+	if err == nil || !strings.HasSuffix(err.Error(), plan.CameraOff) {
+		t.Fatalf("enabling a camera with the option off: %v", err)
+	}
+}

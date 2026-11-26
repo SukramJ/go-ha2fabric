@@ -141,7 +141,7 @@ func run(ctx context.Context, args []string, env config.Env, stdout, stderr io.W
 		}
 	}
 
-	// The cookbook's order (docs/guides/embed-in-a-daemon.md §6 at v0.26.0): every
+	// The cookbook's order (docs/guides/embed-in-a-daemon.md §6 at v0.27.0): every
 	// node starts before the backend runs and stops after it. The one Home
 	// Assistant connection fans out to every node's bridge (concept U6,
 	// C.3): the configured node's and the registry's.

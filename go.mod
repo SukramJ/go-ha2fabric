@@ -7,7 +7,7 @@ require (
 	sukramj.dev/go-ha-catalog v0.4.0
 	sukramj.dev/go-hamapping v0.8.0
 	sukramj.dev/go-hamqtt v0.41.0
-	thingfabric.dev/go-fabric v0.26.0
+	thingfabric.dev/go-fabric v0.27.0
 	thingfabric.dev/go-fabric-ui v0.14.1
 )
 

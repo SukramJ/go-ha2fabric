@@ -6,6 +6,7 @@ package main
 import (
 	"net"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -155,4 +156,42 @@ func TestAddonStopTimeout(t *testing.T) {
 		return
 	}
 	t.Fatalf("addon/config.yaml sets no timeout; the Supervisor's default 10 s is below the stop budget %v", defaultStopBudget)
+}
+
+// TestAddonStopSignal (HR-P4-cfg-01, decision 75): the add-on's final
+// stage hands the container's SIGTERM to the CMD (S6_CMD_RECEIVE_SIGNALS=1)
+// and run.sh exec's the daemon into that process, so the stop budget is
+// the daemon's and not s6-overlay's 3 s S6_KILL_GRACETIME.
+func TestAddonStopSignal(t *testing.T) {
+	b, err := os.ReadFile("../../addon/Dockerfile")
+	if err != nil {
+		t.Fatal(err)
+	}
+	set := false
+	for _, in := range instructions(string(b)) {
+		f := strings.Fields(in)
+		switch {
+		case len(f) == 0:
+		case strings.EqualFold(f[0], "FROM"):
+			set = false // an ENV holds in its own stage only
+		case strings.EqualFold(f[0], "ENV") && slices.Contains(f[1:], "S6_CMD_RECEIVE_SIGNALS=1"):
+			set = true
+		}
+	}
+	if !set {
+		t.Error("addon/Dockerfile's final stage does not set ENV S6_CMD_RECEIVE_SIGNALS=1: s6-overlay TERMs the daemon last and KILLs it 3 s later")
+	}
+	r, err := os.ReadFile("../../script/run.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	last := ""
+	for line := range strings.Lines(string(r)) {
+		if l := strings.TrimSpace(line); l != "" && !strings.HasPrefix(l, "#") {
+			last = l
+		}
+	}
+	if last != "exec /usr/bin/ha2fabric" {
+		t.Errorf("script/run.sh ends with %q, not exec /usr/bin/ha2fabric: the signal would reach the shell, not the daemon", last)
+	}
 }

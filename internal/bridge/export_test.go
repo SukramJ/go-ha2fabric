@@ -7,7 +7,10 @@ import (
 	"context"
 	"maps"
 	"slices"
+	"sync"
+	"testing"
 
+	hamapping "sukramj.dev/go-hamapping"
 	"sukramj.dev/go-hamqtt/model"
 )
 
@@ -46,4 +49,41 @@ func Forgets(b *Bridge) []string {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return slices.Sorted(maps.Keys(b.forget))
+}
+
+// Plans are the plan of entity id's group and the plan that serves its
+// endpoint (group.live), read on the worker; nil when the bridge has no
+// group of id.
+func Plans(b *Bridge, id string) (own, live *hamapping.Plan) {
+	type pair struct{ own, live *hamapping.Plan }
+	ch := make(chan pair, 1)
+	b.enqueue(func(context.Context) {
+		if g := b.owner[id]; g != nil {
+			ch <- pair{g.plan, g.live(id).plan}
+			return
+		}
+		ch <- pair{}
+	})
+	p := <-ch
+	return p.own, p.live
+}
+
+// PlanCloses counts the plans the bridge closes until the test ends.
+func PlanCloses(t *testing.T) func(*hamapping.Plan) int {
+	t.Helper()
+	var mu sync.Mutex
+	n := map[*hamapping.Plan]int{}
+	saved := closePlan
+	closePlan = func(p *hamapping.Plan) {
+		mu.Lock()
+		n[p]++
+		mu.Unlock()
+		saved(p)
+	}
+	t.Cleanup(func() { closePlan = saved })
+	return func(p *hamapping.Plan) int {
+		mu.Lock()
+		defer mu.Unlock()
+		return n[p]
+	}
 }

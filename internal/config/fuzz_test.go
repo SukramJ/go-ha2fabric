@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	fabricui "thingfabric.dev/go-fabric-ui/fabricui"
 	"thingfabric.dev/go-fabric/node"
 )
 
@@ -24,6 +25,7 @@ func FuzzLoad(f *testing.F) {
 	f.Add("", "", "", ",,", "::1, 127.0.0.1", "", "", "12345678", "0", "1", "65535", "0", "x")
 	f.Add("[", "*", " , ", "a,,b", "not-an-ip", "http://x:1/", "eth0,eth0", "11111111", "4096", "0", "0x10000", "-1", strings.Repeat("ü", 17))
 	f.Add("a\tb", "\n", "\x00", "", "", "*.local", ",", "99999999", "0x0FFF", "0b1", "1e3", "999", " ")
+	f.Add("", "", "", "", "", "a\vb, c\u00a0d", "", "", "", "", "", "", "x")
 	f.Fuzz(func(t *testing.T, include, exclude, includeLabels, excludeLabels, allow, hosts, mdns, passcode, discr, vendor, product, limit, label string) {
 		env := MapEnv(map[string]string{
 			"HA_URL": "ws://ha.local:8123/api/websocket", "HA_TOKEN": "t",
@@ -67,6 +69,10 @@ func FuzzLoad(f *testing.F) {
 			if allowedHost(h) != "" {
 				t.Fatalf("accepted WEB_ALLOWED_HOSTS %q", h)
 			}
+		}
+		// go-fabric-ui's own check, so the two cannot drift (HR-P4-cfg-05).
+		if _, err := fabricui.NewHandler(fabricui.Options{AllowedHosts: c.WebAllowedHosts}); err != nil {
+			t.Fatalf("accepted WEB_ALLOWED_HOSTS %q, which go-fabric-ui refuses: %v", c.WebAllowedHosts, err)
 		}
 	})
 }

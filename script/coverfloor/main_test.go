@@ -97,3 +97,23 @@ func TestFloorsFile(t *testing.T) {
 		}
 	}
 }
+
+// TestHAFloorHoldsItsSpread (HR-P4-test-62): internal/ha's floor holds
+// both ends of its measured run-to-run spread (phase 3: 94.7 to 96.5),
+// so the coverage job is not red on a high or a low run. The values are
+// in tenths of a point.
+func TestHAFloorHoldsItsSpread(t *testing.T) {
+	floors, err := readFloors("floors.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tenths := range []int{965, 959, 952, 947} {
+		blocks := map[string]block{
+			module + "internal/ha/a.go:1.1,2.2": {stmts: tenths, covered: true},
+			module + "internal/ha/a.go:3.1,4.2": {stmts: 1000 - tenths, covered: false},
+		}
+		if ok, out := run(t, blocks, map[string]float64{"internal/ha": floors["internal/ha"]}); !ok {
+			t.Errorf("internal/ha at %.1f, floor %.0f:\n%s", float64(tenths)/10, floors["internal/ha"], out)
+		}
+	}
+}

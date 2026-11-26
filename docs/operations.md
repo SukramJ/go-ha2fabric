@@ -4,7 +4,7 @@ What an operator of go-ha2fabric needs: the files it keeps, the ports and
 addresses, mDNS, the token, the logs, the health endpoint, pairing and the
 nodes created in the web UI. The
 node's side of each is go-fabric's
-[operations guide](https://github.com/thingfabric/go-fabric/blob/v0.26.0/docs/guides/operations.md);
+[operations guide](https://github.com/thingfabric/go-fabric/blob/v0.27.0/docs/guides/operations.md);
 this page is the daemon's version. Terms such as fabric, commissioning
 window, bridged node and served surface are defined in go-fabric's
 [glossary](https://docs.thingfabric.dev/reference/glossary/).
@@ -116,7 +116,7 @@ again on every connection.
 | --- | --- | --- |
 | UDP `LISTEN` | `:5540` | Every Matter message. The add-on's `port` option sets it; change it when another Matter node on the same host uses 5540. |
 | UDP each node's `listen` | the next free port above `LISTEN`'s | A node created in the web UI (Nodes, below); the add-on's host networking needs no mapping. |
-| TCP `LISTEN` | off; on with `CAMERA` | Matter over TCP on the same port, for a camera's signals (Cameras, below; go-fabric `docs/guides/operations.md:72, 76` at v0.26.0). |
+| TCP `LISTEN` | off; on with `CAMERA` | Matter over TCP on the same port, for a camera's signals (Cameras, below; go-fabric `docs/guides/operations.md:72, 76` at v0.27.0). |
 | UDP 5353, `224.0.0.251`, `ff02::fb` | — | mDNS, below. |
 | IPv6 on the LAN | required | Matter's operational network is IPv6. |
 | TCP `WEB_LISTEN` | `127.0.0.1:8099`, the image's too; add-on `0.0.0.0:8486` | The web UI. Empty disables it. The image keeps it on loopback: `-e WEB_LISTEN=0.0.0.0:8099` (with `WEB_ALLOW` for `WEB_ADMIN`) opens it to the network. Reached by a DNS name, the name must be in `WEB_ALLOWED_HOSTS` (The web UI, below). |
@@ -216,6 +216,13 @@ request take a proxy from the environment (`HTTP_PROXY`, `HTTPS_PROXY`,
 `NO_PROXY`, Go's rules): set one only for a proxy trusted with the token,
 or list Home Assistant's host in `NO_PROXY`. The add-on's call to the
 Supervisor (`GET /info`) takes no proxy and follows no redirect.
+
+`wss://` verifies Home Assistant's certificate against the system's roots;
+there is no option to skip the check. A certificate from a private
+certificate authority (a home CA, a self-signed one) is trusted on Linux
+through Go's `SSL_CERT_FILE` (a PEM bundle, in place of the system's) or
+`SSL_CERT_DIR` (a directory of them); in the image, mount the bundle and
+set the variable (`-v /path/ca.pem:/ca.pem:ro -e SSL_CERT_FILE=/ca.pem`).
 
 ## What the daemon reads and writes
 
@@ -319,7 +326,7 @@ The lines to know:
 | `camera.signal_failed` | warn | A signal did not reach the controller (`command`, `error`); the session ends. |
 | `camera.snapshot_failed` | warn | A controller's snapshot failed at the camera proxy (`error`: off, refused, too large). |
 | `camera.session_lost` | info | The Home Assistant connection dropped; its camera sessions ended with it. |
-| `camera.session_evicted` | info | A session ended to make room for a new offer at the camera's 8 (`session`, `for`; Cameras). |
+| `camera.session_evicted` | info | A session ended to make room for a new offer of its fabric at the camera's 8 or the fabric's 4 (`session`, `for`, `fabric`; Cameras). |
 | `camera.answer_empty` | warn | Home Assistant's answer carried no SDP; the session ends. |
 
 ## Labels
@@ -386,8 +393,8 @@ With `CAMERA=true` (the add-on option `camera`) a camera entity with the
 Camera (device type 0x0142) through go-hamapping's camera row; a camera
 without it stays unmapped. The option is **off by default**: go-fabric's
 ecosystem gate keeps camera clusters out of host devices until a live test
-with Apple Home has passed (go-fabric `docs/guides/camera.md:577-599` at
-v0.26.0), and the daemon follows it until that test is recorded.
+with Apple Home has passed (go-fabric `docs/guides/camera.md:581-603` at
+v0.27.0), and the daemon follows it until that test is recorded.
 
 What the daemon does — signalling only:
 
@@ -408,8 +415,8 @@ What the daemon does — signalling only:
 
 **TCP.** A signal carries an SDP, which rarely fits one UDP message (1178
 bytes of payload); go-fabric sends it over the controller's TCP session
-and refuses it on a UDP session (go-fabric `docs/guides/camera.md:133-140`
-at v0.26.0).
+and refuses it on a UDP session (go-fabric `docs/guides/camera.md:137-144`
+at v0.27.0).
 With `CAMERA` on, the node therefore accepts Matter over TCP on its port;
 let TCP 5540 through a firewall. A controller that reached the bridge over
 UDP cannot receive the answer: the log says `camera.signal_too_large` and
@@ -438,23 +445,28 @@ Limits:
   Home Assistant scales a JPEG down only, by fixed factors
   (`camera/img_util.py:18-36`): a controller that asks for a large
   resolution of a large camera may get no snapshot.
-- A camera holds at most 8 WebRTC sessions. A further offer ends the
-  session idle longest — no command and no Home Assistant event for a
-  minute — with `End` (reason 12) to its controller
-  (`camera.session_evicted`), or, when every session is more recent, is
-  answered RESOURCE_EXHAUSTED. A session has no idle end of its own: a
+- A camera holds at most 8 WebRTC sessions, and one fabric (one
+  ecosystem's controllers) at most 4 of them. An offer beyond either
+  bound ends the offering fabric's own session idle longest — no command
+  and no Home Assistant event for a minute — with `End` (reason 12) to its
+  controller (`camera.session_evicted`), or, when that fabric has none so
+  idle, is answered RESOURCE_EXHAUSTED; another fabric's session is never
+  ended for it. A session has no idle end of its own: a
   live view signals nothing once it stands, and it stays open as long as
   the controller keeps it. The sessions of a controller go-fabric's node
   proved lost — an exchange the node opened to it went unanswered and no
   session with it is left — end through the node (`camera.session_ended`,
   and Home Assistant's session closes); a controller still on Matter
-  that abandoned its view ends only by the eviction above.
+  that abandoned its view ends only by its own fabric's eviction above.
 - A controller's `ProvideIceCandidates` carries at most 64 candidates and
   a session at most 256; beyond, the call is answered RESOURCE_EXHAUSTED.
   Before Home Assistant names its session at most 64 wait. Home
   Assistant's side is bounded the same way: at most 256 candidates a
-  session (the session ends beyond, `camera.candidates_exceeded`) and
-  1 KiB a candidate (refused, `camera.candidate_refused`). Only a signal
+  session (the session ends beyond, `camera.candidates_exceeded`). A
+  candidate, its line and its `sdpMid` together, is at most 1 KiB — the
+  daemon's own bound, not the specification's: Home Assistant's longer
+  one is refused (`camera.candidate_refused`), the session stays; a
+  controller's is answered CONSTRAINT_ERROR. Only a signal
   the daemon relays counts as activity for the eviction.
 - One camera proxy request runs per camera at a time: snapshots that
   arrive meanwhile share its still, and a still younger than a second is
@@ -663,7 +675,11 @@ for all its fabrics, so a different scope is a different node.
   that writes a name later wins in turn.
 - **Delete** is final: the node leaves every fabric it holds (its
   controllers lose it), stops, and its store, its selection (with its
-  `.bak` and any copy moved aside) and its record are removed (`ha2fabric.node_deleted`). The configured node
+  `.bak` and any copy moved aside) and its record are removed (`ha2fabric.node_deleted`). A node that does not
+  stop (`ha2fabric.node_stop` at warn with `error`) is not deleted, but it
+  has already left its fabrics (the controllers lost it): the Delete
+  answers 500, its record and its files stay, it is listed not enabled,
+  and a second Delete tries the stop again (`fabrics_removed=0`). The configured node
   cannot be deleted (409 `node_is_default`).
 - **Erase** starts the node over for the controllers and keeps it: as
   for the configured node (Erase and factory reset), its fabrics, its
@@ -712,7 +728,8 @@ and the erase answers the error — Erase again. When it cannot be stopped
 either, it is kept: the come-back fails on the port it holds, and the
 next Erase resets that node again. An erase runs while the status pages
 keep answering. A registry node in that
-state is listed as not enabled; its Delete works.
+state is listed as not enabled; its Delete stops it first, and is
+refused (500) while it cannot be stopped.
 
 A stop (SIGTERM, the add-on's stop) has one budget of 25 seconds: the web
 server and the Home Assistant connection end first, then every node stops
@@ -725,7 +742,12 @@ the budget, nor is a node's bridge that does not end in it
 (`ha2fabric.bridge_stop_overrun`): a camera's sessions end together
 within the budget, each in at most 10 seconds (`camera.close_overrun`
 when some do not). The add-on's
-manifest gives the stop 30 seconds before the Supervisor kills it. A
+manifest gives the stop 30 seconds before the Supervisor kills it, and
+its image hands the signal to the daemon (`S6_CMD_RECEIVE_SIGNALS=1`), so
+the budget is the daemon's and not s6-overlay's grace of 3 seconds. The
+container image's daemon gets the signal as PID 1, but `docker stop` and
+Compose kill after 10 seconds unless told otherwise: run it with
+`--stop-timeout 30` (Compose: `stop_grace_period: 30s`). A
 second signal ends the process at once; a signal during the start is an
 ordinary stop (exit 0).
 

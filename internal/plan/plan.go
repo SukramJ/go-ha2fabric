@@ -198,7 +198,7 @@ func Assess(s *ha.Snapshot, in Input) ([]Verdict, []*Group) {
 			continue
 		}
 		if !in.Cameras && isCamera(id) {
-			v.State, v.Reason = eligibility.StateUnmappable.String(), CameraOff
+			v.unmappable(CameraOff)
 			verdicts = append(verdicts, v)
 			continue
 		}
@@ -206,7 +206,7 @@ func Assess(s *ha.Snapshot, in Input) ([]Verdict, []*Group) {
 		// description is read from: mapped, it would be another device
 		// type (HR-P2-bound-90, decision 52).
 		if st.Oversized > 0 {
-			v.State, v.Reason = eligibility.StateUnmappable.String(), OversizedReason(st.Oversized)
+			v.unmappable(OversizedReason(st.Oversized))
 			verdicts = append(verdicts, v)
 			continue
 		}
@@ -242,14 +242,34 @@ func Assess(s *ha.Snapshot, in Input) ([]Verdict, []*Group) {
 	for _, k := range keys {
 		g := groups[k]
 		dev, _ := json.Marshal(g.Device)
-		sig := string(dev)
+		// One builder, grown once: concatenation copied the whole
+		// signature per entity, quadratic in a device's entities
+		// (HR-P4-bound-43).
+		n := len(dev)
 		for _, e := range g.Entities {
-			sig += "|" + e.Key() + "=" + g.Descs[e.Key()]
+			n += 2 + len(e.Key()) + len(g.Descs[e.Key()])
 		}
-		g.Sig = sig
+		var sig strings.Builder
+		sig.Grow(n)
+		sig.Write(dev)
+		for _, e := range g.Entities {
+			sig.WriteString("|")
+			sig.WriteString(e.Key())
+			sig.WriteString("=")
+			sig.WriteString(g.Descs[e.Key()])
+		}
+		g.Sig = sig.String()
 		out = append(out, g)
 	}
 	return verdicts, out
+}
+
+// unmappable makes v unmappable before go-hamapping for reason: the
+// summary and the full verdict, which the web UI reads, both carry it
+// (HR-P4-err-41, decision 52).
+func (v *Verdict) unmappable(reason string) {
+	v.State, v.Reason = eligibility.StateUnmappable.String(), reason
+	v.Full = eligibility.Verdict{State: eligibility.StateUnmappable, Reason: reason}
 }
 
 // Describe is an entity's description as a comparable string: a change

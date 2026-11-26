@@ -43,7 +43,7 @@ func fullHost(t *testing.T, timeout time.Duration) *camera.Host {
 	})
 	h.Attach(goneController{})
 	for i := range camera.MaxSessions {
-		if _, err := h.ProvideOffer(context.Background(), offer(uint16(i+1))); err != nil {
+		if _, err := h.ProvideOffer(context.Background(), fill(i)); err != nil {
 			t.Fatal(err)
 		}
 	}

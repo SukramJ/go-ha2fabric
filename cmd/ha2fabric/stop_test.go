@@ -9,8 +9,11 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
+	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -33,7 +36,7 @@ func restoreSeams(t *testing.T) {
 
 // TestEraseResetFailedKeepsNode (HR-P1-err-61, HR-P1-test-70): a reset
 // that returns without stopping the node — go-fabric's FactoryReset can
-// (node/factory_reset.go:51-55 at v0.26.0) — does not orphan it: the
+// (node/factory_reset.go:51-55 at v0.27.0) — does not orphan it: the
 // daemon stops it before the come-back, so the node comes back on its
 // port. The erase answers the reset's error.
 func TestEraseResetFailedKeepsNode(t *testing.T) {
@@ -92,7 +95,10 @@ func TestStatusDuringErase(t *testing.T) {
 	}
 	erased := make(chan int, 1)
 	go func() {
-		code, _ := d.call(http.MethodPost, "/api/v1/node/maintenance/erase", eraseBody)
+		code, _, err := d.do(http.MethodPost, "/api/v1/node/maintenance/erase", eraseBody)
+		if err != nil {
+			t.Error(err)
+		}
 		erased <- code
 	}()
 	select {
@@ -101,9 +107,9 @@ func TestStatusDuringErase(t *testing.T) {
 		t.Fatal("the erase did not reach the come-back")
 	}
 	began := time.Now()
-	code, _ := d.call(http.MethodGet, "/api/v1/node/status", "")
-	if took := time.Since(began); code != http.StatusOK || took > time.Second {
-		t.Fatalf("a status read during the erase: %d after %v", code, took)
+	code, _, err := d.do(http.MethodGet, "/api/v1/node/status", "")
+	if took := time.Since(began); err != nil || code != http.StatusOK || took > time.Second {
+		t.Fatalf("a status read during the erase: %d after %v (%v)", code, took, err)
 	}
 	if code := <-erased; code != http.StatusNoContent {
 		t.Fatalf("erase %d", code)
@@ -134,7 +140,7 @@ func TestStopWithinBudget(t *testing.T) {
 		}
 		return errors.New("released")
 	}
-	go func() { _, _ = d.call(http.MethodPost, "/api/v1/node/maintenance/erase", eraseBody) }()
+	go func() { _, _, _ = d.do(http.MethodPost, "/api/v1/node/maintenance/erase", eraseBody) }()
 	// The stop comes while the erase is inside its reset (HR-P3-test-11).
 	select {
 	case <-entered:
@@ -178,7 +184,7 @@ func TestStopLetsEraseFinish(t *testing.T) {
 		}
 		return n.FactoryReset(ctx)
 	}
-	go func() { _, _ = d.call(http.MethodPost, "/api/v1/node/maintenance/erase", eraseBody) }()
+	go func() { _, _, _ = d.do(http.MethodPost, "/api/v1/node/maintenance/erase", eraseBody) }()
 	<-entered
 	d.cancel()
 	d.cancel = nil
@@ -255,5 +261,147 @@ func TestCloseBoundedByBridge(t *testing.T) {
 	case <-errc:
 	case <-time.After(5 * time.Second):
 		t.Fatal("close waited for the bridge's worker past the stop's context")
+	}
+}
+
+// TestDeleteWhoseStopFailsIsRefused (decision 74, HR-P4-err-64): a
+// registry node whose stop fails is not deleted: the delete answers 500,
+// the node stays listed (not enabled) with its record and store, and a
+// second delete retries the stop, then removes it and frees its port.
+func TestDeleteWhoseStopFailsIsRefused(t *testing.T) {
+	restoreSeams(t)
+	env, web := eraseEnv(t)
+	d := startDaemon(t, env, web)
+	d.want(http.MethodPost, "/api/v1/nodes", `{"label":"Alexa"}`, http.StatusCreated)
+	storePath, _ := env("STORE_PATH")
+	dir := filepath.Dir(storePath)
+	rec := readRegistry(t, dir)[0]
+	stopNode = func(*node.Node, context.Context) error { return errors.New("the sentinel's stop failed") }
+	d.want(http.MethodDelete, "/api/v1/nodes/alexa", "", http.StatusInternalServerError)
+	stopNode = (*node.Node).Stop
+	l := d.nodes()
+	i := slices.IndexFunc(l.Nodes, func(n nodeListEntry) bool { return n.Key == "alexa" })
+	if i < 0 || l.Nodes[i].Enabled {
+		t.Fatalf("after a delete whose stop failed: %+v, want alexa listed, not enabled", l)
+	}
+	if rs := readRegistry(t, dir); len(rs) != 1 {
+		t.Fatalf("the record went: %+v", rs)
+	}
+	if _, err := os.Stat(filepath.Join(dir, rec.StoreFile())); err != nil {
+		t.Fatalf("the store went: %v", err)
+	}
+	d.want(http.MethodDelete, "/api/v1/nodes/alexa", "", http.StatusNoContent)
+	if l := d.nodes(); len(l.Nodes) != 1 {
+		t.Fatalf("after the second delete: %+v", l)
+	}
+	c, err := net.ListenPacket("udp", rec.Listen)
+	if err != nil {
+		t.Fatalf("alexa's port after its delete: %v", err)
+	}
+	_ = c.Close()
+	d.stop()
+}
+
+// TestCloseRetriesAFailedStop (decision 74): close whose stops failed —
+// the node's and a stale one's — is not done: a second close stops both
+// again, a third does nothing.
+func TestCloseRetriesAFailedStop(t *testing.T) {
+	restoreSeams(t)
+	calls := 0
+	stopNode = func(*node.Node, context.Context) error {
+		calls++
+		if calls <= 2 {
+			return errors.New("the sentinel's stop failed")
+		}
+		return nil
+	}
+	done := make(chan struct{})
+	close(done)
+	s := &served{base: context.Background(), fan: &ha.Fanout{}, n: &node.Node{}, stale: &node.Node{}, cancel: func() {}, done: done, log: slog.New(slog.DiscardHandler)}
+	if err := s.close(context.Background()); err == nil {
+		t.Fatal("the failed stop was not returned")
+	}
+	if err := s.close(context.Background()); err != nil || calls != 4 {
+		t.Fatalf("second close: %v after %d stops, want both stops retried", err, calls)
+	}
+	if err := s.close(context.Background()); err != nil || calls != 4 {
+		t.Fatalf("third close: %v after %d stops, want nothing", err, calls)
+	}
+}
+
+// TestEraseStopsAnEarlierStaleNode (HR-P4-err-66): an erase of a run
+// does not drop a node an earlier erase kept (stale) without stopping
+// it: it stops that node first, or leaves the run and refuses.
+func TestEraseStopsAnEarlierStaleNode(t *testing.T) {
+	restoreSeams(t)
+	stale := &node.Node{}
+	var stopped []*node.Node
+	stopNode = func(n *node.Node, _ context.Context) error {
+		stopped = append(stopped, n)
+		return errors.New("the sentinel's stop failed")
+	}
+	reset := false
+	factoryReset = func(*node.Node, context.Context) error { reset = true; return nil }
+	done := make(chan struct{})
+	close(done)
+	run := &node.Node{}
+	s := &served{base: context.Background(), fan: &ha.Fanout{}, n: run, stale: stale, cancel: func() {}, done: done, log: slog.New(slog.DiscardHandler)}
+	s.live.Store(true)
+	if err := s.erase(context.Background()); err == nil {
+		t.Fatal("an erase whose earlier node did not stop answered nil")
+	}
+	if !slices.Contains(stopped, stale) || reset || s.n != run || s.stale != stale {
+		t.Fatalf("stopped %v (stale %p), reset %v, run kept %v, stale kept %v", stopped, stale, reset, s.n == run, s.stale == stale)
+	}
+}
+
+// TestCreateRollbackStopFails (HR-P4-conc-65, decision 77, HR-P4-err-93):
+// a Create whose record cannot be written stops the started node within
+// the stop budget, not with the request's context without a deadline;
+// when that stop fails, Create answers the error, the node's files stay
+// and the daemon's stop stops the node.
+func TestCreateRollbackStopFails(t *testing.T) {
+	restoreSeams(t)
+	env, web := eraseEnv(t)
+	d := startDaemon(t, env, web)
+	storePath, _ := env("STORE_PATH")
+	dir := filepath.Dir(storePath)
+	if err := os.Mkdir(filepath.Join(dir, "nodes.json"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	var (
+		mu       sync.Mutex
+		first    *node.Node
+		deadline time.Duration
+		stops    = map[*node.Node]int{}
+	)
+	stopNode = func(n *node.Node, ctx context.Context) error {
+		mu.Lock()
+		stops[n]++
+		if first == nil {
+			first = n
+			dl, ok := ctx.Deadline()
+			deadline = time.Hour
+			if ok {
+				deadline = time.Until(dl)
+			}
+			mu.Unlock()
+			return errors.New("the sentinel's stop failed")
+		}
+		mu.Unlock()
+		return n.Stop(ctx)
+	}
+	d.want(http.MethodPost, "/api/v1/nodes", `{"label":"Alexa"}`, http.StatusInternalServerError)
+	if deadline > stopBudget {
+		t.Fatalf("the rollback's stop had %v (or no deadline), want at most %v", deadline, stopBudget)
+	}
+	if m, _ := filepath.Glob(filepath.Join(dir, "*alexa*")); len(m) == 0 {
+		t.Fatal("the files of a node that did not stop were removed")
+	}
+	d.stop()
+	mu.Lock()
+	defer mu.Unlock()
+	if stops[first] != 2 {
+		t.Fatalf("the unstopped node was stopped %d times, want again at the daemon's stop", stops[first])
 	}
 }

@@ -45,6 +45,12 @@ RUN chmod +x /run.sh
 # The licence texts of everything linked (decision 59, HR-P3-sup-37).
 COPY LICENSE THIRD-PARTY-NOTICES.md /usr/share/doc/go-ha2fabric/
 COPY licenses /usr/share/doc/go-ha2fabric/licenses
+# The container's SIGTERM goes to the CMD, which run.sh exec's into the
+# daemon, and s6-overlay ends when the daemon exits: the stop takes the
+# daemon's one budget of 25 s within the manifest's timeout: 30. Without it
+# s6-overlay TERMs the CMD last and KILLs it after S6_KILL_GRACETIME, 3 s
+# (HR-P4-cfg-01, decision 75 of the 2026-11-23 review).
+ENV S6_CMD_RECEIVE_SIGNALS=1
 ARG BUILD_ARCH
 ARG VERSION=addon
 ARG BUILD_VERSION=${VERSION}

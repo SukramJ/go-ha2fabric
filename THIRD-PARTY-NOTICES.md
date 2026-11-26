@@ -29,7 +29,7 @@ The Matter side: the `node` facade, the device kit (`device`), `contract`,
 `eligibility` and the generated `<cluster>def` packages; in tests its
 in-process controller (`fabrictest`).
 
-- Source: <https://github.com/thingfabric/go-fabric>, module `thingfabric.dev/go-fabric`, pinned `v0.26.0`.
+- Source: <https://github.com/thingfabric/go-fabric>, module `thingfabric.dev/go-fabric`, pinned `v0.27.0`.
 - Copyright (C) 2026 SukramJ. Apache License 2.0. Its `NOTICE` (go-fabric
   is a semantic port of matter.js, Copyright matter.js contributors,
   Apache License 2.0) and matter.js's `NOTICE`, with its own

@@ -66,6 +66,28 @@ jobs:
           bad=$(grep -nE '^FROM ' Dockerfile addon/Dockerfile |
             grep -vE '@sha256:[0-9a-f]{64}( AS [a-z0-9-]+)?$' | grep -vE ':FROM base-\$\{BUILD_ARCH\}$' || true)
           if [ -n "$bad" ]; then echo "a base image not pinned by digest:"; echo "$bad"; exit 1; fi
+          # A BuildKit frontend named by a syntax directive is an image the
+          # build runs: pinned by digest too (HR-P4-sup-03).
+          bad=$(grep -niE '^#[[:space:]]*syntax[[:space:]]*=' Dockerfile addon/Dockerfile |
+            grep -vE '@sha256:[0-9a-f]{64}[[:space:]]*$' || true)
+          if [ -n "$bad" ]; then echo "a BuildKit frontend not pinned by digest:"; echo "$bad"; exit 1; fi
+      - name: one Go version in go.mod, both Dockerfiles and every workflow
+        # Dependabot bumps the golang: tag alone; this turns its pull
+        # request red until go.mod and GO_VERSION follow (HR-P4-sup-04).
+        run: |
+          want=$(sed -n 's/^go \([0-9][0-9.]*\)$/\1/p' go.mod)
+          if [ -z "$want" ]; then echo "go.mod has no go line"; exit 1; fi
+          bad=$(grep -E '^toolchain ' go.mod | grep -vxF "toolchain go$want" | sed 's|^|go.mod: |' || true)
+          for f in Dockerfile addon/Dockerfile; do
+            grep -qE "^FROM golang:${want//./\\.}-" "$f" || bad="$bad"$'\n'"$f: no FROM golang:$want-"
+            bad="$bad"$'\n'$(grep -nE '^FROM golang:' "$f" | grep -vF "FROM golang:$want-" | sed "s|^|$f:|" || true)
+          done
+          for f in .github/workflows/*.yml; do
+            grep -qF 'env.GO_VERSION' "$f" || continue
+            grep -qxF "  GO_VERSION: \"$want\"" "$f" || bad="$bad"$'\n'"$f: GO_VERSION is not \"$want\""
+          done
+          bad=$(printf '%s\n' "$bad" | grep -v '^[[:space:]]*$' || true)
+          if [ -n "$bad" ]; then echo "the Go version differs from go.mod's $want:"; echo "$bad"; exit 1; fi
 
   security:
     name: security (vuln + licenses + secrets)

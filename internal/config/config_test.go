@@ -74,6 +74,9 @@ func TestWebAllowedHosts(t *testing.T) {
 	for bad, want := range map[string]string{
 		"bridge.lan:8099": "has a port", "http://bridge.lan": "has a scheme", "bridge.lan/ui": "has a path",
 		"*.lan": "wildcard", "fe80::1": "IP address", "192.168.1.5": "IP address",
+		// White space go-fabric-ui refuses that the list does not split on
+		// (HR-P4-cfg-05).
+		"bridge\v.lan": "white space", "bridge\r.lan": "white space", "bridge\u00a0.lan": "white space", "bridge\u2003.lan": "white space",
 	} {
 		base["WEB_ALLOWED_HOSTS"] = bad
 		_, err := Load([]string{"--store-path", t.TempDir() + "/s.db"}, MapEnv(base), io.Discard)

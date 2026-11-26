@@ -1,9 +1,10 @@
-# syntax=docker/dockerfile:1
 # SPDX-License-Identifier: Apache-2.0
 # The daemon's plain image: distroless, non-root, static (CGO_ENABLED=0). Run it
-# on the host's network, the store on a volume:
+# on the host's network, the store on a volume, with a stop timeout above the
+# daemon's stop budget of 25 s (Docker's default kills after 10 s; Compose:
+# stop_grace_period: 30s):
 #
-#   docker run --network host -v ha2fabric:/data \
+#   docker run --network host --stop-timeout 30 -v ha2fabric:/data \
 #     -e HA_URL=ws://homeassistant.local:8123/api/websocket -e HA_TOKEN=... \
 #     ghcr.io/thingfabric/go-ha2fabric
 #

@@ -21,15 +21,15 @@ import (
 )
 
 // snapshot is the recorded fixtures as one sync reads them.
-func snapshot(t *testing.T) *ha.Snapshot {
-	t.Helper()
+func snapshot(tb testing.TB) *ha.Snapshot {
+	tb.Helper()
 	var s ha.Snapshot
 	for name, v := range map[string]any{
 		"entity_registry_list.json": &s.Entities, "device_registry_list.json": &s.Devices, "area_registry_list.json": &s.Areas, "label_registry_list.json": &s.Labels,
 		"get_states.json": &s.States, "get_config.json": &s.Config, "expose_entity_list.json": &s.Exposed,
 	} {
-		if err := json.Unmarshal(hatest.Fixture(t, name), v); err != nil {
-			t.Fatalf("%s: %v", name, err)
+		if err := json.Unmarshal(hatest.Fixture(tb, name), v); err != nil {
+			tb.Fatalf("%s: %v", name, err)
 		}
 	}
 	return &s
@@ -112,6 +112,11 @@ func TestCameraOff(t *testing.T) {
 	got := byID(plan.Dry(s, plan.Input{Rule: expose.Rule{Include: []string{"camera.porch"}}}))["camera.porch"]
 	if !got.Exposed || got.State != "unmappable" || !strings.Contains(got.Reason, "CAMERA") || got.Row != "" {
 		t.Fatalf("camera off %+v", got)
+	}
+	// The full verdict, which the web UI reads, carries the reason too
+	// (HR-P4-err-41).
+	if got.Full.State.String() != "unmappable" || got.Full.Reason != got.Reason {
+		t.Fatalf("camera off, full verdict %+v", got.Full)
 	}
 	if got := byID(plan.Dry(s, plan.Input{Rule: expose.Rule{Include: []string{"camera.porch"}}, Cameras: true, Ports: camera.DryPorts}))["camera.porch"]; strings.Contains(got.Reason, "CAMERA") {
 		t.Fatalf("camera on %+v", got)
@@ -322,6 +327,9 @@ func TestOversizedUnmappable(t *testing.T) {
 			found++
 			if !v.Exposed || v.State != "unmappable" || v.DeviceType != 0 || !strings.HasPrefix(v.Reason, "state over 256 KiB") || !strings.Contains(v.Reason, "307200 bytes") {
 				t.Errorf("%s: exposed=%v %s dt=%#x %q", v.EntityID, v.Exposed, v.State, v.DeviceType, v.Reason)
+			}
+			if v.Full.State.String() != "unmappable" || v.Full.Reason != v.Reason {
+				t.Errorf("%s: full verdict %+v (HR-P4-err-41)", v.EntityID, v.Full)
 			}
 		}
 		if found != len(hollow) {

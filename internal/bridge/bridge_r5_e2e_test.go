@@ -101,7 +101,7 @@ func TestNewDomainsEndToEnd(t *testing.T) {
 		t.Fatalf("valve %+v", st)
 	}
 	// volume_level 0.5 is CurrentLevel 127 (go-fabric
-	// cluster/spec/levelcontrol/values.go:34-39 at v0.26.0, LevelFromUnit).
+	// cluster/spec/levelcontrol/values.go:34-39 at v0.27.0, LevelFromUnit).
 	values, err = fabrictest.ReadCluster(e.ctx, e.pair, speaker, levelcontroldef.ClusterID)
 	if err != nil {
 		t.Fatal(err)

@@ -23,7 +23,7 @@ func TestString(t *testing.T) {
 	if s := String(); !strings.HasPrefix(s, "go-ha2fabric "+Version) || !strings.Contains(s, "go-fabric") {
 		t.Fatalf("String() = %q", s)
 	}
-	if GoFabric() == "" || GoHamapping() == "" {
-		t.Fatal("empty dependency version")
-	}
+	// This test binary links neither module, so both are "unknown" here;
+	// cmd/ha2fabric's TestVersionBannerFindsItsModules checks the lookup
+	// in a binary that links them (HR-P4-test-67).
 }

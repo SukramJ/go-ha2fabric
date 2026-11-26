@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -16,6 +17,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -26,6 +28,12 @@ import (
 	"thingfabric.dev/go-ha2fabric/internal/nodes"
 )
 
+// nodeStart bounds what a node start may take on the slowest runner
+// (TestRun's 90 s, main_test.go): eventually's wait, and a request that
+// starts a node inside it — a Create, an erase's come-back
+// (HR-P4-test-60).
+const nodeStart = 90 * time.Second
+
 // daemon is one run of the daemon in a test, with its web UI's address.
 type daemon struct {
 	t      *testing.T
@@ -34,12 +42,28 @@ type daemon struct {
 	logs   *safeBuffer
 	cancel context.CancelFunc
 	done   chan int
+	// client is the daemon's own, without keep-alive: a restart on the
+	// same WEB_LISTEN never meets a connection of the server before.
+	client *http.Client
+
+	mu      sync.Mutex
+	lastErr error
+}
+
+// newDaemon is a daemon on web that is not started yet.
+func newDaemon(t *testing.T, web string) *daemon {
+	t.Helper()
+	return &daemon{
+		t: t, web: web, logs: &safeBuffer{}, done: make(chan int, 1),
+		client: &http.Client{Transport: &http.Transport{DisableKeepAlives: true}},
+	}
 }
 
 func startDaemon(t *testing.T, env config.Env, web string) *daemon {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
-	d := &daemon{t: t, web: web, logs: &safeBuffer{}, cancel: cancel, done: make(chan int, 1)}
+	d := newDaemon(t, web)
+	d.cancel = cancel
 	go func() { d.done <- run(ctx, nil, env, io.Discard, d.logs) }()
 	t.Cleanup(func() { d.stop() })
 	d.eventually("the web UI answers", func() bool {
@@ -72,13 +96,22 @@ func (d *daemon) stop() {
 	}
 }
 
-func (d *daemon) call(method, path, body string) (code int, resp []byte) {
-	d.t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+// do sends one request to the web UI, bounded by nodeStart, and answers
+// its status and body, or the client's error with the method, the path
+// and the time it took; the error is also kept for eventually. It does
+// not touch d.t, so a goroutine may call it.
+func (d *daemon) do(method, path, body string) (code int, resp []byte, err error) {
+	ctx, cancel := context.WithTimeout(context.Background(), nodeStart)
 	defer cancel()
+	began := time.Now()
+	fail := func(err error) (int, []byte, error) {
+		err = fmt.Errorf("%s %s: %w after %v", method, path, err, time.Since(began).Round(time.Millisecond))
+		d.note(err)
+		return 0, nil, err
+	}
 	req, err := http.NewRequestWithContext(ctx, method, "http://"+d.web+path, strings.NewReader(body))
 	if err != nil {
-		d.t.Fatal(err)
+		return fail(err)
 	}
 	if body != "" {
 		req.Header.Set("Content-Type", "application/json")
@@ -86,18 +119,46 @@ func (d *daemon) call(method, path, body string) (code int, resp []byte) {
 	if d.token != "" {
 		req.Header.Set("X-Fabric-UI-Token", d.token)
 	}
-	res, err := http.DefaultClient.Do(req)
+	res, err := d.client.Do(req)
 	if err != nil {
-		return 0, nil
+		return fail(err)
 	}
 	defer func() { _ = res.Body.Close() }()
-	b, _ := io.ReadAll(res.Body)
-	return res.StatusCode, b
+	b, err := io.ReadAll(res.Body)
+	if err != nil {
+		return fail(err)
+	}
+	return res.StatusCode, b, nil
+}
+
+// note keeps err as the last client error, for eventually's message.
+func (d *daemon) note(err error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.lastErr = err
+}
+
+// lastError is the last error do or endpointIDs met since eventually
+// began, or nil.
+func (d *daemon) lastError() error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.lastErr
+}
+
+// call is do for polling: a request the client could not make answers
+// status 0, its error kept for eventually's message.
+func (d *daemon) call(method, path, body string) (code int, resp []byte) {
+	code, resp, _ = d.do(method, path, body)
+	return code, resp
 }
 
 func (d *daemon) want(method, path, body string, code int) []byte {
 	d.t.Helper()
-	got, b := d.call(method, path, body)
+	got, b, err := d.do(method, path, body)
+	if err != nil {
+		d.t.Fatalf("%v, want %d\n%s", err, code, d.logs.String())
+	}
 	if got != code {
 		d.t.Fatalf("%s %s: %d, want %d: %s\n%s", method, path, got, code, b, d.logs.String())
 	}
@@ -106,11 +167,12 @@ func (d *daemon) want(method, path, body string, code int) []byte {
 
 func (d *daemon) eventually(what string, cond func() bool) {
 	d.t.Helper()
-	// 90 s as TestRun's: the slowest runner's node start (main_test.go).
-	deadline := time.Now().Add(90 * time.Second)
+	// Only this wait's errors (HR-P4-test-99).
+	d.note(nil)
+	deadline := time.Now().Add(nodeStart)
 	for !cond() {
 		if time.Now().After(deadline) {
-			d.t.Fatalf("never: %s\n%s", what, d.logs.String())
+			d.t.Fatalf("never: %s (last client error: %v)\n%s", what, d.lastError(), d.logs.String())
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
@@ -118,13 +180,16 @@ func (d *daemon) eventually(what string, cond func() bool) {
 
 // nodeList is GET /api/v1/nodes.
 type nodeList struct {
-	Nodes []struct {
-		Key      string `json:"key"`
-		Label    string `json:"label"`
-		Enabled  bool   `json:"enabled"`
-		Managed  bool   `json:"managed"`
-		Exposure bool   `json:"exposure"`
-	} `json:"nodes"`
+	Nodes []nodeListEntry `json:"nodes"`
+}
+
+// nodeListEntry is one node of GET /api/v1/nodes.
+type nodeListEntry struct {
+	Key      string `json:"key"`
+	Label    string `json:"label"`
+	Enabled  bool   `json:"enabled"`
+	Managed  bool   `json:"managed"`
+	Exposure bool   `json:"exposure"`
 }
 
 func (d *daemon) nodes() nodeList {
@@ -337,23 +402,32 @@ func (st *nodeStatus) warned(code, prefix string) bool {
 	return false
 }
 
-// endpointIDs are the bridged endpoints of GET <path>/endpoints.
-func (d *daemon) endpointIDs(path string) []int {
-	d.t.Helper()
+// endpointIDs are the bridged endpoints of GET <path>/endpoints, or the
+// error that kept them; the error is also kept for eventually.
+func (d *daemon) endpointIDs(path string) ([]int, error) {
 	var l struct {
 		Endpoints []struct {
 			EndpointID int `json:"endpoint_id"`
 		} `json:"endpoints"`
 	}
-	code, b := d.call(http.MethodGet, path+"/endpoints", "")
-	if code != http.StatusOK || json.Unmarshal(b, &l) != nil {
-		return nil
+	code, b, err := d.do(http.MethodGet, path+"/endpoints", "")
+	if err != nil {
+		return nil, err
+	}
+	if code != http.StatusOK {
+		err = fmt.Errorf("GET %s/endpoints: %d: %s", path, code, b)
+	} else if jerr := json.Unmarshal(b, &l); jerr != nil {
+		err = fmt.Errorf("GET %s/endpoints: %w", path, jerr)
+	}
+	if err != nil {
+		d.note(err)
+		return nil, err
 	}
 	ids := make([]int, 0, len(l.Endpoints))
 	for _, e := range l.Endpoints {
 		ids = append(ids, e.EndpointID)
 	}
-	return ids
+	return ids, nil
 }
 
 func eraseEnv(t *testing.T) (env config.Env, web string) {
@@ -379,7 +453,7 @@ func TestNodeErase(t *testing.T) {
 	d := startDaemon(t, env, web)
 	var before []int
 	d.eventually("the configured node serves the fixtures", func() bool {
-		before = d.endpointIDs("/api/v1/node")
+		before, _ = d.endpointIDs("/api/v1/node")
 		return len(before) > 0
 	})
 	if !d.status("/api/v1/node/status").Erase {
@@ -395,7 +469,7 @@ func TestNodeErase(t *testing.T) {
 	})
 	var after []int
 	d.eventually("the fixtures' endpoints come back", func() bool {
-		after = d.endpointIDs("/api/v1/node")
+		after, _ = d.endpointIDs("/api/v1/node")
 		return len(after) == len(before)
 	})
 	// go-fabric v0.19.1's FactoryReset erases the numbering with the rows
@@ -454,7 +528,10 @@ func TestNodeEraseFailed(t *testing.T) {
 	if !st.Enabled {
 		t.Fatalf("a switch on the stopped node lists the node not enabled: %+v", st)
 	}
-	code, b := d.call(http.MethodGet, "/api/v1/node/fabrics", "")
+	code, b, err := d.do(http.MethodGet, "/api/v1/node/fabrics", "")
+	if err != nil {
+		t.Fatal(err)
+	}
 	t.Logf("GET /node/fabrics after a failed come-back: %d %s", code, b)
 	if code != http.StatusInternalServerError {
 		t.Fatalf("fabrics of the stopped node: %d %s", code, b)
@@ -475,7 +552,10 @@ func TestNodeEraseFailed(t *testing.T) {
 		var st nodeStatus
 		return code == http.StatusOK && json.Unmarshal(b, &st) == nil && st.Enabled && st.FabricCount == 0 && !st.warned("node_erase_failed", "")
 	})
-	d.eventually("the retried node serves the fixtures", func() bool { return len(d.endpointIDs("/api/v1/node")) > 0 })
+	d.eventually("the retried node serves the fixtures", func() bool {
+		ids, _ := d.endpointIDs("/api/v1/node")
+		return len(ids) > 0
+	})
 
 	d.want(http.MethodPost, "/api/v1/nodes", `{"label":"Alexa"}`, http.StatusCreated)
 	fail()
@@ -513,5 +593,22 @@ func TestResyncWithoutRun(t *testing.T) {
 	s := &served{}
 	if err := s.Resync(context.Background()); err == nil {
 		t.Fatal("Resync without a run reported success")
+	}
+}
+
+// TestDaemonDoKeepsTheError (HR-P4-test-60): a request the client could
+// not make is an error naming the method, the path and the time it took,
+// not status 0; call keeps it for eventually's message.
+func TestDaemonDoKeepsTheError(t *testing.T) {
+	d := newDaemon(t, freePort(t, "tcp"))
+	code, b, err := d.do(http.MethodGet, "/api/v1/node/status", "")
+	if err == nil || code != 0 || b != nil || !strings.Contains(err.Error(), "GET /api/v1/node/status: ") || !strings.Contains(err.Error(), " after ") {
+		t.Fatalf("do on a closed port: %d %q %v", code, b, err)
+	}
+	if code, _ := d.call(http.MethodGet, "/api/v1/node/status", ""); code != 0 || d.lastError() == nil {
+		t.Fatalf("call on a closed port: %d, last error %v", code, d.lastError())
+	}
+	if _, err := d.endpointIDs("/api/v1/node"); err == nil {
+		t.Fatal("endpointIDs on a closed port answered no error")
 	}
 }

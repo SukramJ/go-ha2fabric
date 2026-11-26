@@ -101,7 +101,8 @@ The add-on chooses each new node's port (the next free one above `port`),
 its discriminator and its passcode; only its name can be changed later.
 Every node starts with the add-on. **Deleting a node is final**: the
 controllers that paired it lose it, and its store and selection are
-removed. The first node cannot be deleted; its values stay the options.
+removed; a node that cannot be stopped has left its controllers already,
+but is kept with its files, and a second Delete tries the stop again. The first node cannot be deleted; its values stay the options.
 **Erase** on a node's **Fabrics** page, the first node included, starts
 it over for the controllers — every one of them loses it and pairs it
 again with the same code — and keeps its entities.

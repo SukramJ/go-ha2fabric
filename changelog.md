@@ -22,6 +22,11 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- go-fabric `v0.26.0` → `v0.27.0`.
+- Cameras: one fabric holds at most 4 of a camera's 8 WebRTC sessions, and
+  an offer at either bound ends only an idle session of its own fabric,
+  else it is answered RESOURCE_EXHAUSTED; another ecosystem's live view is
+  no longer ended for it (HR-P4-bound-20).
 - Dependencies moved to their vanity import paths: `sukramj.dev/go-ha-catalog` v0.4.0, `sukramj.dev/go-hamapping` v0.8.0, `sukramj.dev/go-hamqtt` v0.41.0.
 - Add-on: the web UI binds to the address the Supervisor gives the add-on
   (the Supervisor network's gateway, where the Ingress proxy connects),
@@ -38,6 +43,11 @@ All notable changes to this project are documented here. The format follows
   manual image build any more (a published image is never rebuilt, a base
   update ships as a patch release), and `:latest` moves only with the
   newest release (HR-P3-sup-32).
+- The image's build no longer names a BuildKit frontend
+  (`# syntax=docker/dockerfile:1`, an unpinned image the build ran); CI
+  refuses one not pinned by digest (HR-P4-sup-03), and holds the Go
+  version of `go.mod`, both Dockerfiles and every workflow together
+  (HR-P4-sup-04).
 
 ### Removed
 
@@ -48,13 +58,43 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- Add-on: the daemon gets the stop signal itself
+  (`S6_CMD_RECEIVE_SIGNALS=1`), so a stop has the daemon's 25 s budget —
+  an erase finishes, the nodes and camera sessions end in order — instead
+  of s6-overlay's 3 s before it kills the daemon (HR-P4-cfg-01).
 - A Home Assistant reply that is not a result with `success` fails its
   command instead of passing as a success (HR-P3-ha-09).
+- A device whose replacement go-fabric refuses keeps its state,
+  reachability and commands on the endpoint still served, until a later
+  sync applies it (HR-P4-err-40).
+- Deleting a node that does not stop is refused (500) and keeps its record
+  and files for a second Delete, instead of leaving the node running
+  unlisted; the node has left its fabrics already (HR-P4-err-64).
+- A node create whose record cannot be written stops the started node
+  within the stop budget; a node that does not stop keeps its files and
+  is stopped with the daemon (HR-P4-conc-65, HR-P4-err-93). An erase stops
+  a node an earlier failed erase kept before it resets the current one
+  (HR-P4-err-66).
+- The web UI's selection shows why an exposed camera is not served while
+  the camera option is off, and why an entity whose state is over 256 KiB
+  is not mapped (HR-P4-err-41).
+- A device with very many entities no longer makes each sync slow: its
+  signature was quadratic in its entities (HR-P4-bound-43).
+- `WEB_ALLOWED_HOSTS` with white space inside an entry is refused at
+  start, as the web UI would refuse it later (HR-P4-cfg-05).
+- An ICE candidate's `sdpMid` counts toward the 1 KiB bound with its
+  line: Home Assistant's longer candidate is refused as before, a
+  controller's is answered CONSTRAINT_ERROR (HR-P4-bound-21); a line or paragraph separator (U+2028, U+2029) in a
+  name becomes a space (HR-P4-data-22).
 - Docs: the add-on's "Mapped today" lists what go-hamapping v0.8.0 maps
   (scenes, media players, an air conditioner's fan modes and more were
   listed as not mapped); `THIRD-PARTY-NOTICES.md` names `go.mod`'s
   modules and versions; the co-installed add-ons an operator should trust
-  (`docs/operations.md`, The web UI).
+  (`docs/operations.md`, The web UI). The container image's examples
+  run it with `--stop-timeout 30` (Compose: `stop_grace_period: 30s`),
+  since Docker kills after 10 s, inside the stop's budget (HR-P4-cfg-02);
+  `docs/operations.md` names `SSL_CERT_FILE` / `SSL_CERT_DIR` for `wss://`
+  to a Home Assistant with a private certificate authority (HR-P4-doc-24).
 
 ## [0.7.0] - 2026-11-25
 
