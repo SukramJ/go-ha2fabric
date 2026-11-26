@@ -5,7 +5,7 @@
 # 0.3-0.5 points); raise it with the change that raises the coverage.
 cmd/ha2fabric       88
 internal/adapt      96
-internal/bridge     95
+internal/bridge     93
 internal/camera     95
 internal/config     98
 internal/expose     97

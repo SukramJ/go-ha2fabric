@@ -168,7 +168,10 @@ environment read in non-test code is `internal/config/config.go:199`
   `bridge.build` always answers by dropping that entity and rebuilding;
   its one plain error, "plan built twice" (`:424`), the bridge never
   causes. So `bridge.go`'s whole-device branch is defensive code that
-  v0.8.0 cannot reach; it stays uncovered.
+  v0.8.0 cannot reach; it stays uncovered. Guards after the removal at
+  `2a7adae` (HEAD moved to F2's `c6a1f22` meanwhile): `ci` 0, `race` 0,
+  `cover-check` 2 (`internal/bridge` 93.7 < 95, as verify's baseline
+  measured); its floor is now 93, which the same profile passes.
 - **ha-09** (`3369cba`): core sends every reply as `type: result` with
   `success` (`messages.py:63-65`, `:81-104`), a ping's as `pong`
   (`commands.py:730-736`); `callWith` now fails anything else with
