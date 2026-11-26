@@ -1,5 +1,12 @@
 name: Dependabot auto-merge
 
+# Auto-merge for a Dependabot patch update of a module outside the family,
+# once the required checks pass (decision 57 of the 2026-11-23 review,
+# HR-P3-sup-31). Never for a minor or major update, never for go-fabric,
+# go-fabric-ui, go-hamapping, go-hamqtt or go-ha-catalog (thingfabric.dev/*,
+# sukramj.dev/*), never for a grouped update that contains one of them.
+# Everything else waits for the owner's review.
+
 # yamllint disable-line rule:truthy
 on: pull_request_target
 
@@ -9,15 +16,27 @@ permissions:
 
 jobs:
   auto-merge:
-    if: github.actor == 'dependabot[bot]'
+    # The pull request's author, not whoever triggered the event
+    # (HR-P3-sup-47); fetch-metadata checks the commits as well.
+    if: >-
+      github.event.pull_request.user.login == 'dependabot[bot]' &&
+      github.actor == 'dependabot[bot]'
     runs-on: ubuntu-latest
     steps:
       - name: Fetch Dependabot metadata
         id: meta
-        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98
-      - name: Enable auto-merge for non-major updates
-        if: steps.meta.outputs.update-type != 'version-update:semver-major'
-        run: gh pr merge --auto --squash "$PR_URL"
+        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
+      - name: Enable auto-merge for a patch update outside the family
+        if: steps.meta.outputs.update-type == 'version-update:semver-patch'
+        run: |
+          case "$NAMES" in
+          *thingfabric.dev/* | *sukramj.dev/*)
+            echo "family module in this update ($NAMES): no auto-merge"
+            exit 0
+            ;;
+          esac
+          gh pr merge --auto --squash "$PR_URL"
         env:
+          NAMES: ${{ steps.meta.outputs.dependency-names }}
           PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

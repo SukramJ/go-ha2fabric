@@ -1,4 +1,8 @@
 version: 2
+# Pull requests are reviewed by the code owner (.github/CODEOWNERS);
+# dependabot-auto-merge.yml merges a patch update of a module outside the
+# family once the required checks pass, nothing else (decision 57 of the
+# 2026-11-23 review, HR-P3-sup-31).
 updates:
   # Go modules (root)
   - package-ecosystem: gomod
@@ -8,29 +12,38 @@ updates:
     cooldown:
       default-days: 7
     open-pull-requests-limit: 10
-    reviewers:
-      - "SukramJ"
     labels:
       - "dependencies"
       - "go"
     commit-message:
       prefix: "chore(deps)"
     groups:
-      # Bundle minor/patch bumps into one PR; majors stay individual so
-      # they get a focused review.
-      go-minor-patch:
+      # The family (go-fabric, go-fabric-ui, go-hamapping, go-hamqtt,
+      # go-ha-catalog and any later module under these domains): v0.x, so a
+      # minor is the breaking step, and a bump needs its changelog line,
+      # the notices and the re-pinned citations. Never auto-merged. The
+      # first group a dependency matches is its group.
+      family:
+        patterns:
+          - "thingfabric.dev/*"
+          - "sukramj.dev/*"
         update-types: ["minor", "patch"]
+      # Patch updates of the other modules: the only group auto-merged.
+      go-patch:
+        update-types: ["patch"]
+      # Minor updates of the other modules; majors stay individual so they
+      # get a focused review.
+      go-minor:
+        update-types: ["minor"]
 
   # GitHub Actions (pinned by commit SHA; Dependabot bumps the SHA and
-  # keeps the `# vX` version comment in sync).
+  # keeps the `# vX.Y.Z` version comment in sync).
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
       interval: weekly
     cooldown:
       default-days: 7
-    reviewers:
-      - "SukramJ"
     labels:
       - "dependencies"
       - "github-actions"
@@ -38,4 +51,23 @@ updates:
       prefix: "chore(ci)"
     groups:
       github-actions:
+        patterns: ["*"]
+
+  # Base images (pinned by tag and digest in Dockerfile and addon/Dockerfile;
+  # decision 62, HR-P3-sup-34). Dependabot bumps tag and digest together.
+  - package-ecosystem: docker
+    directories:
+      - "/"
+      - "/addon"
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    labels:
+      - "dependencies"
+      - "docker"
+    commit-message:
+      prefix: "chore(docker)"
+    groups:
+      base-images:
         patterns: ["*"]
