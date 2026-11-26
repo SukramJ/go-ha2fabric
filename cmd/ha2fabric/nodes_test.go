@@ -118,13 +118,16 @@ func (d *daemon) eventually(what string, cond func() bool) {
 
 // nodeList is GET /api/v1/nodes.
 type nodeList struct {
-	Nodes []struct {
-		Key      string `json:"key"`
-		Label    string `json:"label"`
-		Enabled  bool   `json:"enabled"`
-		Managed  bool   `json:"managed"`
-		Exposure bool   `json:"exposure"`
-	} `json:"nodes"`
+	Nodes []nodeListEntry `json:"nodes"`
+}
+
+// nodeListEntry is one node of GET /api/v1/nodes.
+type nodeListEntry struct {
+	Key      string `json:"key"`
+	Label    string `json:"label"`
+	Enabled  bool   `json:"enabled"`
+	Managed  bool   `json:"managed"`
+	Exposure bool   `json:"exposure"`
 }
 
 func (d *daemon) nodes() nodeList {
