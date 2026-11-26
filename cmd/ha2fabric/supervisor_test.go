@@ -5,10 +5,12 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -184,5 +186,79 @@ func TestSupervisorGateNoRedirectNoProxy(t *testing.T) {
 	tr, ok := g.client.Transport.(*http.Transport)
 	if !ok || tr.Proxy != nil {
 		t.Fatalf("the gate's transport takes a proxy: %T", g.client.Transport)
+	}
+}
+
+// TestAddonAddress reads the add-on's address from GET /addons/self/info
+// (decision 54 of the 2026-11-23 review) and refuses an answer without one.
+func TestAddonAddress(t *testing.T) {
+	for _, c := range []struct {
+		name, body string
+		status     int
+		want       string
+	}{
+		{"found", `{"result":"ok","data":{"ip_address":"172.30.32.1","ingress_port":8486}}`, 200, "172.30.32.1"},
+		{"no address", `{"result":"ok","data":{"ip_address":"0.0.0.0"}}`, 200, ""},
+		{"not an address", `{"result":"ok","data":{"ip_address":"hassio"}}`, 200, ""},
+		{"missing", `{"result":"ok","data":{}}`, 200, ""},
+		{"error result", `{"result":"error","message":"Self is not an App"}`, 200, ""},
+		{"undecodable", `<html>`, 200, ""},
+		{"refused", `{"result":"error"}`, 403, ""},
+	} {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/addons/self/info" || r.Header.Get("Authorization") != "Bearer sup-token" {
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+			w.WriteHeader(c.status)
+			_, _ = w.Write([]byte(c.body))
+		}))
+		a, err := addonAddress(context.Background(), supervisorClient(), srv.URL+"/addons/self/info", "sup-token")
+		srv.Close()
+		switch {
+		case c.want == "" && err == nil:
+			t.Errorf("%s: %v, want an error", c.name, a)
+		case c.want != "" && (err != nil || a.String() != c.want):
+			t.Errorf("%s: %v, %v; want %s", c.name, a, err, c.want)
+		}
+	}
+}
+
+// TestAddonWebListen binds the add-on's web UI to the Supervisor's address
+// of the add-on when it is found, and keeps WEB_LISTEN with one warning
+// when it is not.
+func TestAddonWebListen(t *testing.T) {
+	found := func(context.Context) (netip.Addr, error) { return netip.MustParseAddr("172.30.32.1"), nil }
+	var calls int
+	missing := func(context.Context) (netip.Addr, error) {
+		calls++
+		return netip.Addr{}, errors.New("supervisor: GET /addons/self/info answered 502")
+	}
+	for _, c := range []struct {
+		listen string
+		read   func(context.Context) (netip.Addr, error)
+		want   string
+		warn   bool
+	}{
+		{"0.0.0.0:8486", found, "172.30.32.1:8486", false},
+		{":8486", found, "172.30.32.1:8486", false},
+		{"[::]:8486", found, "172.30.32.1:8486", false},
+		{"0.0.0.0:8486", missing, "0.0.0.0:8486", true},
+		// A host set explicitly stays.
+		{"192.0.2.7:8486", found, "192.0.2.7:8486", false},
+		{"localhost:8486", found, "localhost:8486", false},
+	} {
+		var logs safeBuffer
+		log := slog.New(slog.NewTextHandler(&logs, nil))
+		calls = 0
+		if got := addonWebListen(context.Background(), c.listen, c.read, time.Millisecond, log); got != c.want {
+			t.Errorf("%s: %s, want %s", c.listen, got, c.want)
+		}
+		if warned := strings.Contains(logs.String(), "level=WARN msg=ha2fabric.web_listen"); warned != c.warn {
+			t.Errorf("%s: warned %v, want %v (%s)", c.listen, warned, c.warn, logs.String())
+		}
+		if c.warn && calls != addressTries {
+			t.Errorf("%s: %d reads, want %d", c.listen, calls, addressTries)
+		}
 	}
 }

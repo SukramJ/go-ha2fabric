@@ -32,8 +32,10 @@ homeassistant_api: true
 
 # Matter needs the host's network: the controllers find the bridge over mDNS
 # and talk to it over UDP (port, default 5540) on the LAN, IPv6 included. With
-# host networking the web UI listens on the host too; the daemon serves it only
-# to the Ingress proxy (172.30.32.2), as the Supervisor's Ingress requires.
+# host networking the web UI listens on the host too: on the Supervisor
+# network's address the Supervisor gives the add-on, read at start, and the
+# daemon serves it only to the Ingress proxy (172.30.32.2), as the
+# Supervisor's Ingress requires.
 host_network: true
 
 # The node's store is a SQLite file under /data; a cold backup stops the
@@ -77,7 +79,9 @@ schema:
   discriminator: int(0,4095)
   vendor_id: int(1,65535)
   product_id: int(1,65535)
-  label: str
+  # Characters, as the Supervisor counts them; the daemon also bounds the
+  # label to 32 bytes (Matter's NodeLabel) and refuses one of spaces only.
+  label: str(1,32)
   expose_assist: bool
   camera: bool
   include:

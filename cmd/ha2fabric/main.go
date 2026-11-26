@@ -21,6 +21,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/netip"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -166,6 +167,12 @@ func run(ctx context.Context, args []string, env config.Env, stdout, stderr io.W
 	}
 	webErr := make(chan error, 1)
 	if cfg.WebListen != "" {
+		if cfg.Addon {
+			sc := supervisorClient()
+			cfg.WebListen = addonWebListen(ctx, cfg.WebListen, func(ctx context.Context) (netip.Addr, error) {
+				return addonAddress(ctx, sc, addonInfoURL, cfg.SupervisorToken)
+			}, addressPause, logger)
+		}
 		ws, err := web.New(webOptions(cfg, gate, logger, fabricui.Options{
 			Node: def.sw, Exposure: def.prov, Reassemble: def.Resync, Events: def.events, Warnings: warnings(def, fl, hostWarnings(startup, gate, client.TokenRefused)), Counters: counters(def, fl), Erase: def.erase, Logger: logger,
 			Operations: web.NewOperations(ring, version.Version, started),
