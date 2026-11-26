@@ -159,10 +159,16 @@ environment read in non-test code is `internal/config/config.go:199`
 - **test-14** (`a836fb1`): `instructions` joins continuations;
   `imageListenProblems` reads both ENV forms and refuses `--web-listen` /
   `-web-listen` in ENTRYPOINT/CMD; `TestImageListenProblems`.
-- **test-15** (`baf60ee`): `TestBuildRefusedWholeDevice`; it needs a seam,
-  `var buildPlan = (*hamapping.Plan).Build` in `internal/bridge`
-  (go-hamapping's only plain error is "plan built twice", no snapshot
-  reaches it). Bite: the verdict loop removed → red.
+- **test-15**: **accepted (note), owner decision 67.** `baf60ee`'s test
+  needed a seam (`buildPlan`), which decision 67 removes; the follow-up
+  commit drops the seam and the test. No real input reaches the path:
+  go-hamapping v0.8.0's `Plan.Build` (`plan.go:420-451`) refuses only with
+  a `*BuildError` keyed by the endpoint's entity (`:431`, `:472` via
+  `parts`; `Endpoint.Key` "is the entity's key", `:66-68`), which
+  `bridge.build` always answers by dropping that entity and rebuilding;
+  its one plain error, "plan built twice" (`:424`), the bridge never
+  causes. So `bridge.go`'s whole-device branch is defensive code that
+  v0.8.0 cannot reach; it stays uncovered.
 - **ha-09** (`3369cba`): core sends every reply as `type: result` with
   `success` (`messages.py:63-65`, `:81-104`), a ping's as `pong`
   (`commands.py:730-736`); `callWith` now fails anything else with
@@ -240,8 +246,7 @@ run by F2/the coordinator since `run.sh` is in it).
    says where they were read), or `script/cite` gets a history marker.
    Recommendation: keep `docs/roadmap.md` out of `CITE_PATHS` only if F2
    keeps the v0.2.1 pins; otherwise all docs in.
-2. The `buildPlan` seam in `internal/bridge` (test-15): accept, or leave
-   the row's test out?
+2. (Answered by decision 67: the seam is gone, test-15 accepted.)
 3. The add-on bind is untested on a live HAOS box: the coordinator's
    live check should see `INFO ha2fabric.web_listen
    listen=172.30.32.1:8486` and Ingress working.

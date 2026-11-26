@@ -1021,11 +1021,6 @@ func (b *Bridge) Resync(ctx context.Context) error {
 	return nil
 }
 
-// buildPlan is go-hamapping's Build; a test replaces it to reach the
-// failure go-hamapping does not attribute to an entity (HR-P3-test-15),
-// which no snapshot produces.
-var buildPlan = (*hamapping.Plan).Build
-
 // build maps and builds one device's plan. An endpoint go-fabric refuses
 // (go-hamapping's *BuildError) costs only its entity and the entities
 // riding on it: they are unmappable with the refusal as their reason, and
@@ -1038,7 +1033,7 @@ func (b *Bridge) build(ctx context.Context, p *plan.Group) (*group, []hamapping.
 	for {
 		hp, mv := hamapping.Map(p.Device, entities, plan.MapOptions(p.Regs, p.Names, b.ports))
 		g := &group{Group: p, plan: hp}
-		devs, err := buildPlan(hp, ctx)
+		devs, err := hp.Build(ctx)
 		if err == nil {
 			mv = append(mv, refused...)
 			g.verdicts = mv
