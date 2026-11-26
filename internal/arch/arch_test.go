@@ -39,22 +39,22 @@ var facade = map[string]bool{
 	// The daemon's log ring (issue #34, go-fabric #393; as in
 	// go-fabric-server's internal/arch): the slog.Handler in front of the
 	// daemon's own, whose records, level and stream go-fabric-ui's
-	// Operations port reads (go-fabric docs/guides/observability.md).
+	// Operations port reads (go-fabric docs/guides/observability.md at v0.26.0).
 	"logring": true,
 }
 
 // testOnly are the go-fabric packages a test may import besides: the
 // in-process controller, its path helpers, the wall clock and the
-// scalar values a controller's attribute write carries (cluster/spec
-// value.go Uint8, which fabrictest.Write takes as a spec.Encodable).
+// scalar values a controller's attribute write carries
+// (cluster/spec/value.go:62 at v0.26.0, Uint8, which fabrictest.Write takes as a spec.Encodable).
 var testOnly = map[string]bool{"fabrictest": true, "controller/client": true, "clock": true, "cluster/spec": true}
 
 // cameraOnly are the go-fabric packages internal/camera alone may import
 // besides the facade: cluster/camera, whose *camera.Provider carries the
 // camera's signals to the controller (go-fabric docs/guides/camera.md:
-// 84-87 at v0.15.6), whose ErrUnknownSession the relay retries on and
+// 93-110 at v0.26.0), whose ErrUnknownSession the relay retries on and
 // whose ErrPayloadTooLarge is the one error a signal over a UDP session
-// returns (:122-127). No other package reaches it.
+// returns (:133-140). No other package reaches it.
 var cameraOnly = map[string]bool{"cluster/camera": true}
 
 // cameraPkg is the package cameraOnly is for.

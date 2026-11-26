@@ -40,9 +40,10 @@ const addonInfoURL = "http://supervisor/addons/self/info"
 
 // minSupervisor is the minimum Supervisor version of the admin check,
 // which reads the Ingress user's groups (web.UserGroupsHeader): 2026.10.4
-// (Supervisor commit 3fbb083b; the header constant is in
-// supervisor/api/ingress.py from that tag on). Below it the add-on's web
-// UI has no administrator.
+// (Supervisor commit 3fbb083b; the header constant is defined in
+// supervisor/const.py, :113 at tag 2026.10.4 and :115 at fe91b8db, and
+// used by supervisor/api/ingress.py; 2026.10.3 lacks it). Below it the
+// add-on's web UI has no administrator.
 var minSupervisor = [3]int{2026, 10, 4}
 
 // minSupervisorText is minSupervisor as the messages name it.

@@ -63,8 +63,9 @@ func (e *env) noCall(mark int, entityID string) {
 	}
 }
 
-// TestCoverCommandGates drives the cover rows of go-hamapping v0.4.4
-// (rows/cover.yaml, the commands of window_covering, #42): StopMotion
+// TestCoverCommandGates drives go-hamapping's cover rows
+// (rows/cover.yaml at v0.8.0, the commands of window_covering since
+// v0.4.4, #42): StopMotion
 // calls stop_cover only with STOP, GoToLiftPercentage calls
 // set_cover_position only with SET_POSITION, and without it
 // LiftPercent100thsValue 0 opens and any other value closes. The

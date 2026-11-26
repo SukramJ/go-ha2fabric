@@ -65,8 +65,9 @@ const maxKey = 64
 const maxSlug = maxKey - 8
 
 // reservedKeys are the node family's page names and the default node's
-// key, which a registry key may not be (go-fabric-ui fabricui/handler.go
-// reservedNodeKeys and options.go DefaultNodeKey at v0.6.0).
+// key, which a registry key may not be (go-fabric-ui
+// fabricui/handler.go:211-213 at v0.14.1, reservedNodeKeys, and
+// fabricui/options.go:94-95 at v0.14.1, DefaultNodeKey).
 var reservedKeys = []string{
 	"status", "pair", "fabrics", "selection", "endpoints", "endpoint", "surface", "diagnostics", "topology",
 	fabricui.DefaultNodeKey,

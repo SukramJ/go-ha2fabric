@@ -24,8 +24,8 @@ type Input struct {
 	// Cameras is the camera option (config.Config.Camera). Off, Assess
 	// gives an exposed camera the verdict CameraOff and plans it not.
 	Cameras bool
-	// Ports is go-hamapping's Options.Ports (go-hamapping plan.go:120-128
-	// at v0.4.3): a camera entity's host object, asked once per entity
+	// Ports is go-hamapping's Options.Ports (go-hamapping plan.go:160-168
+	// at v0.8.0): a camera entity's host object, asked once per entity
 	// during Map. The composition root sets camera.DryPorts for
 	// --dump-plan and the web UI's previews; the bridge maps with its
 	// live hosts. MapOptions hands it through unchanged.

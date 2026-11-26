@@ -20,7 +20,7 @@ import (
 	"thingfabric.dev/go-ha2fabric/internal/plan"
 )
 
-const cameraDeviceType = 0x0142 // go-fabric device/camera_gen.go:20-24 at v0.15.5
+const cameraDeviceType = 0x0142 // go-fabric device/camera_gen.go:20-24 at v0.26.0
 
 func (e *env) verdict(entityID string) plan.Verdict {
 	e.t.Helper()
@@ -52,7 +52,7 @@ func (e *env) sessions(ep uint16) []wpdef.WebRTCSessionStruct {
 // controller of fabrictest has no WebRtcTransportRequestor, so the
 // camera's Answer and IceCandidates reaching a requestor are held by
 // internal/camera's tests and by go-fabric's
-// node/webrtc_provider_peers_test.go; here a scripted answer shows the
+// node/webrtc_provider_peers_test.go at v0.26.0; here a scripted answer shows the
 // signal goes out and, refused, ends the session.
 func TestCameraEndToEnd(t *testing.T) {
 	e := newEnv(t, expose.Rule{Assist: true}, func(o *setup) { o.camera = true })

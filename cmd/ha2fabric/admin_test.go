@@ -22,8 +22,8 @@ import (
 )
 
 // adminRoutes are go-fabric-ui's administrator operations, read from its
-// contract (contract/openapi.yaml, every operation with x-admin: true) at
-// the version go.mod pins, so a route the UI adds joins the table by
+// contract (contract/openapi.yaml at go.mod's version, every operation
+// with x-admin: true), so a route the UI adds joins the table by
 // itself. A path parameter takes a sample value.
 func adminRoutes(t *testing.T) []string {
 	t.Helper()

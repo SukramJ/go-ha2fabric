@@ -37,7 +37,7 @@ const (
 )
 
 // Defaults. The commissioning values are the public test values of
-// go-fabric's cookbook (docs/guides/embed-in-a-daemon.md §2, CSA test
+// go-fabric's cookbook (docs/guides/embed-in-a-daemon.md §2 at v0.26.0, CSA test
 // vendor 0xFFF1, product 0x8001). The passcode has no default: without
 // PASSCODE the configured node's is random, drawn on the first start and
 // kept beside the store (internal/nodes ConfiguredPasscode).
@@ -60,14 +60,15 @@ const (
 	// SelectionFile is the web UI's overrides file, beside the store.
 	SelectionFile = "selection.json"
 	// TestPasscode is the public test passcode of go-fabric's examples and
-	// test harness (fabrictest.DefaultPasscode, fabrictest/device.go:35 at
-	// v0.25.0) and the default before 0.7.0: valid, so it is honoured when
+	// test harness (fabrictest.DefaultPasscode, fabrictest/device.go:36 at
+	// v0.26.0) and the default before 0.7.0: valid, so it is honoured when
 	// set explicitly, with a warning. go-fabric exposes no list of such
 	// values; its validator refuses only the trivial ones.
 	TestPasscode = 20202021
 	// IngressProxy is the Supervisor's Ingress proxy address, the only
 	// client an add-on's Ingress port may serve
-	// (developers.home-assistant.io docs/apps/presentation.md "Ingress").
+	// (developers.home-assistant.io docs/apps/presentation.md "Ingress" at
+	// 50b5188).
 	IngressProxy = "172.30.32.2"
 )
 
@@ -139,7 +140,7 @@ type Config struct {
 	// relays their WebRTC signalling (CAMERA, default false). It is off
 	// until a live test with Apple Home has passed: go-fabric's ecosystem
 	// gate keeps camera clusters out of host devices before that
-	// (go-fabric docs/guides/camera.md:414-425 at v0.15.5).
+	// (go-fabric docs/guides/camera.md:577-599 at v0.26.0).
 	Camera bool
 
 	// NodeLimit is how many nodes the web UI may create beside the
@@ -335,7 +336,7 @@ func Load(args []string, env Env, out io.Writer) (*Config, error) {
 		add("LABEL must not be empty")
 	} else if len(c.Label) > 32 {
 		// NodeLabel is at most 32 bytes (go-fabric
-		// cluster/core/basic_information.go:853 at v0.11.0).
+		// cluster/core/basic_information.go:649-651 at v0.26.0).
 		add("LABEL is %d bytes, at most 32", len(c.Label))
 	} else if !text.Safe(c.Label) {
 		add("LABEL must be UTF-8 text without control or bidirectional control characters, got %q", c.Label)
@@ -467,7 +468,7 @@ func loopback(hostPort string) bool {
 
 // allowedHost says what is wrong with a WEB_ALLOWED_HOSTS entry, or "":
 // go-fabric-ui's rules for Options.AllowedHosts (fabricui/host.go:101-121
-// at v0.14.0), checked here so a wrong value fails at start like every
+// at v0.14.1), checked here so a wrong value fails at start like every
 // other option instead of after the node opened its store. An IP address
 // needs no entry: the Host check admits every one.
 func allowedHost(h string) string {
@@ -489,7 +490,8 @@ func allowedHost(h string) string {
 // splitInterfaces reads MDNS_INTERFACES: comma- or newline-separated (the
 // add-on hands a list one item per line). Blank is every interface; an
 // empty name between separators or a name given twice is refused, as
-// go-fabric's node.Config.Validate refuses them (node/mdns.go at v0.19.1),
+// go-fabric's node.Config.Validate refuses them (node/config.go:1086-1092
+// at v0.26.0),
 // so the operator reads it here, with the variable's name, first.
 func splitInterfaces(s string, add func(string, ...any)) []string {
 	s = strings.TrimSpace(s)

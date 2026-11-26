@@ -198,7 +198,7 @@ const (
 	StateUnavailable = "unavailable"
 )
 
-// StateChanged is state_changed's data: homeassistant/core.py:129-142 at
+// StateChanged is state_changed's data: homeassistant/core.py:130-143 at
 // 2026.10.3 (entity_id, old_state, new_state; new_state null when the
 // entity was removed).
 type StateChanged struct {
@@ -382,7 +382,7 @@ type Exposed struct {
 const AssistantConversation = "conversation"
 
 // ServiceCall is one call_service command: domain, service, the service
-// data and the target entity (websocket_api/commands.py:265-274 at
+// data and the target entity (websocket_api/commands.py:266-275 at
 // 2026.10.3).
 type ServiceCall struct {
 	Domain   string
