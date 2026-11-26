@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -152,4 +153,54 @@ func TestClientHostileFrames(t *testing.T) {
 func itoa(n int64) string {
 	b, _ := json.Marshal(n)
 	return string(b)
+}
+
+// TestClientReplyShape (HR-P3-ha-09): a reply to a command is a result
+// with success, as core sends every one (websocket_api/messages.py:63-65
+// result_message, :81-104 error_message at 2026.10.3); a reply of another
+// type, or a result without success, fails the call with ErrFrame and the
+// connection stays.
+func TestClientReplyShape(t *testing.T) {
+	for name, reply := range map[string]string{
+		"a result without success": `{"id":%d,"type":"result","result":{"context":{}}}`,
+		"another type":             `{"id":%d,"type":"pong"}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			url := hostile(t, func(ctx context.Context, ws *websocket.Conn) {
+				send(ctx, ws, `{"type":"auth_required"}`)
+				if _, _, err := ws.Read(ctx); err != nil {
+					return
+				}
+				send(ctx, ws, `{"type":"auth_ok","ha_version":"2026.10.3"}`)
+				for {
+					_, b, err := ws.Read(ctx)
+					if err != nil {
+						return
+					}
+					var cmd struct {
+						ID   int64  `json:"id"`
+						Type string `json:"type"`
+					}
+					if json.Unmarshal(b, &cmd) != nil {
+						return
+					}
+					if cmd.Type == "call_service" {
+						send(ctx, ws, fmt.Sprintf(reply, cmd.ID))
+						continue
+					}
+					send(ctx, ws, `{"id":`+itoa(cmd.ID)+`,"type":"result","success":true,"result":null}`)
+				}
+			})
+			c, r, _ := start(t, ha.Options{URL: url, Token: "t", MinBackoff: time.Hour})
+			r.wait(t, "connected")
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := c.CallService(ctx, ha.ServiceCall{Domain: "light", Service: "turn_on"}); !errors.Is(err, ha.ErrFrame) {
+				t.Fatalf("CallService on %s: %v, want ErrFrame", name, err)
+			}
+			if !c.Connected() {
+				t.Fatal("the connection did not stay")
+			}
+		})
+	}
 }

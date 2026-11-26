@@ -12,15 +12,15 @@
 // carries the controller's offer and candidates to camera/webrtc/offer and
 // camera/webrtc/candidate, and Home Assistant's answer and candidates back
 // to the controller's WebRtcTransportRequestor through the kit's
-// *camera.Provider signals (go-fabric docs/guides/camera.md:84-87 at
-// v0.15.5). It never touches the media: the video, audio and snapshot
+// *camera.Provider signals (go-fabric docs/guides/camera.md:93-110 at
+// v0.26.0). It never touches the media: the video, audio and snapshot
 // streams it allocates are one nominal stream each, and a snapshot is
 // Home Assistant's camera proxy still.
 //
 // It is the one package that imports go-fabric's cluster/camera: the
 // signals are methods of *camera.Provider, and camera.ErrPayloadTooLarge
-// is the one error a signal over UDP returns (docs/guides/camera.md:122-127
-// at v0.15.6).
+// is the one error a signal over UDP returns (docs/guides/camera.md:133-140
+// at v0.26.0).
 package camera
 
 import (
@@ -49,7 +49,7 @@ import (
 // End reasons, WebRTCEndReasonEnum (connectedhomeip
 // data_model/1.7/globals/Enums.xml:225-265 at 1dc3b69ed5e; go-fabric
 // carries the field as a uint8 and checks only the highest value,
-// cluster/camera/provider.go:587-588 at v0.15.5).
+// cluster/camera/provider.go:680-695 at v0.26.0).
 const (
 	// ReasonICEFailed (0, "No media connection could be established to
 	// the other party", Enums.xml:226) ends a session Home Assistant
@@ -68,7 +68,7 @@ const (
 const NominalStreamID uint16 = 1
 
 // statusInvalidInState is the IM status INVALID_IN_STATE (0xCB, Matter
-// Core §8.10.1; go-fabric im/status.go:94 at v0.15.5).
+// Core §8.10.1; go-fabric im/status.go:94 at v0.26.0).
 const statusInvalidInState uint8 = 0xCB
 
 // Errors of the host.
@@ -99,8 +99,8 @@ var (
 // MaxPendingCandidates bounds the controller's ICE candidates a session
 // queues until Home Assistant names its session (HR-P0-bound-28). Neither
 // the command (ProvideICECandidates' list is "min 1" only, go-fabric
-// cluster/spec/webrtctransportprovider/definition_gen.go:696 at v0.25.0)
-// nor the kit (cluster/camera/provider.go:603-617) bounds them. An ICE
+// cluster/spec/webrtctransportprovider/definition_gen.go:721 at v0.26.0)
+// nor the kit (cluster/camera/provider.go:648-665 at v0.26.0) bounds them. An ICE
 // agent gathers one host candidate per local address and one server
 // reflexive or relayed candidate per STUN or TURN server and address —
 // with bundling a few dozen at most — so 64 holds any real gathering
@@ -184,7 +184,7 @@ func (u client) Image(ctx context.Context, entityID string, width, height int) (
 }
 
 // Signaller is the controller side of a session: *camera.Provider's
-// signals (cluster/camera/provider_peer.go:84-120 at v0.15.5).
+// signals (cluster/camera/provider_peer.go:104-148 at v0.26.0).
 type Signaller interface {
 	Answer(ctx context.Context, sessionID uint16, sdp string) error
 	IceCandidates(ctx context.Context, sessionID uint16, candidates []gfcamera.ProviderICECandidate) error
@@ -199,7 +199,7 @@ type Options struct {
 	Logger *slog.Logger
 	// Retries and RetryInterval bound the wait for a session the kit has
 	// not stored yet — it stores the session after ProvideOffer returned
-	// (cluster/camera/provider.go:522-526 at v0.15.5), and Home Assistant
+	// (cluster/camera/provider.go:597-601 at v0.26.0), and Home Assistant
 	// may answer before — and for the signaller before [Host.Attach].
 	// 0 is 10 and 50 ms.
 	Retries       int
@@ -275,7 +275,7 @@ var dryHost = New("", nil, Options{})
 // DryPorts is go-hamapping's Options.Ports for a plan without a node
 // (--dump-plan, the web UI's previews): a camera entity gets a host that
 // serves nothing, every other entity none. go-hamapping decides a camera
-// row on the ports' interfaces (go-hamapping plan.go:120-128 at v0.4.3),
+// row on the ports' interfaces (go-hamapping plan.go:160-168 at v0.8.0),
 // so the stand-in is a real *Host; the bridge's live hosts take its place
 // when it builds.
 func DryPorts(e model.Entity) any {
@@ -345,7 +345,7 @@ var ErrNoProvider = errors.New("camera: the device has no WebRtcTransportProvide
 
 // AttachDevice attaches the *camera.Provider of the device the plan built
 // on the host's ports — the server the node attaches its signalling route
-// to (go-fabric node/webrtc_provider_peers.go:43-56 at v0.15.5).
+// to (go-fabric node/webrtc_provider_peers.go:30-51 at v0.26.0).
 func (h *Host) AttachDevice(d *device.Device) error {
 	p, ok := d.Server(wpdef.ClusterID).(*gfcamera.Provider)
 	if !ok {
@@ -419,7 +419,7 @@ func (h *Host) Close(ctx context.Context) {
 // SolicitOffer implements wpdef.ProviderPort: not served, since Home
 // Assistant's API takes the client's offer only. The error carries
 // INVALID_IN_STATE, which the kit's server passes through as the answer
-// (cluster/camera/chime.go:291-299 at v0.15.6, spec.CarriesStatus).
+// (cluster/camera/chime.go:302-311 at v0.26.0, spec.CarriesStatus).
 func (h *Host) SolicitOffer(context.Context, wpdef.OfferArgs) (wpdef.WebRTCSessionStruct, bool, error) {
 	return wpdef.WebRTCSessionStruct{}, false, contract.StatusError{Status: statusInvalidInState, Message: ErrSolicitOffer.Error()}
 }
@@ -436,8 +436,8 @@ func (h *Host) ProvideAnswer(context.Context, uint16, string) error { return Err
 //
 // The cap check and the insert after Home Assistant's answer are not one
 // step under h.mu: the cap holds because go-fabric runs one command of a
-// camera's provider at a time (cluster/camera/provider.go:125-131 and
-// state.go:15-26 at v0.25.0), so no second offer of this camera runs
+// camera's provider at a time (cluster/camera/provider.go:159-165 at
+// v0.26.0 and cluster/camera/state.go:13-28 at v0.26.0), so no second offer of this camera runs
 // between them (HR-P2-conc-69). The same lock means a slow Home Assistant
 // holds the camera's other commands (EndSession, ProvideIceCandidates)
 // until this offer returns (an evicted or replaced session's unsubscribe,

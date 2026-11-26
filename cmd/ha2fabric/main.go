@@ -21,6 +21,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/netip"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -140,7 +141,7 @@ func run(ctx context.Context, args []string, env config.Env, stdout, stderr io.W
 		}
 	}
 
-	// The cookbook's order (docs/guides/embed-in-a-daemon.md §6): every
+	// The cookbook's order (docs/guides/embed-in-a-daemon.md §6 at v0.26.0): every
 	// node starts before the backend runs and stops after it. The one Home
 	// Assistant connection fans out to every node's bridge (concept U6,
 	// C.3): the configured node's and the registry's.
@@ -166,6 +167,12 @@ func run(ctx context.Context, args []string, env config.Env, stdout, stderr io.W
 	}
 	webErr := make(chan error, 1)
 	if cfg.WebListen != "" {
+		if cfg.Addon {
+			sc := supervisorClient()
+			cfg.WebListen = addonWebListen(ctx, cfg.WebListen, func(ctx context.Context) (netip.Addr, error) {
+				return addonAddress(ctx, sc, addonInfoURL, cfg.SupervisorToken)
+			}, addressPause, logger)
+		}
 		ws, err := web.New(webOptions(cfg, gate, logger, fabricui.Options{
 			Node: def.sw, Exposure: def.prov, Reassemble: def.Resync, Events: def.events, Warnings: warnings(def, fl, hostWarnings(startup, gate, client.TokenRefused)), Counters: counters(def, fl), Erase: def.erase, Logger: logger,
 			Operations: web.NewOperations(ring, version.Version, started),
@@ -229,7 +236,7 @@ func run(ctx context.Context, args []string, env config.Env, stdout, stderr io.W
 // warnings is the web UI's Options.Warnings: the host's (startWarnings),
 // the configured node's findings and the registry nodes', which every
 // node's status page reports (a registry node's handler inherits the
-// default's, go-fabric-ui fabricui/handler.go:401 at v0.7.1).
+// default's, go-fabric-ui fabricui/handler.go:601-610 at v0.14.1).
 func warnings(def *served, fl *fleet, host func() []fabricui.Warning) func(context.Context) []fabricui.Warning {
 	return func(ctx context.Context) []fabricui.Warning {
 		out := host()
@@ -263,7 +270,7 @@ const discardsMessage = "Controller commands answered with success that called n
 
 // counters is the web UI's Options.Counters (go-fabric-ui contract
 // 0.8.0): host-wide as warnings are — every node's status reads the
-// default's list (go-fabric-ui fabricui/handler.go:393 at v0.8.0) —, so discards is the sum
+// default's list (go-fabric-ui fabricui/handler.go:601-610 at v0.14.1) —, so discards is the sum
 // over the configured node's bridge and the registry nodes' (the
 // bridge.command_discarded lines, docs/operations.md).
 func counters(def *served, fl *fleet) func(context.Context) []fabricui.Counter {

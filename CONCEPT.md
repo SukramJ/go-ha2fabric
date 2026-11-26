@@ -1,7 +1,8 @@
 # go-ha2fabric: concept
 
 Status: implemented in 0.1.0 (brief H2, 2026-10-25); labels, the web UI
-from go-fabric-ui and the stable entity identity in 0.2.0 (brief H3). Written 2026-10-24
+from go-fabric-ui and the stable entity identity in 0.2.0 (brief H3); the
+current release is 0.7.0, its changes in `changelog.md`. Written 2026-10-24
 from go-fabric's concept v6 part B (2026-10-20) and the owner's decisions
 of 2026-10-24 (go-fabric concept v8: `go-fabric-server`; evening: this
 daemon embeds go-fabric). Changes to this document follow those decisions.
@@ -102,9 +103,10 @@ today's state until it lands.
   incremental mirror of the registries was rejected: it gives up what a
   full read gives after a reconnect, for a gain nobody has measured.
 - **No Matter types in the adapter.** `internal/adapt` imports nothing of
-  go-fabric. What it knows of Matter today (`command.go:15-16`, `:208-209`,
-  `:276-284`) moves to go-hamapping, where "The mapping" above already
-  places it.
+  go-fabric. What it knows of Matter today (in `internal/adapt/command.go`:
+  the `keypadinputdef` and `levelcontroldef` imports, `levelcontroldef.LevelMax`
+  and the switch over the `keypadinputdef` key codes) moves to go-hamapping,
+  where "The mapping" above already places it.
 - **go-hamapping's own vocabulary.** The `go-*2mqtt` daemons are not planned
   as consumers. go-hamqtt's vocabulary was chosen so that one table serves
   them too (go-hamapping `CONCEPT.md:20-22, 26-29`); without them it is a

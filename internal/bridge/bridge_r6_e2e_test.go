@@ -5,6 +5,7 @@ package bridge_test
 
 import (
 	"bytes"
+	"errors"
 	"image"
 	"image/jpeg"
 	"testing"
@@ -20,7 +21,7 @@ import (
 	"thingfabric.dev/go-ha2fabric/internal/plan"
 )
 
-const cameraDeviceType = 0x0142 // go-fabric device/camera_gen.go:20-24 at v0.15.5
+const cameraDeviceType = 0x0142 // go-fabric device/camera_gen.go:20-24 at v0.26.0
 
 func (e *env) verdict(entityID string) plan.Verdict {
 	e.t.Helper()
@@ -52,7 +53,7 @@ func (e *env) sessions(ep uint16) []wpdef.WebRTCSessionStruct {
 // controller of fabrictest has no WebRtcTransportRequestor, so the
 // camera's Answer and IceCandidates reaching a requestor are held by
 // internal/camera's tests and by go-fabric's
-// node/webrtc_provider_peers_test.go; here a scripted answer shows the
+// node/webrtc_provider_peers_test.go at v0.26.0; here a scripted answer shows the
 // signal goes out and, refused, ends the session.
 func TestCameraEndToEnd(t *testing.T) {
 	e := newEnv(t, expose.Rule{Assist: true}, func(o *setup) { o.camera = true })
@@ -172,5 +173,40 @@ func TestCameraOffEndToEnd(t *testing.T) {
 		if v := e.verdict(id); v.Endpoint != 0 || v.State != "unmappable" || v.Row != "" {
 			t.Fatalf("%s with the camera off %+v", id, v)
 		}
+	}
+}
+
+// TestCameraOfferRefusedEndToEnd (HR-P3-test-10): an offer Home Assistant
+// refuses — here a camera without WebRTC, webrtc_offer_failed as core
+// answers it — goes ha.Client → camera.HA → camera.Host and reaches the
+// controller as the command's failure; no session is held.
+func TestCameraOfferRefusedEndToEnd(t *testing.T) {
+	e := newEnv(t, expose.Rule{Assist: true}, func(o *setup) { o.camera = true })
+	e.commission()
+	cam := e.mustEndpoint("camera.front_door")
+	res, err := fabrictest.Invoke(e.ctx, e.pair, client.CommandAt(cam, csdef.ClusterID, csdef.CmdVideoStreamAllocate), csdef.VideoStreamAllocateRequest{
+		StreamUsage: csdef.StreamUsageLiveView, VideoCodec: csdef.VideoCodecH264, MinFrameRate: 15, MaxFrameRate: 30,
+		MinResolution: csdef.VideoResolutionStruct{Width: 640, Height: 480}, MaxResolution: csdef.VideoResolutionStruct{Width: 1920, Height: 1080},
+		MinBitRate: 10000, MaxBitRate: 2000000, KeyFrameInterval: 4000,
+	})
+	var video csdef.VideoStreamAllocateResponse
+	if err != nil || video.DecodeTLV(res.Fields) != nil {
+		t.Fatalf("VideoStreamAllocate: %v", err)
+	}
+	e.ha.SetWebRTC("camera.front_door", false)
+	usage, origin := wpdef.StreamUsageLiveView, uint16(1)
+	_, err = fabrictest.Invoke(e.ctx, e.pair, client.CommandAt(cam, wpdef.ClusterID, wpdef.CmdProvideOffer), wpdef.ProvideOfferRequest{
+		WebRtcSessionId: spec.NullOf[uint16](), Sdp: "v=0\r\no=- 1 1 IN IP4 192.0.2.1\r\ns=controller\r\n", StreamUsage: &usage, OriginatingEndpointId: &origin,
+		VideoStreams: &[]uint16{video.VideoStreamId},
+	})
+	var se *fabrictest.StatusError
+	if !errors.As(err, &se) {
+		t.Fatalf("a refused offer answered %v, want a status", err)
+	}
+	if s := e.sessions(cam); len(s) != 0 {
+		t.Fatalf("CurrentSessions after a refused offer %+v", s)
+	}
+	if o := e.ha.Offers(); len(o) != 0 {
+		t.Fatalf("the refused offer was taken: %+v", o)
 	}
 }

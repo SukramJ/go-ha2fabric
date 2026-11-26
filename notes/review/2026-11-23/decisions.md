@@ -118,3 +118,38 @@ read of phase 2 are by Opus.
 | 50 | When the `sync_failed` warning shows | **From the second failure in a row**; the first is retried silently after 5 s |
 | 51 | A `READ_LIMIT` option | **No**: the 256 KiB cap per state (decision 42) keeps `get_states` far below 64 MiB, and the sync error now names the limit |
 | 52 | HR-P2-bound-90 (pre-merge read): an entity whose state exceeds the 256 KiB cap is mapped from its stripped state as another device type | **Unmappable with a reason** in `plan.Assess` ("state over 256 KiB"); no change of device type, the operator sees the reason; extends decision 42 |
+
+## 2026-11-26, phase 3 start
+
+All roles this plan gives Fable still run on Opus (owner, 2026-11-24).
+Baseline of phase 3: origin/main `0a47095` (phase 2 `d16f3ab`, the move to
+`thingfabric.dev` #76, R7 #78, release 0.7.0 #79, the libraries under
+`sukramj.dev` #80).
+
+| # | Subject | Decision |
+| --- | --- | --- |
+| 53 | Decisions 21 and 37 after the `0.7.0` tag: the held reports and the docs sentence on co-installed add-ons | **In phase 3's pull request**: every `held/*` report of phases 0–2 published, HR-P1-auth-01 labelled "interception measured on a real HAOS, the end-to-end exchange not completed on a live box"; the docs sentence; decision 37 amended by the owner on 2026-11-25: **docs only**, no Supervisor issue |
+| 54 | HR-P0-cfg-27, the add-on listener's address (the live test of 2026-11-25 measured the Supervisor network's gateway as the add-on's `ip_address`) | **Fixed in phase 3**: the add-on binds the web listener to the Supervisor network's gateway address, found at start (interface or Supervisor network info), not a constant; when it is not found, today's bind with a warning line; the client filter stays |
+| 55 | go-fabric-server's review | **After this review's phase 3** (the plan rule: written while this review is in phase 4) |
+
+## 2026-11-26, after phase 3's verification
+
+| # | Subject | Decision |
+| --- | --- | --- |
+| 56 | HR-P3-doc-30, the 0.7.0 add-on migration instruction | **A docs pull request now**, ahead of phase 3's: keep the old repository address and update in place (the old URL redirects; the add-on keeps its `/data`); then the owner's production add-on is updated 0.6.3 → 0.7.0 under the old address and the result recorded |
+| 57 | HR-P3-sup-31, Dependabot auto-merge | **Patch updates only**, the five family modules (go-fabric, go-fabric-ui, go-hamapping, go-hamqtt, go-ha-catalog) never; `coverage`, `fuzz-smoke` and `docker` become required checks |
+| 58 | HR-P3-sup-32, -sup-33, -sup-44, the release path and repository settings | **As go-fabric-ui's decision 56, and more**: in the workflows the tag must be on `main` and a manual run only from `main`; by `gh api` after the owner confirms the exact calls: a `v*` tag ruleset, a `ghcr` environment for `v*` tags, required checks bound to the Actions app, secret scanning and push protection on |
+| 59 | HR-P3-sup-37, licence texts | **Complete with a guard**: a generated `licenses/` tree (the linked modules, Go's licence, go-fabric's NOTICE with matter.js's, go-fabric-ui's npm licences) in the release archive and both images; a CI check that it is current |
+| 60 | HR-P3-test-01 and A's guard rows (api-04, -05, -06, -07, test-13) | **Both**: go-fabric's stale-floor check (a floor more than 3.0 points below the measurement fails), a floor for every package, floors just under the lower of two runs; one AST guard in `internal/arch` for the purity of `internal/plan`, `internal/adapt`'s go-fabric imports, packages without a layer entry, environment reads outside `internal/config`, and the fuzz-smoke list |
+| 61 | Citation pins (HR-P3-cite-60..62, -66, -67) | **`go.mod`'s version** for every go-fabric, go-fabric-ui and go-hamapping citation, with unit C's citation check in `make ci` (file and lines exist at `go.mod`'s version), so a bump re-pins them |
+| 62 | HR-P3-sup-34, -35, -36 | **All three**: base images by digest, actions by full SHA (Dependabot keeps both current), build provenance and an SBOM attested for the release archive and the images |
+| 63 | HR-P3-test-03, -sup-33, -cfg-68, the rest | **test-03 accepted** (no clock seam for a timer that no longer exists; decision 31); sup-33 a note (its fix comes with decision 58); `label: str(1,32)` in the add-on schema; every other low and note in phase 3's pull request |
+
+## 2026-11-26, during phase 3's fix wave
+
+| # | Subject | Decision |
+| --- | --- | --- |
+| 64 | armv7: Home Assistant publishes no armv7 base image after `3.22-2025.11.1` | **Dropped**: the add-on builds for amd64 and aarch64 only; a changelog line and the docs say so |
+| 65 | The image workflows' manual rebuild of an existing release tag | **Dropped**: a published image is never rebuilt; a base update ships as a patch release |
+| 66 | A required reviewer on the `ghcr` environment | **No**: `v*` tags and `main` only, and only an admin creates a `v*` tag |
+| 67 | HR-P3-test-15's test seam `buildPlan` in `internal/bridge`; `docs/roadmap.md` in `make cite` | **The seam goes**: a real fixture go-hamapping refuses whole (a shape of go-hamapping #45), else test-15 accepted as a note; the roadmap stays out of `make cite` as history, like `docs/reports/` |

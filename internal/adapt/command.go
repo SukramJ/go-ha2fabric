@@ -231,7 +231,7 @@ func Service(cmd model.Command, cur *ha.State) (ha.ServiceCall, error) {
 		// media_player/services.py:182-192 volume_set, volume_level 0 to 1
 		// (cv.small_float): the level 0 to 254 over LevelControl's range,
 		// level / 254 as go-fabric's UnitFromLevel (cluster/spec/
-		// levelcontrol/values.go:21,41-44), to two places.
+		// levelcontrol/values.go:21,41-44 at v0.26.0), to two places.
 		if f, ok := number(payload); ok {
 			level := min(max(math.Round(f), 0), float64(levelcontroldef.LevelMax))
 			v := math.Round(level/float64(levelcontroldef.LevelMax)*100) / 100
@@ -290,8 +290,8 @@ func waterHeaterMode(id, payload string, attrs map[string]any) (ha.ServiceCall, 
 }
 
 // mediaKey is row media_player/video_player's SendKey with the CEC key
-// codes it lets through (go-fabric cluster/spec/keypadinput
-// definition_gen.go:95-98): volume up and down (media_player/
+// codes it lets through (go-fabric
+// cluster/spec/keypadinput/definition_gen.go:91-94 at v0.26.0): volume up and down (media_player/
 // services.py:137-148 volume_up, volume_down), mute as the opposite of
 // the current is_volume_muted (:193-203 volume_mute) and power as toggle
 // (:131-136).
@@ -370,7 +370,7 @@ func light(id string, payload []byte) (ha.ServiceCall, error) {
 
 // catalogPayload is the payload the row rendered for a catalog key: the
 // entity's Extra[key], else the catalog's default for the platform
-// (go-hamapping value.go extra/catalogDefault).
+// (go-hamapping value.go extra/catalogDefault at v0.8.0).
 func catalogPayload(e model.Entity, key string) (string, bool) {
 	if v, ok := e.Desc().Extra[key].(string); ok {
 		return v, true
@@ -405,10 +405,10 @@ func integer(s string, lo, hi int) (int, bool) {
 }
 
 // kelvinMin and kelvinMax bound color_temp_kelvin to what go-hamapping
-// renders: 1e6 / ColorTemperatureMireds (go-hamapping rows_gen.go:2265 at
-// v0.6.0, "reciprocal" with scale 1e6) with the mireds 1 to 65279 (the
-// row's bounds at :2248-2249, Matter's 0xFEFF; 0 is refused by
-// "reciprocal", value.go:277-280), so 15 (1e6/65279, rounded) to
+// renders: 1e6 / ColorTemperatureMireds (go-hamapping rows_gen.go:2365 at
+// v0.8.0, "reciprocal" with scale 1e6) with the mireds 1 to 65279 (the
+// row's bounds on the same line, Matter's 0xFEFF; 0 is refused by
+// "reciprocal", value.go:277-280 at v0.8.0), so 15 (1e6/65279, rounded) to
 // 1000000. Home Assistant takes any int from 0 (light/const.py:173,
 // cv.positive_int at helpers/config_validation.py:185, 2026.10.3); both
 // bounds fit an int32.

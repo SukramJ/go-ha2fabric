@@ -14,7 +14,7 @@ Every claim below carries its source. A line marked **unverified** is a
 reading question for the brief, not a fact.
 
 Legend: `[ ]` open, `[~]` in progress (brief named), `[x]` done (release
-named).
+named; a "Left:" line names what was not built, open without a brief).
 
 ## How a tranche runs
 
@@ -32,11 +32,12 @@ named).
 ## R1 — Sensor device classes the kit already serves
 
 Owner: go-hamapping. Largest gap between kit and table: nine sensor
-classes are mapped (`rows/sensor.yaml:10-191`), about fifty are listed
-as unmappable "in H1" (`rows/sensor.yaml:221-224`), and go-fabric has
+classes are mapped (`rows/sensor.yaml:10-191` at go-hamapping v0.2.1),
+about fifty are listed as unmappable "in H1" (`rows/sensor.yaml:221-224`
+at v0.2.1), and go-fabric has
 device types for a good part of them.
 
-- [~] **Air quality**: `carbon_dioxide`, `carbon_monoxide`, `pm1`, `pm25`,
+- [x] **Air quality**: `carbon_dioxide`, `carbon_monoxide`, `pm1`, `pm25`,
   `pm10`, `volatile_organic_compounds`, `nitrogen_dioxide`, `ozone`,
   `radon`, `aqi` → go-fabric `device/air_quality_sensor_gen.go` with the
   concentration clusters (`cluster/measurement/concentration.go`).
@@ -47,11 +48,11 @@ device types for a good part of them.
   carbon_dioxide … radon, AirQualitySensor). Left: `aqi`, which stays
   unmappable — a numeric index onto the AirQuality enum is a mapping
   decision.
-- [~] **Electrical**: `apparent_power`, `power_factor`, `frequency`,
+- [x] **Electrical**: `apparent_power`, `power_factor`, `frequency`,
   `reactive_power`, `reactive_energy` → `device/electrical_sensor_gen.go`
   (ElectricalPowerMeasurement, ElectricalEnergyMeasurement). The
   existing `power`, `voltage`, `current`, `energy` rows
-  (`rows/sensor.yaml:91-190`) are the pattern; check whether they already
+  (`rows/sensor.yaml:91-190` at go-hamapping v0.2.1) are the pattern; check whether they already
   declare these clusters so the new classes become optional attributes
   on the same device rather than new rows.
   Landed in go-hamapping v0.3.0 / go-ha2fabric 0.4.0: apparent_power,
@@ -81,9 +82,9 @@ device types for a good part of them.
 ## R2 — Buttons, events and selects
 
 Owner: go-hamapping. The platforms `button`, `event`, `select`, `number`
-and `text` have an explicit unmapped row each (`rows_gen.go:419, 851,
-1879, 1885`; `rows/button.yaml`, `event.yaml`, `number.yaml`,
-`select.yaml`).
+and `text` had an explicit unmapped row each (`rows_gen.go:419, 851,
+1879, 1885` at go-hamapping v0.2.1; `rows/button.yaml`, `event.yaml`,
+`number.yaml`, `select.yaml`).
 
 - [x] **`button`** → `device/generic_switch_gen.go` as a momentary switch:
   a press from the controller side has no meaning (a button is an input
@@ -97,7 +98,7 @@ and `text` have an explicit unmapped row each (`rows_gen.go:419, 851,
   it rather than as written here: an OnOffPlugInUnit whose On presses
   the button (`press`), its OnOff always off (go-hamapping
   `docs/by_design.md`).
-- [~] **`event`** → GenericSwitch too, with `event_types` as the
+- [x] **`event`** → GenericSwitch too, with `event_types` as the
   positions when the type count fits (MultiPressMax), else a
   single-position switch per type. **Unverified**: whether Apple Home
   and Google Home show a bridged GenericSwitch at all; matter-hub's
@@ -121,9 +122,10 @@ and `text` have an explicit unmapped row each (`rows_gen.go:419, 851,
 
 ## R3 — Climate features
 
-Owner: go-hamapping; go-ha2fabric's `internal/adapt` (`command.go:78-104`)
-follows. The thermostat row (`rows/climate.yaml:11-25`) excludes four
-things with caveats "not mapped in H1".
+Owner: go-hamapping; go-ha2fabric's `internal/adapt` (`Service`'s climate
+cases in `command.go`) follows. The thermostat row (`rows/climate.yaml:11-25`
+at go-hamapping v0.2.1; `:159-180` at v0.8.0) excluded four things with
+caveats "not mapped in H1".
 
 - [ ] **Preset modes** → Thermostat Presets (go-fabric
   `device/thermostat_hold_declaration_test.go` shows the declaration).
@@ -148,7 +150,8 @@ things with caveats "not mapped in H1".
   turn_off the fan modes stay a caveat.
 - [ ] **AC FanMode Off**: the air conditioner's FanMode Off write sends
   `set_fan_mode off`, which Home Assistant refuses unless `off` is in
-  `fan_modes` (`climate/__init__.py:470-488` at 2026.10.3); the
+  `fan_modes` (`climate/__init__.py:470-488`, the call with
+  `self.fan_modes` `:511`, at 2026.10.3); the
   `air_conditioner` row should gate the Off write on `fan_modes`
   containing `off` or map it to `turn_off`. Owner: go-hamapping.
 - [~] **Swing modes**: no Matter counterpart in go-fabric's kit; stays a
@@ -178,7 +181,7 @@ Owner: go-hamapping.
   the entity registry's lock options and inserts it when a `lock`,
   `unlock` or `open` call carries none (`lock/__init__.py:113-133,
   280-295` at 2026.10.3); the daemon's calls carry none
-  (`internal/adapt/command.go:43, 62-67`), so the operator sets the code
+  (the `lock` entry of `payloads` in `internal/adapt/command.go`), so the operator sets the code
   in Home Assistant. `docs/operations.md` §Locks with a code says where.
   A code never passes through this daemon, its logs or its selection
   file. Matter-side PIN credentials (matter-hub stores the controller's
@@ -190,20 +193,20 @@ Owner: go-hamapping.
 Owner: go-hamapping, each a larger row with command structure; one
 domain per wave.
 
-- [~] **`vacuum`** → `device/robotic_vacuum_cleaner_gen.go` (RvcRunMode,
+- [x] **`vacuum`** → `device/robotic_vacuum_cleaner_gen.go` (RvcRunMode,
   RvcOperationalState, RvcCleanMode, ServiceArea in
   `cluster/servicearea`). Home Assistant's `vacuum` states and
   `supported_features` (`data/features.json`) are the predicate.
   Landed in go-hamapping v0.3.0 / go-ha2fabric 0.4.0:
   RoboticVacuumCleaner with RvcRunMode and RvcOperationalState for an
   entity with START. Left: RvcCleanMode (fan speed) and ServiceArea.
-- [~] **`valve`** → `device/water_valve_gen.go` (ValveConfigurationAndControl
+- [x] **`valve`** → `device/water_valve_gen.go` (ValveConfigurationAndControl
   in `cluster/valve`): open, close, position when `set_valve_position`
   is supported.
   Landed in go-hamapping v0.3.0 / go-ha2fabric 0.4.0: WaterValve, open
   and close. Left: the valve position (go-fabric's valve server serves
   no Level feature).
-- [~] **`water_heater`** → `device/water_heater_gen.go`
+- [x] **`water_heater`** → `device/water_heater_gen.go`
   (`cluster/energy/waterheater.go`): modes and target temperature.
   Landed in go-hamapping v0.3.0 / go-ha2fabric 0.4.0 as a heating-only
   Thermostat (SystemMode Off/Heat, setpoint, limits). Left: the
@@ -219,7 +222,7 @@ domain per wave.
   keys), every other player a Speaker (OnOff, LevelControl from
   `volume_level`). Sources and tracks are a caveat.
 - [ ] **`cover` details**: the row is complete for lift and tilt
-  (`rows/cover.yaml:20-49`). Nothing open; listed so the survey is
+  (`rows/cover.yaml:9-143` at go-hamapping v0.8.0). Nothing open; listed so the survey is
   complete.
 - [ ] **`light` effects** (`effect_list`) and **`fan` `speed_count`**:
   no Matter counterpart for effects; the fan's step count could set
@@ -235,7 +238,8 @@ only for a convenience default. The facts:
   `video_doorbell`, `chime`) and holds "no media stack: the host runs
   the WebRTC peer connection" (`cluster/camera/doc.go`, package comment).
 - The Camera device type makes CameraAvStreamManagement (VDO, ADO, SNP)
-  and WebRtcTransportProvider mandatory (`device/camera_gen.go:34-45`).
+  and WebRtcTransportProvider mandatory (`device/camera_gen.go:34-45` at
+  go-fabric v0.26.0).
 - Home Assistant at 2026.10.3 offers `camera/webrtc/offer`,
   `camera/webrtc/candidate`, `camera/webrtc/get_client_config`
   (`homeassistant/components/camera/webrtc.py:254, 335, 308`); the
@@ -256,17 +260,19 @@ on the go-fabric lines):
 - chip's AllocateVideoStream validation reads only the request's ranges
   and the declared stream usages, no sensor parameters
   (`CameraAVStreamManagementCluster.cpp:2066-2141`); go-fabric checks
-  the same (`cluster/camera/avstream.go:708-731`). A placeholder stream
+  the same (`cluster/camera/avstream.go:871-888` at v0.26.0,
+  `videoStreamAllocate`). A placeholder stream
   declaration is possible.
 - H264 is the mandatory codec (`CameraAVStreamManagement.xml:173-185`,
   data model 1.7); Home Assistant's go2rtc provider produces it
   (`homeassistant/components/go2rtc/__init__.py:414`).
 - **Blocker:** go-fabric has no facade route for the camera to invoke
   `Answer`, `IceCandidates` and `End` on the controller's
-  WebRtcTransportRequestor. `docs/guides/camera.md:38-58` covers the
-  requestor side only, `cluster/camera/provider.go` has no outbound
-  call, `Node.Peers()` is a seam without a facade route
-  (`docs/guides/advanced-seams.md:37`). Filed as go-fabric #351.
+  WebRtcTransportRequestor. At go-fabric v0.15.4,
+  `docs/guides/camera.md:38-58` covered the requestor side only,
+  `cluster/camera/provider.go` had no outbound call, `Node.Peers()` was a
+  seam without a facade route (`docs/guides/advanced-seams.md:37`). Filed
+  as go-fabric #351, answered in v0.15.5 (below).
 
 R6 was therefore not built in the R1–R5 run (owner decision 2026-10-31:
 build only on a green reading). go-fabric #351 shipped in v0.15.5, and R6
@@ -303,9 +309,9 @@ Left open:
 - Closed: two questions to go-fabric, filed as go-fabric #356
   (2026-10-31) and answered by go-fabric `v0.15.6` (2026-11-01).
   `camera.ErrPayloadTooLarge` is the value of `bridge.ErrPayloadTooLarge`
-  (`cluster/camera/provider_peer.go:51-63`), so `internal/camera` imports
+  (`cluster/camera/provider_peer.go:51-63` at v0.26.0), so `internal/camera` imports
   `cluster/camera` alone; the kit passes a port's `contract.StatusError`
-  through (`cluster/camera/chime.go:291-299`), so `SolicitOffer` answers
+  through (`cluster/camera/chime.go:302-311` at v0.26.0), so `SolicitOffer` answers
   INVALID_IN_STATE.
 
 ## A — Architecture (owner, 2026-11-05)
@@ -355,7 +361,7 @@ Owner decision of 2026-11-08 (go-hamapping brief C2).
 - `binary_sensor` classes `battery`, `battery_charging`, `connectivity`,
   `gas`, `glass_break`, `heat`, `light`, `lock`, `moving`, `plug`,
   `power`, `problem`, `running`, `safety`, `sound`, `tamper`, `update`,
-  `vibration` (`rows/binary_sensor.yaml:130`): no Matter type. `cold`
+  `vibration` (`rows/binary_sensor.yaml:142` at go-hamapping v0.8.0): no Matter type. `cold`
   has one (`device/water_freeze_detector_gen.go`) and could join R1 if
   a consumer asks. OnOffSensor as a generic fallback is a decision for
   go-hamapping's `docs/by_design.md`, not a default.

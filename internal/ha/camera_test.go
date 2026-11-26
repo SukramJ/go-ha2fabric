@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"image"
 	"image/color"
 	"image/jpeg"
@@ -274,5 +275,69 @@ func TestClientImage(t *testing.T) {
 	}
 	if strings.Contains(logs.String(), hatest.Token) {
 		t.Fatal("the token reached the log")
+	}
+}
+
+// TestFakeRefusesAsCore (HR-P3-test-10): the fake refuses the camera
+// commands core 2026.10.3 refuses — an unknown camera and one that is off
+// (camera/helper.py:14-26), a camera without WebRTC
+// (camera/webrtc.py:213-248), a candidate that is not an
+// RTCIceCandidateInit (:325-339) — and fires device_registry_updated
+// remove for a removed device.
+func TestFakeRefusesAsCore(t *testing.T) {
+	srv := hatest.New(t)
+	c, r, _ := start(t, ha.Options{URL: srv.URL(), Token: hatest.Token, Events: []string{ha.EventDeviceRegistryUpdated}, Logger: slog.New(slog.DiscardHandler)})
+	r.wait(t, "connected")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	code := func(err error) string {
+		var e *ha.Error
+		if errors.As(err, &e) {
+			return e.Code
+		}
+		return fmt.Sprint(err)
+	}
+	if _, err := c.WebRTCOffer(ctx, "camera.missing", "v=0"); code(err) != "home_assistant_error" {
+		t.Errorf("an unknown camera's offer: %v", err)
+	}
+	srv.SetCameraOff("camera.front_door", true)
+	if _, err := c.WebRTCOffer(ctx, "camera.front_door", "v=0"); code(err) != "home_assistant_error" || !strings.Contains(err.Error(), "off") {
+		t.Errorf("an offer to a camera that is off: %v", err)
+	}
+	srv.SetCameraOff("camera.front_door", false)
+	srv.SetWebRTC("camera.front_door", false)
+	if _, err := c.WebRTCOffer(ctx, "camera.front_door", "v=0"); code(err) != "webrtc_offer_failed" {
+		t.Errorf("an offer to a camera without WebRTC: %v", err)
+	}
+	if err := c.WebRTCCandidate(ctx, "camera.front_door", "s1", ha.ICECandidate{Candidate: "candidate:1 1 UDP 1 192.0.2.1 1 typ host"}); code(err) != "webrtc_candidate_failed" {
+		t.Errorf("a candidate to a camera without WebRTC: %v", err)
+	}
+	srv.SetWebRTC("camera.front_door", true)
+	err := c.Call(ctx, map[string]any{"type": "camera/webrtc/candidate", "entity_id": "camera.front_door", "session_id": "s1", "candidate": map[string]any{"sdpMid": "0"}}, nil)
+	if code(err) != "invalid_format" {
+		t.Errorf("a candidate without its candidate string: %v", err)
+	}
+	if n := len(srv.Offers()) + len(srv.Candidates()); n != 0 {
+		t.Errorf("%d refused commands recorded", n)
+	}
+	if _, err := c.WebRTCOffer(ctx, "camera.front_door", "v=0"); err != nil {
+		t.Fatalf("an offer to a camera with WebRTC: %v", err)
+	}
+
+	srv.RemoveDevice("dev-gone-unknown")
+	devices, err := c.ListDevices(ctx)
+	if err != nil || len(devices) == 0 {
+		t.Fatalf("devices: %v", err)
+	}
+	srv.RemoveDevice(devices[0].ID)
+	r.wait(t, "event:"+ha.EventDeviceRegistryUpdated)
+	r.mu.Lock()
+	ev := r.events[len(r.events)-1]
+	r.mu.Unlock()
+	if !strings.Contains(string(ev.Data), `"action":"remove"`) || !strings.Contains(string(ev.Data), devices[0].ID) {
+		t.Errorf("the remove event: %s", ev.Data)
+	}
+	if after, _ := c.ListDevices(ctx); len(after) != len(devices)-1 {
+		t.Errorf("%d devices after the removal, want %d", len(after), len(devices)-1)
 	}
 }

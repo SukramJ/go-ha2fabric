@@ -39,22 +39,22 @@ var facade = map[string]bool{
 	// The daemon's log ring (issue #34, go-fabric #393; as in
 	// go-fabric-server's internal/arch): the slog.Handler in front of the
 	// daemon's own, whose records, level and stream go-fabric-ui's
-	// Operations port reads (go-fabric docs/guides/observability.md).
+	// Operations port reads (go-fabric docs/guides/observability.md at v0.26.0).
 	"logring": true,
 }
 
 // testOnly are the go-fabric packages a test may import besides: the
 // in-process controller, its path helpers, the wall clock and the
-// scalar values a controller's attribute write carries (cluster/spec
-// value.go Uint8, which fabrictest.Write takes as a spec.Encodable).
+// scalar values a controller's attribute write carries
+// (cluster/spec/value.go:62 at v0.26.0, Uint8, which fabrictest.Write takes as a spec.Encodable).
 var testOnly = map[string]bool{"fabrictest": true, "controller/client": true, "clock": true, "cluster/spec": true}
 
 // cameraOnly are the go-fabric packages internal/camera alone may import
 // besides the facade: cluster/camera, whose *camera.Provider carries the
 // camera's signals to the controller (go-fabric docs/guides/camera.md:
-// 84-87 at v0.15.6), whose ErrUnknownSession the relay retries on and
+// 93-110 at v0.26.0), whose ErrUnknownSession the relay retries on and
 // whose ErrPayloadTooLarge is the one error a signal over a UDP session
-// returns (:122-127). No other package reaches it.
+// returns (:133-140). No other package reaches it.
 var cameraOnly = map[string]bool{"cluster/camera": true}
 
 // cameraPkg is the package cameraOnly is for.
@@ -64,9 +64,23 @@ const cameraPkg = "internal/camera"
 // pure core decides without one (internal/plan; brief A1, section 4).
 var nodeFree = map[string]bool{"internal/plan": true}
 
+// adaptGoFabric is all of go-fabric that internal/adapt's code may import
+// (HR-P3-api-05): the two def packages whose values its commands carry
+// today. A2 empties it (CLAUDE.md, "Not built yet (A2)"); until then new
+// code does not deepen what A2 removes.
+var adaptGoFabric = map[string]bool{"cluster/spec/keypadinput": true, "cluster/spec/levelcontrol": true}
+
+// adaptPkg is the package adaptGoFabric is for.
+const adaptPkg = "internal/adapt"
+
 // layers are the module's own import rules: a package may import only the
 // module packages its entry lists.
+// Every package has an entry (HR-P3-api-06), the root package's doc and
+// the tools under script/ too.
 var layers = map[string][]string{
+	".":                  {},
+	"script/coverfloor":  {},
+	"script/cite":        {},
 	"internal/version":   {},
 	"internal/text":      {},
 	"internal/expose":    {},
@@ -127,6 +141,9 @@ func facadeImport(pkg, dep string, isTest bool) bool {
 	if dep == "node" && nodeFree[pkg] {
 		return false
 	}
+	if pkg == adaptPkg && !isTest {
+		return adaptGoFabric[dep]
+	}
 	return facade[dep] || isDef(dep) || isTest && testOnly[dep] || pkg == cameraPkg && cameraOnly[dep]
 }
 
@@ -137,6 +154,7 @@ func TestImports(t *testing.T) {
 	}
 	fset := token.NewFileSet()
 	files := 0
+	unruled := map[string]bool{}
 	err = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -155,6 +173,10 @@ func TestImports(t *testing.T) {
 		pkg := filepath.ToSlash(rel)
 		isTest := strings.HasSuffix(path, "_test.go")
 		where := filepath.ToSlash(strings.TrimPrefix(path, root+string(os.PathSeparator)))
+		if _, ruled := layers[pkg]; !ruled && !unruled[pkg] {
+			unruled[pkg] = true
+			t.Errorf("%s: package %s has no layer entry", where, pkg)
+		}
 		f, err := parser.ParseFile(fset, path, nil, parser.ImportsOnly)
 		if err != nil {
 			return err
@@ -168,11 +190,8 @@ func TestImports(t *testing.T) {
 				}
 			case p == module || strings.HasPrefix(p, module+"/"):
 				dep := strings.TrimPrefix(strings.TrimPrefix(p, module), "/")
-				if _, ruled := layers[pkg]; !ruled {
-					if pkg != "." {
-						t.Errorf("%s: package %s has no layer entry", where, pkg)
-					}
-					continue
+				if dep == "" {
+					dep = "."
 				}
 				if !layerAllows(pkg, dep, isTest) {
 					t.Errorf("%s imports %s: outside the layers of %s", where, p, pkg)
@@ -268,6 +287,18 @@ func TestGuardRefuses(t *testing.T) {
 	}
 	if facadeImport("internal/plan", "node", false) || !facadeImport("internal/plan", "device", false) || !facadeImport("internal/plan", "eligibility", false) {
 		t.Error("the pure core's rule: no node")
+	}
+	// internal/adapt's go-fabric reach is frozen (HR-P3-api-05).
+	for _, dep := range []string{"cluster/spec/onoff", "node", "device", "eligibility"} {
+		if facadeImport(adaptPkg, dep, false) {
+			t.Errorf("internal/adapt may not import %s", dep)
+		}
+	}
+	if !facadeImport(adaptPkg, "cluster/spec/levelcontrol", false) || !facadeImport(adaptPkg, "eligibility", true) {
+		t.Error("internal/adapt's frozen set, and its tests' facade")
+	}
+	if _, ok := layers["internal/foo"]; ok {
+		t.Error("an unknown package has a layer entry")
 	}
 	if allowedThirdParty("internal/bridge", "gopkg.in/yaml.v3", false) || !allowedThirdParty("internal/bridge", "sukramj.dev/go-hamqtt/model", false) || allowedThirdParty("internal/bridge", "sukramj.dev/go-hamqtt/discovery", false) {
 		t.Error("third-party list")

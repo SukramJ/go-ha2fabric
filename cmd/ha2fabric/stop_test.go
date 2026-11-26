@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -32,7 +33,7 @@ func restoreSeams(t *testing.T) {
 
 // TestEraseResetFailedKeepsNode (HR-P1-err-61, HR-P1-test-70): a reset
 // that returns without stopping the node — go-fabric's FactoryReset can
-// (node/factory_reset.go:51-55 at v0.25.0) — does not orphan it: the
+// (node/factory_reset.go:51-55 at v0.26.0) — does not orphan it: the
 // daemon stops it before the come-back, so the node comes back on its
 // port. The erase answers the reset's error.
 func TestEraseResetFailedKeepsNode(t *testing.T) {
@@ -80,7 +81,12 @@ func TestStatusDuringErase(t *testing.T) {
 	restoreSeams(t)
 	env, web := eraseEnv(t)
 	d := startDaemon(t, env, web)
+	// The seam signals its entry, so the read below runs while the
+	// come-back is inside it (HR-P3-test-11), not after a guessed sleep.
+	entered := make(chan struct{})
+	var once sync.Once
 	newNode = func(ctx context.Context, c node.Config) (*node.Node, error) {
+		once.Do(func() { close(entered) })
 		time.Sleep(2 * time.Second)
 		return node.New(ctx, c)
 	}
@@ -89,7 +95,11 @@ func TestStatusDuringErase(t *testing.T) {
 		code, _ := d.call(http.MethodPost, "/api/v1/node/maintenance/erase", eraseBody)
 		erased <- code
 	}()
-	time.Sleep(500 * time.Millisecond)
+	select {
+	case <-entered:
+	case <-time.After(30 * time.Second):
+		t.Fatal("the erase did not reach the come-back")
+	}
 	began := time.Now()
 	code, _ := d.call(http.MethodGet, "/api/v1/node/status", "")
 	if took := time.Since(began); code != http.StatusOK || took > time.Second {
@@ -113,7 +123,10 @@ func TestStopWithinBudget(t *testing.T) {
 	release := make(chan struct{})
 	timer := time.AfterFunc(12*time.Second, func() { close(release) })
 	t.Cleanup(func() { timer.Stop() })
+	entered := make(chan struct{})
+	var once sync.Once
 	factoryReset = func(n *node.Node, ctx context.Context) error {
+		once.Do(func() { close(entered) })
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -122,7 +135,12 @@ func TestStopWithinBudget(t *testing.T) {
 		return errors.New("released")
 	}
 	go func() { _, _ = d.call(http.MethodPost, "/api/v1/node/maintenance/erase", eraseBody) }()
-	time.Sleep(500 * time.Millisecond)
+	// The stop comes while the erase is inside its reset (HR-P3-test-11).
+	select {
+	case <-entered:
+	case <-time.After(30 * time.Second):
+		t.Fatal("the erase did not reach the reset")
+	}
 	began := time.Now()
 	d.cancel()
 	d.cancel = nil

@@ -9,13 +9,19 @@
 //
 // Usage: go run ./script/coverfloor FILE
 //
-// The floors are a ratchet: raise one in the commit that raises the
-// coverage, never lower one without a reason in that commit.
+// The floors are a ratchet, and the check holds it both ways: a package
+// below its floor fails, a floor more than staleFloorSlack points under
+// the measurement fails (it has stopped detecting a regression of that
+// size), and a package with statements and no floor fails. Raise a floor
+// in the commit that raises the coverage, to the whole percent below the
+// lowest of two runs; never lower one without a reason in that commit.
 package main
 
 import (
 	"bufio"
 	"fmt"
+	"io"
+	"math"
 	"os"
 	"path"
 	"sort"
@@ -24,6 +30,15 @@ import (
 )
 
 const module = "thingfabric.dev/go-ha2fabric/"
+
+// staleFloorSlack is how far a measurement may sit above its floor, as
+// go-fabric's script/coverfloor/main.go:73-81 at v0.26.0
+// (staleFloorSlack; review HR-P3-test-01): beyond it a regression of that many
+// points passes. Three points hold the run-to-run spread (0.3-0.5 points
+// measured here) of a floor at the whole percent below the lowest run. A
+// zero floor has no slack: a package at 0 that measures anything has
+// gained tested code and needs a real floor.
+const staleFloorSlack = 3.0
 
 type block struct {
 	stmts   int
@@ -45,6 +60,14 @@ func main() {
 		fmt.Fprintln(os.Stderr, "coverfloor:", err)
 		os.Exit(2)
 	}
+	if !check(os.Stdout, blocks, floors) {
+		os.Exit(1)
+	}
+}
+
+// check writes one line per package and every problem to w, and reports
+// whether there was none.
+func check(w io.Writer, blocks map[string]block, floors map[string]float64) bool {
 	total, covered := map[string]int{}, map[string]int{}
 	for key, b := range blocks {
 		pkg := path.Dir(strings.TrimPrefix(key[:strings.IndexByte(key, ':')], module))
@@ -58,25 +81,47 @@ func main() {
 		pkgs = append(pkgs, p)
 	}
 	sort.Strings(pkgs)
-	failed := false
+	var problems []string
 	for _, p := range pkgs {
-		pct := 100 * float64(covered[p]) / float64(max(total[p], 1))
+		if total[p] == 0 {
+			continue
+		}
+		pct := 100 * float64(covered[p]) / float64(total[p])
 		floor, ok := floors[p]
 		mark := "  "
-		if ok && pct+1e-9 < floor {
-			mark, failed = "✗ ", true
+		switch {
+		case !ok:
+			mark = "✗ "
+			problems = append(problems, fmt.Sprintf("%s has %d statements and no floor: add \"%s %.0f\" to script/coverfloor/floors.txt", p, total[p], p, math.Floor(pct)))
+		case pct+1e-9 < floor:
+			mark = "✗ "
+			problems = append(problems, fmt.Sprintf("%s: %.1f%% < floor %.1f%%: restore the coverage, or lower the floor deliberately and say why", p, pct, floor))
+		default:
+			slack := staleFloorSlack
+			if floor == 0 {
+				slack = 0
+			}
+			if pct-floor > slack+1e-9 {
+				mark = "✗ "
+				problems = append(problems, fmt.Sprintf("%s is %.1f points above its floor (more than %.1f): raise it to %.0f in script/coverfloor/floors.txt to keep the ratchet biting", p, pct-floor, slack, math.Floor(pct)))
+			}
 		}
-		fmt.Printf("%s%-28s %6.1f%%  floor %5.1f%%\n", mark, p, pct, floor)
+		_, _ = fmt.Fprintf(w, "%s%-28s %6.1f%%  floor %5.1f%%\n", mark, p, pct, floor)
 	}
+	stale := make([]string, 0, len(floors))
 	for p := range floors {
-		if _, ok := total[p]; !ok {
-			fmt.Printf("✗ %-28s has a floor but no statements in the profile\n", p)
-			failed = true
+		if total[p] == 0 {
+			stale = append(stale, p)
 		}
 	}
-	if failed {
-		os.Exit(1)
+	sort.Strings(stale)
+	for _, p := range stale {
+		problems = append(problems, p+" has a floor but no statements in the profile: delete the entry, or profile the whole module")
 	}
+	for _, m := range problems {
+		_, _ = fmt.Fprintln(w, "✗", m)
+	}
+	return len(problems) == 0
 }
 
 func readProfile(name string) (map[string]block, error) {

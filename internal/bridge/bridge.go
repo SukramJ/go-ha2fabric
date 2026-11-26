@@ -12,7 +12,7 @@
 // (internal/exposure).
 //
 // It follows go-fabric's cookbook "Embed in a daemon"
-// (docs/guides/embed-in-a-daemon.md at v0.11.0): one aggregator batch for
+// (docs/guides/embed-in-a-daemon.md at v0.26.0): one aggregator batch for
 // the whole exposed set at start and on every registry change (§4),
 // states to attributes through the plan's typed Sets (§5), reachability
 // from each entity's availability and from the Home Assistant connection

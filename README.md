@@ -20,9 +20,9 @@ Twin of [`go-hamapping`](https://github.com/SukramJ/go-hamapping); both are buil
 setup (pure Go, `CGO_ENABLED=0`, Apache-2.0 with a contributor licence
 agreement, the same guards in CI).
 
-> **Status: 0.7.0.** The daemon and its Home Assistant add-on run, with
-> cameras as an opt-in (brief R6); a real
-> pairing with Apple Home is the owner's manual step before the release is
+> **Status: 0.7.0, released.** The daemon and its Home Assistant add-on
+> run. Cameras stay an opt-in (brief R6) until a real pairing with Apple
+> Home has passed, which is also the owner's step before the project is
 > announced. The design is in [`CONCEPT.md`](CONCEPT.md).
 
 ## Why "Matter" is not in the name
@@ -33,7 +33,8 @@ device, is reserved to Alliance members and certified products under the
 *Connectivity Standards Alliance Trademark and Logo Usage Guidelines and
 Terms* (<https://csa-iot.org/resources/governing-documents/>; the terms are
 restated in go-fabric's
-[`licenses/NOTICE-matter.js.txt`](https://github.com/thingfabric/go-fabric/blob/main/licenses/NOTICE-matter.js.txt):
+[`licenses/NOTICE-matter.js.txt`](https://github.com/thingfabric/go-fabric/blob/v0.26.0/licenses/NOTICE-matter.js.txt)
+at v0.26.0, shipped in this project's `licenses/` tree:
 "Only the Alliance and its members may use Alliance trademarks and logos,
 including, without limitation, the Matter trademarks and logos"). This
 project is neither, so the mark is not part of its name; the word appears
@@ -47,11 +48,14 @@ See go-fabric's README, section "Not certified".
 
 - **One bridge for every exposed entity.** Each Home Assistant device
   becomes bridged endpoints of one go-fabric node; go-hamapping decides the
-  device types and clusters: lights (on/off, dimmable, colour temperature,
-  extended colour), switches, sensors (temperature, humidity, pressure,
-  illuminance, power, voltage, current, energy, with a device's battery on
-  its main endpoint), binary sensors (contact, motion, occupancy, water
-  leak, smoke, carbon monoxide), covers, climate, locks and fans.
+  device types and clusters ([go-hamapping v0.8.0](https://github.com/SukramJ/go-hamapping/blob/v0.8.0/docs/rows.md)): lights (on/off, dimmable, colour
+  temperature, extended colour), switches, scenes, scripts, automations
+  and buttons, sensors (temperature, humidity, pressure, illuminance,
+  power, voltage, current, energy, air quality and more, with a device's
+  battery on its main endpoint), binary sensors (contact, motion,
+  occupancy, water leak, freeze, smoke, carbon monoxide), covers, climate,
+  locks, fans, media players, vacuums, valves, water heaters, selects,
+  events and, opt-in, cameras.
 - **Several nodes, one per ecosystem.** Beside the configured node the
   web UI creates further nodes — one for Apple Home, one for Alexa —
   each with its own port, pairing code, store and entity selection, on
@@ -72,7 +76,9 @@ See go-fabric's README, section "Not certified".
   overrides. `--dump-plan` prints the same table. The terms the pages use
   are defined in go-fabric's [glossary](https://docs.thingfabric.dev/reference/glossary/).
 - **Pure Go**, `CGO_ENABLED=0`: a static binary, a distroless image, a Home
-  Assistant add-on for amd64, aarch64 and armv7.
+  Assistant add-on for amd64 and aarch64 (no armv7 after 0.7.0: Home
+  Assistant publishes no armv7 base image any more; the release archives
+  and the plain image still cover linux/arm/v7).
 
 ## The exposure rule
 
@@ -124,6 +130,15 @@ docker run --network host -v ha2fabric:/data \
   ghcr.io/thingfabric/go-ha2fabric
 ```
 
+The images moved with 0.7.0: `ghcr.io/sukramj/go-ha2fabric` and
+`ghcr.io/sukramj/go-ha2fabric-addon-<arch>` stay at 0.6.3 and receive no
+update; pull `ghcr.io/thingfabric/go-ha2fabric`. From the release after
+0.7.0, the archives and images carry a build provenance and an SBOM attestation
+(`gh attestation verify oci://ghcr.io/thingfabric/go-ha2fabric:<version> -R thingfabric/go-ha2fabric`;
+for an archive, its file instead of the `oci://` reference) and the
+licence texts of everything linked (`licenses/`, in the images
+`/usr/share/doc/go-ha2fabric/`).
+
 The image's web UI listens on loopback (`127.0.0.1:8099`); to reach it from
 another machine add `-e WEB_LISTEN=0.0.0.0:8099`, and with `WEB_ADMIN=true`
 also `-e WEB_ALLOW=<the administrators' addresses>`
@@ -166,6 +181,7 @@ environment only and never logged or stored.
 | `INCLUDE`, `EXCLUDE` | empty | Entity ids or globs. |
 | `INCLUDE_LABELS`, `EXCLUDE_LABELS` | empty | Home Assistant labels, by name or id (comma- or newline-separated). |
 | `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error`. |
+| `NODE_LIMIT` | `8` | How many nodes the web UI may create beside the configured one, 0 to 32 ([`docs/operations.md`](docs/operations.md#nodes)). |
 | `WEB_LISTEN` | `127.0.0.1:8099` | The web UI; empty disables it. |
 | `WEB_ALLOW` | empty (all) | Client addresses (IP addresses) the web UI serves. An address filter, not authentication. |
 | `WEB_ALLOWED_HOSTS` | empty | Stand-alone: DNS names the web UI answers under besides `localhost` and IP addresses (comma-separated host names, no port). The add-on needs none. |
@@ -177,7 +193,7 @@ the token's role, logs, health, pairing, Erase and a factory reset.
 ## Development
 
 ```sh
-make build     # go build ./... (the daemon's main is a placeholder until the first release)
+make build     # go build ./... and the daemon into bin/
 make test      # go test -count=1 ./...
 make race      # go test -race (CGO_ENABLED=1 for this run only)
 make lint      # gofumpt + golangci-lint + go mod tidy -diff
@@ -189,8 +205,10 @@ make release                  # the release dry run into dist/
 
 The guards, the tool versions and the workflow files follow the sibling
 repositories. `internal/arch` holds the import rule: go-fabric's facade
-(`node`, `device`, `contract`, `eligibility`, the `<cluster>def` packages)
-and nothing below it. The tests run against a fake Home Assistant built
+(`node`, `device`, `contract`, `eligibility`, `logring`, the `<cluster>def`
+packages under `cluster/spec/`) and nothing below it; the camera host
+alone also `cluster/camera`, and the pure core (`internal/plan`) not even
+`node`. The tests run against a fake Home Assistant built
 from recorded WebSocket fixtures (`testdata/ha/`) and go-fabric's in-process
 controller (`fabrictest`); no live Home Assistant in CI.
 

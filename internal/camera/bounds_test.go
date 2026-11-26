@@ -113,7 +113,10 @@ func TestIdleSessionEvictedAtTheBound(t *testing.T) {
 // TestQuietSessionStays (decision 31): a session has no idle end of its
 // own — once the peer connection stands a live view signals nothing, and
 // go-fabric's node ends a lost controller's sessions through EndSession.
-// Below the bound a session idle beyond EvictIdle stays.
+// Below the bound a session idle beyond EvictIdle stays. It holds that
+// half only: it watches for 100 ms, so it does not see an idle timer of
+// an hour return (HR-P3-test-03, accepted: no clock seam for a timer
+// that no longer exists).
 func TestQuietSessionStays(t *testing.T) {
 	up := &upstream{script: func(s *stream) {
 		s.push(session("01HA"))

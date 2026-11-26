@@ -9,6 +9,11 @@ this page is the daemon's version. Terms such as fabric, commissioning
 window, bridged node and served surface are defined in go-fabric's
 [glossary](https://docs.thingfabric.dev/reference/glossary/).
 
+Platforms: the release archives and the plain image for linux amd64,
+arm64 and arm/v7; the add-on for amd64 and aarch64 only, since Home
+Assistant publishes no armv7 base image after `3.22-2025.11.1` (an armv7
+add-on installation stays at 0.7.0).
+
 ## Files
 
 The daemon keeps two files for its configured node: the node's SQLite
@@ -111,7 +116,7 @@ again on every connection.
 | --- | --- | --- |
 | UDP `LISTEN` | `:5540` | Every Matter message. The add-on's `port` option sets it; change it when another Matter node on the same host uses 5540. |
 | UDP each node's `listen` | the next free port above `LISTEN`'s | A node created in the web UI (Nodes, below); the add-on's host networking needs no mapping. |
-| TCP `LISTEN` | off; on with `CAMERA` | Matter over TCP on the same port, for a camera's signals (Cameras, below; go-fabric `docs/guides/operations.md:54, 58` at v0.15.5). |
+| TCP `LISTEN` | off; on with `CAMERA` | Matter over TCP on the same port, for a camera's signals (Cameras, below; go-fabric `docs/guides/operations.md:72, 76` at v0.26.0). |
 | UDP 5353, `224.0.0.251`, `ff02::fb` | — | mDNS, below. |
 | IPv6 on the LAN | required | Matter's operational network is IPv6. |
 | TCP `WEB_LISTEN` | `127.0.0.1:8099`, the image's too; add-on `0.0.0.0:8486` | The web UI. Empty disables it. The image keeps it on loopback: `-e WEB_LISTEN=0.0.0.0:8099` (with `WEB_ALLOW` for `WEB_ADMIN`) opens it to the network. Reached by a DNS name, the name must be in `WEB_ALLOWED_HOSTS` (The web UI, below). |
@@ -128,7 +133,13 @@ Assistant's Ingress requires that only its proxy reaches it
 `WEB_ALLOW=172.30.32.2` and the daemon refuses every other client with 403.
 In add-on mode (`SUPERVISOR_TOKEN` set) the daemon holds that itself:
 `WEB_ALLOW` defaults to `172.30.32.2`, and any other value is refused at
-start. Stand-alone, `WEB_ALLOW` takes any list of client addresses. A
+start. The add-on also binds the web UI to the address the Supervisor
+gives it (`ip_address` of `GET /addons/self/info`, the Supervisor
+network's gateway, where the Ingress proxy connects), read at start
+(`ha2fabric.web_listen` in Logs); when it cannot read it, the web UI
+listens on every interface as before, with that line at warn. The bind
+takes the listener off the addresses the LAN reaches; the client filter
+stays either way. Stand-alone, `WEB_ALLOW` takes any list of client addresses. A
 peer on the LAN that forges the source address `172.30.32.2` cannot
 complete a connection: that address is on the Supervisor's internal
 network (`172.30.32.0/23`), so the host sends its answer there and not
@@ -177,7 +188,7 @@ The daemon reaches Home Assistant as an administrator:
 - **Stand-alone** with `HA_TOKEN`, a long-lived access token created on a
   Home Assistant user's profile (Security tab). The user needs to be an
   administrator: `homeassistant/expose_entity/list` is an administrator's
-  command (`homeassistant/exposed_entities.py:414-418` at 2026.10.3); the
+  command (`homeassistant/exposed_entities.py:417-423` at 2026.10.3); the
   three events are on the subscribe allowlist
   (`auth/permissions/events.py:30-49`).
 
@@ -264,6 +275,7 @@ The lines to know:
 | `ha2fabric.passcode_test_value` | warn | `PASSCODE` is the public test value 20202021 (Pairing). |
 | `ha2fabric.token_in_clear` | warn | `HA_URL` is `ws://` to a host that is neither loopback nor the Supervisor (`host`; The token). |
 | `ha2fabric.supervisor` | info, warn | Add-on: the Supervisor's `version` and whether the web UI has an `admin` (2026.10.4 or later; a pre-release of 2026.10.4 counts as older); at warn when it is older; read again every 10 minutes (`recheck_in`), also once it passed: a Supervisor downgraded below 2026.10.4 takes the administrator away again. Logged when the version or the verdict changes. |
+| `ha2fabric.web_listen` | info, warn | Add-on: the web UI's address, the Supervisor's address of the add-on (`listen`); at warn when it was not read (`error`) and the web UI listens on every interface (Ports and addresses). |
 | `ha2fabric.supervisor_unreadable` | warn, then debug | Add-on: `GET /info` failed (`error`); retried every 30 s, every 10 minutes once a version was read; until a version is read the web UI is the status page only, and a gate that passed stays open. |
 | `ha2fabric.node_erased` | info | A node was erased in the web UI (`node=<key>` for a registry node): `fabrics_removed`, `elapsed`; the node comes back next, with `ha2fabric.fabrics count=0` and `ha2fabric.pairing`. At warn with `error` when the reset failed part-way. |
 | `ha2fabric.node_limit` | warn | At start: `nodes.json` holds more nodes (`nodes`) than `NODE_LIMIT` (`limit`) allows; all start, the web UI creates no more (Nodes). |
@@ -374,8 +386,8 @@ With `CAMERA=true` (the add-on option `camera`) a camera entity with the
 Camera (device type 0x0142) through go-hamapping's camera row; a camera
 without it stays unmapped. The option is **off by default**: go-fabric's
 ecosystem gate keeps camera clusters out of host devices until a live test
-with Apple Home has passed (go-fabric `docs/guides/camera.md:414-425` at
-v0.15.5), and the daemon follows it until that test is recorded.
+with Apple Home has passed (go-fabric `docs/guides/camera.md:577-599` at
+v0.26.0), and the daemon follows it until that test is recorded.
 
 What the daemon does — signalling only:
 
@@ -396,7 +408,8 @@ What the daemon does — signalling only:
 
 **TCP.** A signal carries an SDP, which rarely fits one UDP message (1178
 bytes of payload); go-fabric sends it over the controller's TCP session
-and refuses it on a UDP session (go-fabric `docs/guides/camera.md:121-128`).
+and refuses it on a UDP session (go-fabric `docs/guides/camera.md:133-140`
+at v0.26.0).
 With `CAMERA` on, the node therefore accepts Matter over TCP on its port;
 let TCP 5540 through a firewall. A controller that reached the bridge over
 UDP cannot receive the answer: the log says `camera.signal_too_large` and
@@ -475,6 +488,31 @@ mode (every request carries a per-process token the page reads from
 `/api/v1/node/status`, so anyone who can reach the port is the
 administrator). Stand-alone without `WEB_ADMIN` the UI is the status page
 only.
+
+**Co-installed add-ons.** In the add-on the administrator is told apart
+by the source address of the Ingress proxy, `172.30.32.2`, alone: the
+groups header and the Supervisor's version describe a request the
+Supervisor really sent, and nothing the Supervisor forwards is a secret
+the add-on could verify (the header is a plain value; the Ingress session
+is the Supervisor's to check, and the add-on has no call that checks it,
+Supervisor `supervisor/api/ingress.py:181-183` at `fe91b8db`). Every other add-on on the same Home Assistant runs on the
+same Supervisor network (`hassio`, `172.30.32.0/23`), sharing its layer 2
+with the proxy, and the Supervisor leaves add-ons the `NET_RAW`
+capability unless a feature flag that is off by default drops it
+(`supervisor/docker/app.py:402-407` at `fe91b8db`: "NET_RAW allows ARP and
+MAC spoofing on the shared internal network"). With it, such an add-on
+can claim the proxy's address: on a real Home Assistant OS the
+interception of that address was observed; a complete forged exchange
+with the web UI was not run on a live system. An add-on that succeeds is
+the web UI's administrator — the pairing codes (a fabric of its own, and
+with it the exposed entities), the selection, erase, the nodes and the
+log — and the daemon cannot tell its requests from the proxy's. The bind
+to the Supervisor's address (Ports and addresses) takes the listener off
+the LAN's addresses; it does not stop an add-on on the Supervisor network.
+What the operator can do: install only add-ons trusted as much as a Home
+Assistant administrator (one with `homeassistant_api`, or `hassio_api`
+with a role above `default`, reaches Home Assistant itself without this), and check the Fabrics page for a controller
+nobody paired — removing it ends that controller's access.
 
 `WEB_ADMIN=true` on a `WEB_LISTEN` that is not a loopback address
 (`0.0.0.0:8099`, for example) is refused at start (exit 2) unless

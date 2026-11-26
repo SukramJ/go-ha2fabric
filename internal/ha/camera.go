@@ -80,9 +80,9 @@ var (
 )
 
 // DefaultImageLimit bounds a still: go-fabric's large-message bound of
-// 64000 bytes (secure/sessionparams/sessionparams.go:44 at v0.15.5), of
+// 64000 bytes (secure/sessionparams/sessionparams.go:44 at v0.26.0), of
 // which its snapshot bound is the image's share, 100 bytes less
-// (cluster/camera/avstream.go:77-83). An image between the two reaches
+// (cluster/camera/avstream.go:79-85 at v0.26.0). An image between the two reaches
 // the kit, which answers RESOURCE_EXHAUSTED for it.
 const DefaultImageLimit = 64000
 

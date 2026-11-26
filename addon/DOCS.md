@@ -8,6 +8,10 @@ the add-on shows its verdict for every entity.
 The bridge is **uncertified**: it carries the CSA test vendor and a test
 attestation chain, and a controller may warn when you pair it.
 
+It runs on amd64 and aarch64 (64-bit ARM). There is no armv7 build after
+0.7.0: Home Assistant publishes no armv7 base image any more, so an
+armv7 installation stays at 0.7.0.
+
 ## Quickstart
 
 1. Install the add-on and start it.
@@ -51,13 +55,17 @@ choices win over the lists, never over disabled or hidden, and live in
 settings. The web UI's selection page lists every candidate with its
 labels, what decided and go-hamapping's verdict.
 
-Mapped today: lights (on/off, dimmable, colour temperature, colour),
-switches, sensors (temperature, humidity, pressure, illuminance, power,
-voltage, current, energy; a battery shows on its device's main endpoint),
-binary sensors (door, window, garage door, motion, occupancy, moisture,
-smoke, carbon monoxide), covers, climate (heating, cooling, heat/cool),
-locks and fans. Scenes, media players, areas and a climate's fan or preset
-modes are not mapped.
+Mapped today (the rows of [go-hamapping v0.8.0](https://github.com/SukramJ/go-hamapping/blob/v0.8.0/docs/rows.md)): lights (on/off, dimmable, colour
+temperature, colour), switches, and scenes, scripts, automations and
+buttons as on/off plugs; sensors (temperature, humidity, pressure,
+illuminance, power, voltage, current, energy, frequency, flow, air quality;
+a battery shows on its device's main endpoint), binary sensors (door,
+window, garage door, motion, occupancy, moisture, freeze, smoke, carbon
+monoxide), covers, climate (heating, cooling, heat/cool, an air
+conditioner's fan modes), locks, fans, media players (speakers, TVs),
+vacuums, valves, water heaters, selects, events (as a generic switch) and,
+with the `camera` option, cameras. Areas and a climate's preset modes are
+not mapped; the selection page shows each entity's verdict and reason.
 
 ## Options reference
 
@@ -138,7 +146,11 @@ passes on with every Ingress request. That needs **Supervisor 2026.10.4 or
 later**, which the add-on reads at start; on an older Supervisor, or until
 it has read the version, the web UI shows the status page only, with a
 warning (`supervisor_too_old`, `supervisor_unknown`). Any other Home
-Assistant user sees the status page only.
+Assistant user sees the status page only. The check rests on the address
+of the Supervisor's Ingress proxy, which another add-on on the same Home
+Assistant can claim on the Supervisor's internal network: install only
+add-ons you trust as an administrator, and remove a fabric on the Fabrics
+page that nobody paired ([operations page, "Co-installed add-ons"](https://github.com/thingfabric/go-ha2fabric/blob/main/docs/operations.md#the-web-ui)).
 
 ## More
 

@@ -10,7 +10,10 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
+	"net/netip"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -26,11 +29,21 @@ import (
 // api/root.py:40-44, at fe91b8db).
 const supervisorInfoURL = "http://supervisor/info"
 
+// addonInfoURL is the Supervisor's GET /addons/self/info, which an
+// add-on's token may read without hassio_api (the same bypass,
+// security.py:107-116 at fe91b8db). Its "ip_address" is the address the
+// Ingress proxy connects to (api/ingress.py:125-127, the add-on's
+// ip_address; api/apps.py:308): for a host-network add-on the Supervisor
+// network's gateway (docker/app.py:188-191), on the host's interface
+// "hassio".
+const addonInfoURL = "http://supervisor/addons/self/info"
+
 // minSupervisor is the minimum Supervisor version of the admin check,
 // which reads the Ingress user's groups (web.UserGroupsHeader): 2026.10.4
-// (Supervisor commit 3fbb083b; the header constant is in
-// supervisor/api/ingress.py from that tag on). Below it the add-on's web
-// UI has no administrator.
+// (Supervisor commit 3fbb083b; the header constant is defined in
+// supervisor/const.py, :113 at tag 2026.10.4 and :115 at fe91b8db, and
+// used by supervisor/api/ingress.py; 2026.10.3 lacks it). Below it the
+// add-on's web UI has no administrator.
 var minSupervisor = [3]int{2026, 10, 4}
 
 // minSupervisorText is minSupervisor as the messages name it.
@@ -80,11 +93,11 @@ type supervisorGate struct {
 	since   time.Time
 }
 
-// errSupervisorRedirect refuses a redirect of the gate's request, which
-// carries SUPERVISOR_TOKEN.
-var errSupervisorRedirect = errors.New("supervisor: GET /info answered with a redirect, which is not followed")
+// errSupervisorRedirect refuses a redirect of a request to the Supervisor,
+// which carries SUPERVISOR_TOKEN.
+var errSupervisorRedirect = errors.New("supervisor: the answer is a redirect, which is not followed")
 
-// supervisorClient is the gate's HTTP client: bounded, no redirect
+// supervisorClient is the HTTP client of the Supervisor's API: bounded, no redirect
 // followed and no proxy taken from the environment (HTTP_PROXY), so the
 // Bearer header goes to the Supervisor and nowhere else.
 func supervisorClient() *http.Client {
@@ -178,32 +191,51 @@ func (g *supervisorGate) run(ctx context.Context) {
 
 // read is GET /info's supervisor version.
 func (g *supervisorGate) read(ctx context.Context) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, g.url, http.NoBody)
+	var data struct {
+		Supervisor string `json:"supervisor"`
+	}
+	result, err := supervisorGet(ctx, g.client, g.url, g.token, &data)
 	if err != nil {
 		return "", err
 	}
-	req.Header.Set("Authorization", "Bearer "+g.token)
-	res, err := g.client.Do(req)
+	if result != "ok" || data.Supervisor == "" {
+		return "", fmt.Errorf("supervisor: GET %s without a version (result %q)", urlPath(g.url), result)
+	}
+	return data.Supervisor, nil
+}
+
+// supervisorGet reads one of the Supervisor's API answers: its "result"
+// and its "data" into data.
+func supervisorGet(ctx context.Context, client *http.Client, target, token string, data any) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, http.NoBody)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	res, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("supervisor: %w", err)
 	}
 	defer func() { _ = res.Body.Close() }()
 	if res.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("supervisor: GET /info answered %d", res.StatusCode)
+		return "", fmt.Errorf("supervisor: GET %s answered %d", urlPath(target), res.StatusCode)
 	}
-	var body struct {
+	body := struct {
 		Result string `json:"result"`
-		Data   struct {
-			Supervisor string `json:"supervisor"`
-		} `json:"data"`
-	}
+		Data   any    `json:"data"`
+	}{Data: data}
 	if err := json.NewDecoder(io.LimitReader(res.Body, 1<<20)).Decode(&body); err != nil {
-		return "", fmt.Errorf("supervisor: GET /info: %w", err)
+		return "", fmt.Errorf("supervisor: GET %s: %w", urlPath(target), err)
 	}
-	if body.Result != "ok" || body.Data.Supervisor == "" {
-		return "", fmt.Errorf("supervisor: GET /info without a version (result %q)", body.Result)
+	return body.Result, nil
+}
+
+// urlPath is the path of a Supervisor URL, as the messages name it.
+func urlPath(u string) string {
+	if p, err := url.Parse(u); err == nil && p.Path != "" {
+		return p.Path
 	}
-	return body.Data.Supervisor, nil
+	return u
 }
 
 // Warnings are the gate's while it does not open.
@@ -283,4 +315,70 @@ func atLeast(v string, floor [3]int) bool {
 		}
 	}
 	return !suffix
+}
+
+// Reading the add-on's address at start: a few tries, so a Supervisor
+// still answering its own start does not leave the wide bind for the
+// whole run.
+const (
+	addressTries = 3
+	addressPause = time.Second
+)
+
+// addonAddress is the address the Supervisor gives this add-on
+// (GET /addons/self/info's ip_address): where its Ingress proxy connects.
+// An unspecified address (the Supervisor's "no address") is none.
+func addonAddress(ctx context.Context, client *http.Client, target, token string) (netip.Addr, error) {
+	var data struct {
+		IPAddress string `json:"ip_address"`
+	}
+	result, err := supervisorGet(ctx, client, target, token, &data)
+	if err != nil {
+		return netip.Addr{}, err
+	}
+	if result != "ok" {
+		return netip.Addr{}, fmt.Errorf("supervisor: GET %s answered result %q", urlPath(target), result)
+	}
+	a, err := netip.ParseAddr(data.IPAddress)
+	if err != nil || a.IsUnspecified() {
+		return netip.Addr{}, fmt.Errorf("supervisor: GET %s without an address (ip_address %q)", urlPath(target), data.IPAddress)
+	}
+	return a.Unmap(), nil
+}
+
+// addonWebListen is the web UI's address in the add-on (decision 54 of
+// the 2026-11-23 review): an unspecified host in WEB_LISTEN (the add-on's
+// 0.0.0.0:8486) becomes the address the Supervisor gives the add-on, so
+// the listener is not on the LAN; the port stays. Not found after
+// addressTries, the bind stays as given, with one warning. A host set
+// explicitly stays; the client filter (WEB_ALLOW) holds either way.
+func addonWebListen(ctx context.Context, listen string, read func(context.Context) (netip.Addr, error), pause time.Duration, log *slog.Logger) string {
+	host, port, err := net.SplitHostPort(listen)
+	if err != nil {
+		return listen
+	}
+	if host != "" {
+		if ip, err := netip.ParseAddr(host); err != nil || !ip.IsUnspecified() {
+			return listen
+		}
+	}
+	for try := 1; ; try++ {
+		a, err := read(ctx)
+		if err == nil {
+			addr := net.JoinHostPort(a.String(), port)
+			log.Info("ha2fabric.web_listen", slog.String("listen", addr), slog.String("from", "the Supervisor's address of the add-on"))
+			return addr
+		}
+		if try == addressTries || ctx.Err() != nil {
+			log.Warn("ha2fabric.web_listen", slog.String("listen", listen), slog.String("error", err.Error()),
+				slog.String("hint", "the add-on's address was not read from the Supervisor, so the web UI listens on every interface; it still serves the Ingress proxy only"))
+			return listen
+		}
+		t := time.NewTimer(pause)
+		select {
+		case <-ctx.Done():
+			t.Stop()
+		case <-t.C:
+		}
+	}
 }

@@ -6,10 +6,55 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- The licence and notice texts of everything linked into the daemon —
+  each Go module's, Go's own, go-fabric's `NOTICE` with matter.js's, the
+  npm licences of go-fabric-ui's web bundle — in a generated `licenses/`
+  tree, shipped in the release archives and in both images under
+  `/usr/share/doc/go-ha2fabric/`; CI fails when it is stale
+  (HR-P3-sup-37).
+- Release archives and both images carry a build provenance and an SBOM
+  (CycloneDX) attestation, checkable with `gh attestation verify`; the
+  archives' SBOM is also a release asset (HR-P3-sup-36).
+- `SECURITY.md`: report a vulnerability privately through GitHub's
+  private vulnerability reporting (HR-P3-sup-44).
 
 ### Changed
 
 - Dependencies moved to their vanity import paths: `sukramj.dev/go-ha-catalog` v0.4.0, `sukramj.dev/go-hamapping` v0.8.0, `sukramj.dev/go-hamqtt` v0.41.0.
+- Add-on: the web UI binds to the address the Supervisor gives the add-on
+  (the Supervisor network's gateway, where the Ingress proxy connects),
+  read at start; when it cannot be read, every interface as before, with
+  the warning `ha2fabric.web_listen`. The client filter is unchanged
+  (HR-P0-cfg-27).
+- Add-on: the `label` option is `str(1,32)` in the schema, so the
+  Supervisor's options form refuses an empty or a longer label
+  (HR-P3-cfg-68).
+- Base images are pinned by digest: the add-on's Home Assistant base
+  `3.24-2026.11.1` instead of `latest`; a local add-on build takes
+  `BUILD_ARCH`, not `BUILD_FROM` (HR-P3-sup-34).
+- Images and archives are published only for a tag on `main`; there is no
+  manual image build any more (a published image is never rebuilt, a base
+  update ships as a patch release), and `:latest` moves only with the
+  newest release (HR-P3-sup-32).
+
+### Removed
+
+- **The add-on for armv7.** Home Assistant publishes no armv7 base image
+  after `3.22-2025.11.1`, so the add-on is built for amd64 and aarch64
+  only; an armv7 installation keeps 0.7.0. The release archives and the
+  plain image still cover linux/arm/v7.
+
+### Fixed
+
+- A Home Assistant reply that is not a result with `success` fails its
+  command instead of passing as a success (HR-P3-ha-09).
+- Docs: the add-on's "Mapped today" lists what go-hamapping v0.8.0 maps
+  (scenes, media players, an air conditioner's fan modes and more were
+  listed as not mapped); `THIRD-PARTY-NOTICES.md` names `go.mod`'s
+  modules and versions; the co-installed add-ons an operator should trust
+  (`docs/operations.md`, The web UI).
 
 ## [0.7.0] - 2026-11-25
 
@@ -280,7 +325,7 @@ to reach it from the network, run the image with
   session (HR-P2-conc-60).
 - Camera: Home Assistant's ICE candidates are bounded as the
   controller's are — 256 per session, 1 KiB each — and an event the
-  relay ignores no longer keeps a session from its idle end
+  relay ignores no longer counts as activity for the eviction
   (HR-P2-bound-40).
 - Home Assistant's names, manufacturers, models, versions and serials
   reach the controllers without control and bidirectional control
