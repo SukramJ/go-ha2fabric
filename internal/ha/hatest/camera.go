@@ -265,7 +265,12 @@ func (s *Server) cameraCommand(ctx context.Context, c *conn, id int64, typ strin
 
 // cameraProxy is GET /api/camera_proxy/{entity_id} (camera/__init__.py:
 // 782-838 at 2026.10.3): 401 for a wrong Authorization header, 403
-// without one, 503 for a camera that is off, the image otherwise.
+// without one, 503 for a camera that is off, the image otherwise, with
+// the type its bytes name. It differs from core where no test looks
+// (HR-P4-test-68): core looks the entity up before the authentication
+// and answers 401 for an unknown entity of a request without a header
+// (:784-787), where the fake answers 403 — the client always sends the
+// header.
 func (s *Server) cameraProxy(w http.ResponseWriter, r *http.Request) {
 	entity := r.PathValue("entity_id")
 	if h := r.Header.Get("Authorization"); h != "Bearer "+Token {
@@ -289,7 +294,7 @@ func (s *Server) cameraProxy(w http.ResponseWriter, r *http.Request) {
 	case off:
 		http.Error(w, "503: Service Unavailable", http.StatusServiceUnavailable)
 	default:
-		w.Header().Set("Content-Type", "image/jpeg")
+		w.Header().Set("Content-Type", http.DetectContentType(img))
 		_, _ = w.Write(img)
 	}
 }

@@ -124,7 +124,7 @@ type flight struct {
 // NewSnapshots returns the shared reader of src.
 func NewSnapshots(src Source) *Snapshots { return &Snapshots{src: src} }
 
-// Read returns a snapshot read that began at or after since, with the
+// Read returns a snapshot read that began after since, with the
 // exposure list when assist is set (ReadSnapshot). The read runs detached
 // from ctx, as the others that join it need it; ctx ends only this
 // caller's wait.
@@ -132,7 +132,10 @@ func (s *Snapshots) Read(ctx context.Context, since time.Time, assist bool) (*Sn
 	s.mu.Lock()
 	var f *flight
 	for _, c := range s.last[b2i(assist):] {
-		if c != nil && !c.began.Before(since) {
+		// After, not at: a read sent in the trigger's clock tick may have
+		// left before the event arrived (HR-P4-conc-69); an equal time
+		// costs one read more, never a stale one.
+		if c != nil && c.began.After(since) {
 			f = c
 			break
 		}

@@ -37,6 +37,10 @@ import (
 // Token is the access token the fake accepts.
 const Token = "hatest-token"
 
+// matchAll is core's MATCH_ALL, the event type of a subscription to
+// every event.
+const matchAll = "*"
+
 // Server is the fake. Its methods are safe for concurrent use.
 type Server struct {
 	t   testing.TB
@@ -270,11 +274,16 @@ func (s *Server) command(ctx context.Context, c *conn, id int64, cmd map[string]
 	case "get_states":
 		result = clone(s.states)
 	case "get_config":
-		result = s.config
+		result = clone(s.config)
 	case "homeassistant/expose_entity/list":
-		result = map[string]any{"exposed_entities": s.exposed}
+		result = clone(map[string]any{"exposed_entities": s.exposed})
 	case "subscribe_events":
+		// Without an event type every event (MATCH_ALL,
+		// websocket_api/commands.py:185 at 2026.10.3; HR-P4-test-68).
 		et, _ := cmd["event_type"].(string)
+		if et == "" {
+			et = matchAll
+		}
 		c.mu.Lock()
 		c.subs[et] = append(c.subs[et], id)
 		c.mu.Unlock()
@@ -355,6 +364,9 @@ func (s *Server) fire(eventType string, data any) {
 		"context":    map[string]any{"id": "01JBEVENT", "parent_id": nil, "user_id": nil},
 	}
 	s.mu.Lock()
+	// A copy made under the lock: data may hold the fake's live maps
+	// (SetState's new state), which a later write changes (HR-P4-test-61).
+	ev["data"] = clone(data)
 	conns := make([]*conn, 0, len(s.conns))
 	for c := range s.conns {
 		conns = append(conns, c)
@@ -362,7 +374,7 @@ func (s *Server) fire(eventType string, data any) {
 	s.mu.Unlock()
 	for _, c := range conns {
 		c.mu.Lock()
-		ids := slices.Clone(c.subs[eventType])
+		ids := slices.Concat(c.subs[eventType], c.subs[matchAll])
 		c.mu.Unlock()
 		for _, id := range ids {
 			c.send(context.Background(), map[string]any{"id": id, "type": "event", "event": ev})
@@ -610,19 +622,23 @@ func (s *Server) Calls() []ha.ServiceCall {
 	return slices.Clone(s.calls)
 }
 
-// WaitCall waits for a call that match accepts.
+// WaitCall waits for a call that match accepts, the calls made before
+// it included. It reads every call from Calls in order; the call channel
+// only wakes it, so no call is missed however many came (HR-P4-test-68).
 func (s *Server) WaitCall(ctx context.Context, match func(ha.ServiceCall) bool) (ha.ServiceCall, error) {
-	for _, c := range s.Calls() {
-		if match(c) {
-			return c, nil
-		}
-	}
+	seen := 0
+	t := time.NewTicker(20 * time.Millisecond)
+	defer t.Stop()
 	for {
-		select {
-		case c := <-s.callCh:
-			if match(c) {
-				return c, nil
+		calls := s.Calls()
+		for ; seen < len(calls); seen++ {
+			if match(calls[seen]) {
+				return calls[seen], nil
 			}
+		}
+		select {
+		case <-s.callCh:
+		case <-t.C:
 		case <-ctx.Done():
 			return ha.ServiceCall{}, errors.Join(ctx.Err(), errors.New("hatest: no matching call_service"))
 		}
