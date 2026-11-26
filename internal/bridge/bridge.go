@@ -119,6 +119,24 @@ type group struct {
 	keys     []device.SourceKey
 	// cameras are the entities whose camera host the build attached.
 	cameras map[string]bool
+	// stale are the entities whose endpoint's Replace go-fabric refused
+	// (decision 73, HR-P4-err-40): the node still serves the device of an
+	// earlier group under the key, so that group's plan stays live for
+	// them — states, reachability, commands and the read model's endpoint
+	// — until a later batch applies the Replace. Each maps to that group.
+	stale map[string]*group
+	// served are the devices the node serves under the refused keys, for
+	// unreachable.
+	served []*device.Device
+}
+
+// live is the group whose plan serves entity id: g, or the earlier group
+// whose device the node still serves after a refused Replace.
+func (g *group) live(id string) *group {
+	if s := g.stale[id]; s != nil {
+		return s
+	}
+	return g
 }
 
 // built is g as plan.Diff reads it: its signature and its endpoints with
@@ -280,9 +298,7 @@ func (b *Bridge) Run(ctx context.Context) error {
 				b.timer.Stop()
 			}
 			b.mu.Unlock()
-			for _, g := range b.groups {
-				g.plan.Close()
-			}
+			b.closePlans(nil)
 			b.closeAll(ctx)
 			return nil
 		case fn := <-b.work:
@@ -360,6 +376,11 @@ func (b *Bridge) unreachable(ctx context.Context) {
 					key = g.keys[i].String()
 				}
 				b.log.Debug("bridge.unreachable", slog.String("key", key), slog.String("error", err.Error()))
+			}
+		}
+		for _, d := range g.served {
+			if err := d.SetReachable(ctx, false); err != nil {
+				b.log.Debug("bridge.unreachable", slog.String("error", err.Error()))
 			}
 		}
 	}
@@ -718,9 +739,7 @@ func (b *Bridge) syncConnected(ctx context.Context, since time.Time) error {
 	for _, k := range slices.Sorted(maps.Keys(ch.Forgotten)) {
 		b.log.Info("bridge.forget", slog.String("entity", ch.Forgotten[k]), slog.String("key", k))
 	}
-	for _, k := range slices.Concat(ch.Replaced, ch.Removed) {
-		b.groups[k].plan.Close()
-	}
+	b.closePlans(next)
 	b.groups = next
 	b.closeCameras(ctx)
 	b.owner = map[string]*group{}
@@ -750,7 +769,7 @@ func (b *Bridge) syncConnected(ctx context.Context, since time.Time) error {
 	}
 	for i := range verdicts {
 		if g := b.owner[verdicts[i].EntityID]; g != nil && g.plan != nil {
-			if d := g.plan.DeviceFor(verdicts[i].EntityID); d != nil {
+			if d := g.live(verdicts[i].EntityID).plan.DeviceFor(verdicts[i].EntityID); d != nil {
 				verdicts[i].Endpoint, _ = d.EndpointNumber()
 			}
 		}
@@ -777,7 +796,7 @@ func (b *Bridge) syncConnected(ctx context.Context, since time.Time) error {
 			continue
 		}
 		for _, e := range g.Entities {
-			if g.plan.DeviceFor(e.Key()) != nil {
+			if g.live(e.Key()).plan.DeviceFor(e.Key()) != nil {
 				serving[e.Key()] = true
 			}
 		}
@@ -821,7 +840,9 @@ func (b *Bridge) syncConnected(ctx context.Context, since time.Time) error {
 // serves its very endpoint under its key; a refused Add's key is not
 // served, so it leaves its group's keys and endpoints; a group with a
 // refused Add or Replace keeps no signature, so the next sync rebuilds it
-// and plan.Diff adds or replaces its keys again. A Forget applied unless
+// and plan.Diff adds or replaces its keys again; until then a refused
+// Replace's entities stay on the plan whose device the node still serves
+// (keepStale, decision 73). A Forget applied unless
 // its call failed or an endpoint still serves its key, itself or as a
 // part (the node's refusal); a Forget not applied is recorded again for
 // the next sync. A failed Remove needs nothing: the node refuses it for a
@@ -893,6 +914,75 @@ func (b *Bridge) settle(ops []plan.Op[*device.Device], errs []error, next map[st
 		cp := *g.Group
 		cp.Sig = ""
 		g.Group, g.keys, g.devices = &cp, keys, devs
+		for _, k := range keys {
+			if refused[k.String()] == plan.Replace {
+				b.keepStale(g, k.String(), byKey[k.String()])
+			}
+		}
+	}
+}
+
+// keepStale keeps the plan live that serves the endpoint the node still
+// serves under key, whose Replace by g's device it refused (decision
+// 73): the earlier group of g's device, or the group it kept stale
+// after an earlier refusal. Its entities on that endpoint — the
+// endpoint's own and its riders — go to that plan, and a camera's host
+// back to the served device's provider.
+func (b *Bridge) keepStale(g *group, key string, ep node.Endpoint) {
+	d, ok := ep.(*device.Device)
+	if !ok || d == nil {
+		return
+	}
+	old := b.groups[g.Key]
+	if old == nil {
+		return
+	}
+	for _, c := range append([]*group{old}, slices.Collect(maps.Values(old.stale))...) {
+		if !slices.Contains(c.devices, d) {
+			continue
+		}
+		for i := range c.plan.Endpoints {
+			ep := &c.plan.Endpoints[i]
+			if ep.Options.StableKey == nil || ep.Options.StableKey.String() != key {
+				continue
+			}
+			if g.stale == nil {
+				g.stale = map[string]*group{}
+			}
+			for _, id := range append([]string{ep.Key}, ep.Riders...) {
+				g.stale[id] = c
+				if h := b.hosts[id]; h != nil && c.cameras[id] {
+					if err := h.AttachDevice(d); err != nil {
+						b.log.Error("bridge.camera_unattached", slog.String("entity", id), slog.String("error", err.Error()))
+					}
+				}
+			}
+			g.served = append(g.served, d)
+			b.log.Warn("bridge.replace_refused", slog.String("key", key), slog.String("entity", ep.Key),
+				slog.String("hint", "the endpoint served stays live on its earlier plan until a sync replaces it"))
+			return
+		}
+	}
+}
+
+// closePlans closes the plans of the groups in b.groups, and of the
+// groups they keep stale, that no group of next uses any more, as its
+// own or kept stale.
+func (b *Bridge) closePlans(next map[string]*group) {
+	used := map[*hamapping.Plan]bool{}
+	for _, g := range next {
+		used[g.plan] = true
+		for _, s := range g.stale {
+			used[s.plan] = true
+		}
+	}
+	for _, g := range b.groups {
+		for _, c := range append([]*group{g}, slices.Collect(maps.Values(g.stale))...) {
+			if c.plan != nil && !used[c.plan] {
+				used[c.plan] = true
+				c.plan.Close()
+			}
+		}
 	}
 }
 
@@ -1091,6 +1181,7 @@ func (b *Bridge) build(ctx context.Context, p *plan.Group) (*group, []hamapping.
 
 // apply carries one entity's current state onto its device.
 func (b *Bridge) apply(ctx context.Context, g *group, id string) {
+	g = g.live(id)
 	if len(g.devices) == 0 {
 		return
 	}
