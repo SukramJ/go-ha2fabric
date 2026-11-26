@@ -103,9 +103,10 @@ today's state until it lands.
   incremental mirror of the registries was rejected: it gives up what a
   full read gives after a reconnect, for a gain nobody has measured.
 - **No Matter types in the adapter.** `internal/adapt` imports nothing of
-  go-fabric. What it knows of Matter today (`command.go:15-16`, `:208-209`,
-  `:276-284`) moves to go-hamapping, where "The mapping" above already
-  places it.
+  go-fabric. What it knows of Matter today (in `internal/adapt/command.go`:
+  the `keypadinputdef` and `levelcontroldef` imports, `levelcontroldef.LevelMax`
+  and the switch over the `keypadinputdef` key codes) moves to go-hamapping,
+  where "The mapping" above already places it.
 - **go-hamapping's own vocabulary.** The `go-*2mqtt` daemons are not planned
   as consumers. go-hamqtt's vocabulary was chosen so that one table serves
   them too (go-hamapping `CONCEPT.md:20-22, 26-29`); without them it is a

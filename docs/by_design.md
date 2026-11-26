@@ -96,9 +96,12 @@ composes it with the device name (`device.ComposeNodeLabel`).
 ## Composition
 
 matter-hub composes devices: user-defined composed entities
-(`services/storage/entity-mapping-storage.ts:227-229`) and, behind
-`autoComposedDevices`, battery, humidity, pressure, power and energy pulled
-onto a device's main entity (`services/bridges/bridge-registry.ts:1032-1105`).
+(`services/storage/entity-mapping-storage.ts:227-229`) and, by default,
+humidity and pressure onto a temperature sensor and power and energy onto
+a switch or light, the battery behind `autoBatteryMapping` or
+`autoComposedDevices` (`services/bridges/bridge-registry.ts:307-312,
+345-350, 446-451, 1040-1106`); `autoComposedDevices` makes them composed
+devices rather than extra clusters on one endpoint (`:314-325`).
 go-ha2fabric composes nothing: go-hamapping's rows decide, one endpoint per
 mapped entity, with riders (a battery) on the device's primary endpoint.
 The table is the one place a device shape is decided.
@@ -119,7 +122,7 @@ alone (`selection-<key>.json`; `docs/operations.md`, Nodes).
 
 A speaker's `volume_level` (0 to 1, `media_player/services.py:182-192` at
 2026.10.3) is LevelControl's CurrentLevel 0 to 254 (go-fabric
-`cluster/spec/levelcontrol/values.go:14-44`, `LevelFromUnit` and
+`cluster/spec/levelcontrol/values.go:14-44` at v0.26.0, `LevelFromUnit` and
 `UnitFromLevel`), as matter-hub maps it
 (`matter/behaviors/speaker-level-control-server.ts:37-40, 55-59, 85-96,
 165-166`). One difference: matter-hub sends `level / 254` as it is;
@@ -136,7 +139,7 @@ plugin it calls experimental (`backend/src/plugins/builtin/camera/camera-plugin.
 (`camera/const.py:71-75` at 2026.10.3) through go-hamapping's camera row,
 but only with `CAMERA=true`, off by default: go-fabric's ecosystem gate
 keeps camera clusters out of host devices until a live test with Apple Home
-has passed (go-fabric `docs/guides/camera.md:414-425` at v0.15.5). The gate
+has passed (go-fabric `docs/guides/camera.md:577-599` at v0.26.0). The gate
 is go-fabric's rule, and a default that breaks it would ship an unverified
 device type to every user.
 
@@ -162,8 +165,8 @@ it does not deliver yet (`backend/src/plugins/builtin/camera/webrtc-provider-ser
 go-ha2fabric refuses it: Home Assistant's WebRTC API takes the client's
 offer only (`camera/webrtc.py:252-258`), so the bridge has no offer of its
 own to give. The refusal carries INVALID_IN_STATE, which go-fabric's kit
-answers as is since `v0.15.6` (`cluster/camera/chime.go:291-299`,
-`spec.CarriesStatus`; go-fabric #356). chip's camera controller
+answers as is since `v0.15.6` (`cluster/camera/chime.go:302-311` at
+v0.26.0, `portError`, `spec.CarriesStatus`; go-fabric #356). chip's camera controller
 starts a live view with `ProvideOffer`
 (`examples/camera-controller/commands/liveview/LiveViewCommands.cpp:40` at
 1dc3b69ed5e), which is served.

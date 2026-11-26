@@ -111,7 +111,7 @@ again on every connection.
 | --- | --- | --- |
 | UDP `LISTEN` | `:5540` | Every Matter message. The add-on's `port` option sets it; change it when another Matter node on the same host uses 5540. |
 | UDP each node's `listen` | the next free port above `LISTEN`'s | A node created in the web UI (Nodes, below); the add-on's host networking needs no mapping. |
-| TCP `LISTEN` | off; on with `CAMERA` | Matter over TCP on the same port, for a camera's signals (Cameras, below; go-fabric `docs/guides/operations.md:54, 58` at v0.15.5). |
+| TCP `LISTEN` | off; on with `CAMERA` | Matter over TCP on the same port, for a camera's signals (Cameras, below; go-fabric `docs/guides/operations.md:72, 76` at v0.26.0). |
 | UDP 5353, `224.0.0.251`, `ff02::fb` | — | mDNS, below. |
 | IPv6 on the LAN | required | Matter's operational network is IPv6. |
 | TCP `WEB_LISTEN` | `127.0.0.1:8099`, the image's too; add-on `0.0.0.0:8486` | The web UI. Empty disables it. The image keeps it on loopback: `-e WEB_LISTEN=0.0.0.0:8099` (with `WEB_ALLOW` for `WEB_ADMIN`) opens it to the network. Reached by a DNS name, the name must be in `WEB_ALLOWED_HOSTS` (The web UI, below). |
@@ -177,7 +177,7 @@ The daemon reaches Home Assistant as an administrator:
 - **Stand-alone** with `HA_TOKEN`, a long-lived access token created on a
   Home Assistant user's profile (Security tab). The user needs to be an
   administrator: `homeassistant/expose_entity/list` is an administrator's
-  command (`homeassistant/exposed_entities.py:414-418` at 2026.10.3); the
+  command (`homeassistant/exposed_entities.py:417-423` at 2026.10.3); the
   three events are on the subscribe allowlist
   (`auth/permissions/events.py:30-49`).
 
@@ -374,8 +374,8 @@ With `CAMERA=true` (the add-on option `camera`) a camera entity with the
 Camera (device type 0x0142) through go-hamapping's camera row; a camera
 without it stays unmapped. The option is **off by default**: go-fabric's
 ecosystem gate keeps camera clusters out of host devices until a live test
-with Apple Home has passed (go-fabric `docs/guides/camera.md:414-425` at
-v0.15.5), and the daemon follows it until that test is recorded.
+with Apple Home has passed (go-fabric `docs/guides/camera.md:577-599` at
+v0.26.0), and the daemon follows it until that test is recorded.
 
 What the daemon does — signalling only:
 
@@ -396,7 +396,8 @@ What the daemon does — signalling only:
 
 **TCP.** A signal carries an SDP, which rarely fits one UDP message (1178
 bytes of payload); go-fabric sends it over the controller's TCP session
-and refuses it on a UDP session (go-fabric `docs/guides/camera.md:121-128`).
+and refuses it on a UDP session (go-fabric `docs/guides/camera.md:133-140`
+at v0.26.0).
 With `CAMERA` on, the node therefore accepts Matter over TCP on its port;
 let TCP 5540 through a firewall. A controller that reached the bridge over
 UDP cannot receive the answer: the log says `camera.signal_too_large` and
