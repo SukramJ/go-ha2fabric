@@ -166,3 +166,16 @@ Baseline of phase 4 run 1: origin/main `c3a9770` (phase 3, #82); the delta
 | 69 | go-fabric v0.27.0 (released 2026-11-26; `make apidiff` clean against v0.26.0, five deprecations, none used here) | **Lifted in phase 4's fix wave**: the reviewers read the code at `c3a9770` (v0.26.0) and name what v0.27.0's *Changed* rows touch here; no deprecated identifier (SA1019); the pre-merge read reads the lift as delta |
 | 70 | The fix wave's scope | **Run 1's rows and the carried test-helper row** (`cmd/ha2fabric/nodes_test.go` `daemon.call` drops the client's error and answers status 0; phase 3's Windows flake); issues #71, #72, #73 stay outside, each its own wave after the review |
 | 71 | A release after phase 4 | **No tag**: phase 4's pull request lands untagged; the owner decides 0.7.1 / 0.8.0 after convergence (the bind's live check and the first attest and SBOM run come with that tag) |
+
+## 2026-11-26, after phase 4 run 1's verification
+
+Run 1: 0 high · 0 medium · 11 low · 14 note (`phase-4-verify.md`); no
+confirmed high or medium, so run 1 is the convergence run (README "Done")
+if the pre-merge read adds none.
+
+| # | Subject | Decision |
+| --- | --- | --- |
+| 72 | HR-P4-bound-20, the camera's eviction at the session cap crosses fabrics | **Fabric-scoped eviction plus a per-fabric share** in the host (half the cap, 4 of 8), otherwise RESOURCE_EXHAUSTED; a go-hamapping issue to pass go-fabric's `MaxSessionsPerFabric` through the camera row, after which the host's share goes; supersedes decision 23's eviction rule |
+| 73 | HR-P4-err-40, a refused Replace leaves the served endpoint without a live plan | **A stale plan for exactly the refused keys**, live until a later batch applies them; completes HR-P1-err-31 |
+| 74 | HR-P4-err-64, a Delete whose stop fails | **Refused** with 500, the record and files kept, a second Delete retries |
+| 75 | Every other row of run 1 | **As the verifier recommends**: cfg-01 `S6_CMD_RECEIVE_SIGNALS=1` with a guard test and the comments and docs (cfg-02's docs line with it); sup-03 the `# syntax=` line dropped and the lint grep extended; sup-04 a lint check that holds the Go version in its four places; test-62 floor 94 and the floors header; sup-70 `gosec` on `cmd/` with one reasoned `nolint`; P's `ErrNoStableKey` probe as a standing guard; adpt-42 a go-fabric issue beside #616, outside the fix wave; every other low and note fixed in phase 4's pull request |
