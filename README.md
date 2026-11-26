@@ -20,9 +20,9 @@ Twin of [`go-hamapping`](https://github.com/SukramJ/go-hamapping); both are buil
 setup (pure Go, `CGO_ENABLED=0`, Apache-2.0 with a contributor licence
 agreement, the same guards in CI).
 
-> **Status: 0.7.0.** The daemon and its Home Assistant add-on run, with
-> cameras as an opt-in (brief R6); a real
-> pairing with Apple Home is the owner's manual step before the release is
+> **Status: 0.7.0, released.** The daemon and its Home Assistant add-on
+> run. Cameras stay an opt-in (brief R6) until a real pairing with Apple
+> Home has passed, which is also the owner's step before the project is
 > announced. The design is in [`CONCEPT.md`](CONCEPT.md).
 
 ## Why "Matter" is not in the name
@@ -47,11 +47,14 @@ See go-fabric's README, section "Not certified".
 
 - **One bridge for every exposed entity.** Each Home Assistant device
   becomes bridged endpoints of one go-fabric node; go-hamapping decides the
-  device types and clusters: lights (on/off, dimmable, colour temperature,
-  extended colour), switches, sensors (temperature, humidity, pressure,
-  illuminance, power, voltage, current, energy, with a device's battery on
-  its main endpoint), binary sensors (contact, motion, occupancy, water
-  leak, smoke, carbon monoxide), covers, climate, locks and fans.
+  device types and clusters ([go-hamapping v0.8.0](https://github.com/SukramJ/go-hamapping/blob/v0.8.0/docs/rows.md)): lights (on/off, dimmable, colour
+  temperature, extended colour), switches, scenes, scripts, automations
+  and buttons, sensors (temperature, humidity, pressure, illuminance,
+  power, voltage, current, energy, air quality and more, with a device's
+  battery on its main endpoint), binary sensors (contact, motion,
+  occupancy, water leak, freeze, smoke, carbon monoxide), covers, climate,
+  locks, fans, media players, vacuums, valves, water heaters, selects,
+  events and, opt-in, cameras.
 - **Several nodes, one per ecosystem.** Beside the configured node the
   web UI creates further nodes — one for Apple Home, one for Alexa —
   each with its own port, pairing code, store and entity selection, on
@@ -166,6 +169,7 @@ environment only and never logged or stored.
 | `INCLUDE`, `EXCLUDE` | empty | Entity ids or globs. |
 | `INCLUDE_LABELS`, `EXCLUDE_LABELS` | empty | Home Assistant labels, by name or id (comma- or newline-separated). |
 | `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error`. |
+| `NODE_LIMIT` | `8` | How many nodes the web UI may create beside the configured one, 0 to 32 ([`docs/operations.md`](docs/operations.md#nodes)). |
 | `WEB_LISTEN` | `127.0.0.1:8099` | The web UI; empty disables it. |
 | `WEB_ALLOW` | empty (all) | Client addresses (IP addresses) the web UI serves. An address filter, not authentication. |
 | `WEB_ALLOWED_HOSTS` | empty | Stand-alone: DNS names the web UI answers under besides `localhost` and IP addresses (comma-separated host names, no port). The add-on needs none. |
@@ -177,7 +181,7 @@ the token's role, logs, health, pairing, Erase and a factory reset.
 ## Development
 
 ```sh
-make build     # go build ./... (the daemon's main is a placeholder until the first release)
+make build     # go build ./... and the daemon into bin/
 make test      # go test -count=1 ./...
 make race      # go test -race (CGO_ENABLED=1 for this run only)
 make lint      # gofumpt + golangci-lint + go mod tidy -diff
@@ -189,8 +193,10 @@ make release                  # the release dry run into dist/
 
 The guards, the tool versions and the workflow files follow the sibling
 repositories. `internal/arch` holds the import rule: go-fabric's facade
-(`node`, `device`, `contract`, `eligibility`, the `<cluster>def` packages)
-and nothing below it. The tests run against a fake Home Assistant built
+(`node`, `device`, `contract`, `eligibility`, `logring`, the `<cluster>def`
+packages under `cluster/spec/`) and nothing below it; the camera host
+alone also `cluster/camera`, and the pure core (`internal/plan`) not even
+`node`. The tests run against a fake Home Assistant built
 from recorded WebSocket fixtures (`testdata/ha/`) and go-fabric's in-process
 controller (`fabrictest`); no live Home Assistant in CI.
 

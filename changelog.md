@@ -280,7 +280,7 @@ to reach it from the network, run the image with
   session (HR-P2-conc-60).
 - Camera: Home Assistant's ICE candidates are bounded as the
   controller's are — 256 per session, 1 KiB each — and an event the
-  relay ignores no longer keeps a session from its idle end
+  relay ignores no longer counts as activity for the eviction
   (HR-P2-bound-40).
 - Home Assistant's names, manufacturers, models, versions and serials
   reach the controllers without control and bidirectional control

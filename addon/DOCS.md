@@ -51,13 +51,17 @@ choices win over the lists, never over disabled or hidden, and live in
 settings. The web UI's selection page lists every candidate with its
 labels, what decided and go-hamapping's verdict.
 
-Mapped today: lights (on/off, dimmable, colour temperature, colour),
-switches, sensors (temperature, humidity, pressure, illuminance, power,
-voltage, current, energy; a battery shows on its device's main endpoint),
-binary sensors (door, window, garage door, motion, occupancy, moisture,
-smoke, carbon monoxide), covers, climate (heating, cooling, heat/cool),
-locks and fans. Scenes, media players, areas and a climate's fan or preset
-modes are not mapped.
+Mapped today (the rows of [go-hamapping v0.8.0](https://github.com/SukramJ/go-hamapping/blob/v0.8.0/docs/rows.md)): lights (on/off, dimmable, colour
+temperature, colour), switches, and scenes, scripts, automations and
+buttons as on/off plugs; sensors (temperature, humidity, pressure,
+illuminance, power, voltage, current, energy, frequency, flow, air quality;
+a battery shows on its device's main endpoint), binary sensors (door,
+window, garage door, motion, occupancy, moisture, freeze, smoke, carbon
+monoxide), covers, climate (heating, cooling, heat/cool, an air
+conditioner's fan modes), locks, fans, media players (speakers, TVs),
+vacuums, valves, water heaters, selects, events (as a generic switch) and,
+with the `camera` option, cameras. Areas and a climate's preset modes are
+not mapped; the selection page shows each entity's verdict and reason.
 
 ## Options reference
 
