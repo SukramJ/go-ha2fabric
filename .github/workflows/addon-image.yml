@@ -8,7 +8,18 @@ name: "Add-on: Build and Push"
 # This is deliberately separate from the distroless daemon image (./Dockerfile,
 # docker-build-push.yml): that image runs the binary directly and has no run.sh
 # to translate add-on options into the daemon's environment, so it is not a valid add-on
-# image. Triggered on tag pushes and via workflow_dispatch.
+# image. Triggered on tag pushes and via workflow_dispatch (a rebuild of a
+# released tag).
+#
+# The gate (decision 58 of the 2026-11-23 review, HR-P3-sup-32): the tagged
+# commit is on main and its version is addon/config.yaml's and
+# internal/version's; a manual run starts from main only and builds an
+# existing tag's own source, never the branch it was started from. The push
+# job runs in the `ghcr` environment. Each image gets a build provenance and
+# an SBOM attestation (decision 62, HR-P3-sup-36), kept in GitHub's
+# attestation store and not pushed to the registry, so the Supervisor still
+# pulls a plain image:
+# `gh attestation verify oci://ghcr.io/thingfabric/go-ha2fabric-addon-amd64:<version> -R thingfabric/go-ha2fabric`.
 # yamllint disable-line rule:truthy
 on:
   push:
@@ -17,108 +28,161 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Image tag to publish (e.g. 1.2.3). Defaults to the resolved git version."
-        required: false
-        default: ""
+        description: "Release tag to rebuild (e.g. 1.2.3 or v1.2.3); its own source is built."
+        required: true
 
 permissions:
   contents: read
-  packages: write
 
 concurrency:
-  group: addon-${{ github.ref }}
+  group: addon-${{ github.ref }}-${{ github.event.inputs.tag }}
   cancel-in-progress: true
 
 env:
   IMAGE: ghcr.io/thingfabric/go-ha2fabric-addon
+  GO_VERSION: "1.27.4"
+  # The SBOM generator, run with `go run` at this version (the Go checksum
+  # database verifies it); Dependabot does not see it — bump by hand.
+  CYCLONEDX_GOMOD_VERSION: "v1.12.0"
 
 jobs:
   build_and_push:
     if: github.repository_owner == 'thingfabric'
     name: addon ${{ matrix.arch }} -> ghcr.io
     runs-on: ubuntu-latest
+    environment: ghcr
+    permissions:
+      contents: read
+      packages: write          # the image
+      id-token: write          # the Sigstore certificate of the attestations
+      attestations: write      # the attestations
+      artifact-metadata: write # the storage record
     strategy:
       fail-fast: false
       matrix:
+        # The base image of each arch is addon/Dockerfile's base-<arch>
+        # stage, pinned by digest there (decision 62, HR-P3-sup-34).
         include:
           - arch: amd64
             platform: linux/amd64
-            base: ghcr.io/home-assistant/amd64-base:latest
+            goarch: amd64
           - arch: aarch64
             platform: linux/arm64
-            base: ghcr.io/home-assistant/aarch64-base:latest
+            goarch: arm64
           - arch: armv7
             platform: linux/arm/v7
-            base: ghcr.io/home-assistant/armv7-base:latest
+            goarch: arm
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-        with:
-          # Fetch full history so git-describe can resolve the version.
-          fetch-depth: 0
-
-      - name: Resolve version + build metadata
+      # The input reaches the shell through env, never expanded into the
+      # script (HR-P3-sup-46).
+      - name: Resolve the release tag
+        id: ref
+        env:
+          INPUT_TAG: ${{ github.event.inputs.tag }}
         run: |
-          INPUT_TAG="${{ github.event.inputs.tag }}"
-          if [ -n "${INPUT_TAG}" ]; then
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+              echo "::error::a manual run starts from main only, not $GITHUB_REF"; exit 1
+            fi
             VERSION="${INPUT_TAG#v}"
-            TAGGED=1
-          elif [ "${GITHUB_REF_TYPE}" = "tag" ]; then
-            VERSION="${GITHUB_REF_NAME#v}"
-            TAGGED=1
           else
-            VERSION="$(git describe --tags --always --dirty 2>/dev/null || echo dev)"
+            VERSION="${GITHUB_REF_NAME#v}"
           fi
-          echo "TAGGED=${TAGGED:-0}" >> "$GITHUB_ENV"
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::not a release version: $VERSION"; exit 1
+          fi
           echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
-          echo "COMMIT=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
-          echo "BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
-          echo "Publishing ${IMAGE}-${{ matrix.arch }}:${VERSION} and :latest"
+          echo "ref=refs/tags/v${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout the release tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ steps.ref.outputs.ref }}
+          fetch-depth: 0
 
       # The Supervisor pulls <image>:<version> with the version of
       # addon/config.yaml, so an image tagged with another version would be
-      # installed under a name its manifest contradicts. Refuse the tag; a
-      # workflow_dispatch without a tag (git describe) is not checked.
-      - name: The tag matches addon/config.yaml and internal/version
-        if: env.TAGGED == '1'
+      # installed under a name its manifest contradicts.
+      - name: The tag is on main and matches addon/config.yaml and internal/version
+        env:
+          ARCH: ${{ matrix.arch }}
         run: |
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          sha=$(git rev-parse HEAD)
+          git merge-base --is-ancestor "$sha" origin/main ||
+            { echo "::error::v$VERSION ($sha) is not on main"; exit 1; }
           addon=$(awk -F'"' '/^version:/{print $2; exit}' addon/config.yaml)
-          test "$addon" = "$VERSION" || { echo "tag $VERSION, addon/config.yaml $addon"; exit 1; }
+          test "$addon" = "$VERSION" || { echo "::error::tag $VERSION, addon/config.yaml $addon"; exit 1; }
           want=$(awk -F'"' '/^[[:space:]]*Version = /{print $2; exit}' internal/version/version.go)
-          test "$want" = "$VERSION" || { echo "tag $VERSION, internal/version $want"; exit 1; }
+          test "$want" = "$VERSION" || { echo "::error::tag $VERSION, internal/version $want"; exit 1; }
+          newest=$(git tag -l 'v*' --sort=-v:refname | head -1)
+          {
+            echo "COMMIT=$(git rev-parse --short HEAD)"
+            echo "BUILD_DATE=$(git show -s --format=%cI HEAD)"
+            if [ "$newest" = "v$VERSION" ]; then
+              echo "TAGS=${IMAGE}-${ARCH}:${VERSION},${IMAGE}-${ARCH}:latest"
+            else
+              echo "TAGS=${IMAGE}-${ARCH}:${VERSION}"
+            fi
+          } >> "$GITHUB_ENV"
+          echo "Publishing ${IMAGE}-${ARCH}:${VERSION} (newest release: $newest)"
+
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: false
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1  # v4
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550  # v4
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push
-        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc  # v7
+        id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           file: ./addon/Dockerfile
           platforms: ${{ matrix.platform }}
           push: true
           # HA Supervisor expects a plain image, not an OCI index with
-          # attestations, so disable provenance/SBOM manifests.
+          # attestations, so no provenance/SBOM manifests in the image; they
+          # are attested below instead.
           provenance: false
+          sbom: false
           build-args: |
-            BUILD_FROM=${{ matrix.base }}
             BUILD_ARCH=${{ matrix.arch }}
             BUILD_VERSION=${{ env.VERSION }}
             VERSION=${{ env.VERSION }}
             COMMIT=${{ env.COMMIT }}
             BUILD_DATE=${{ env.BUILD_DATE }}
-          tags: |
-            ${{ env.IMAGE }}-${{ matrix.arch }}:latest
-            ${{ env.IMAGE }}-${{ matrix.arch }}:${{ env.VERSION }}
-          cache-from: type=gha,scope=addon-${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=addon-${{ matrix.arch }}
+          tags: ${{ env.TAGS }}
+
+      - name: SBOM of the binary (CycloneDX, the modules as linked)
+        env:
+          SBOM_GOARCH: ${{ matrix.goarch }}
+        run: |
+          GOBIN="$RUNNER_TEMP/bin" go install "github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@${CYCLONEDX_GOMOD_VERSION}"
+          CGO_ENABLED=0 GOOS=linux GOARCH="$SBOM_GOARCH" "$RUNNER_TEMP/bin/cyclonedx-gomod" \
+            app -json -licenses -std -main cmd/ha2fabric -output sbom.cdx.json .
+
+      - name: Attest build provenance of the image
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE }}-${{ matrix.arch }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+
+      - name: Attest the SBOM of the image
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE }}-${{ matrix.arch }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          sbom-path: sbom.cdx.json

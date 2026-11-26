@@ -4,9 +4,13 @@ name: "Release: Create from Tag"
 # and attaches the archives and SHA256SUMS to a GitHub release whose notes
 # are the changelog.md section. The tag must equal internal/version's
 # Version and addon/config.yaml's version, and changelog.md must have its
-# section: the job refuses the tag otherwise. The images are
-# docker-build-push.yml's and addon-image.yml's. The template is the sibling
-# repositories' release-on-tag.yml (go-zendure2mqtt, go-fabric-server).
+# section: the job refuses the tag otherwise, and it refuses a tag whose
+# commit is not on main (decision 58 of the 2026-11-23 review, HR-P3-sup-32).
+# The archives get a build provenance and an SBOM attestation (decision 62,
+# HR-P3-sup-36): `gh attestation verify <archive> -R thingfabric/go-ha2fabric`.
+# The images are docker-build-push.yml's and addon-image.yml's. The template
+# is the sibling repositories' release-on-tag.yml (go-zendure2mqtt,
+# go-fabric-server).
 # yamllint disable-line rule:truthy
 on:
   push:
@@ -14,7 +18,7 @@ on:
       - 'v*'
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: release-${{ github.ref }}
@@ -22,26 +26,41 @@ concurrency:
 
 env:
   GO_VERSION: "1.27.4"
+  # The SBOM generator, run with `go run` at this version (the Go checksum
+  # database verifies it); Dependabot does not see it — bump by hand.
+  CYCLONEDX_GOMOD_VERSION: "v1.12.0"
 
 jobs:
   create_release:
     if: github.repository_owner == 'thingfabric'
     name: Create GitHub Release (${{ github.ref_name }})
     runs-on: ubuntu-latest
+    permissions:
+      contents: write          # the release and its assets
+      id-token: write          # the Sigstore certificate of the attestations
+      attestations: write      # the attestations
+      artifact-metadata: write # the storage record
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+      - name: The tagged commit is on main
+        run: |
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main ||
+            { echo "::error::tag $GITHUB_REF_NAME ($GITHUB_SHA) is not on main"; exit 1; }
       - name: Determine version from tag
         run: |
           TAG_NAME="${GITHUB_REF_NAME}"
           VERSION="${TAG_NAME#v}"
           echo "TAG_NAME=${TAG_NAME}" >> "$GITHUB_ENV"
           echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
-      - uses: actions/setup-go@v7.1.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version: ${{ env.GO_VERSION }}
-          cache: true
+          # A release builds from a clean module download, not from a cache
+          # another ref wrote (go.sum verifies the modules either way).
+          cache: false
       - name: The tag matches internal/version, addon/config.yaml and changelog.md
         run: |
           want=$(awk -F'"' '/^[[:space:]]*Version = /{print $2; exit}' internal/version/version.go)
@@ -49,6 +68,25 @@ jobs:
           make version-check
       - name: Build release archives + extract notes
         run: make release RELEASE_VERSION="${VERSION}"
+      - name: Every archive carries the licence texts
+        run: |
+          for a in dist/*.tar.gz; do
+            tar -tzf "$a" | grep -q '/licenses/MODULES.txt$' || { echo "::error::$a has no licenses/"; exit 1; }
+          done
+      - name: SBOM of the binary (CycloneDX, the modules as linked)
+        run: |
+          GOBIN="$RUNNER_TEMP/bin" go install "github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@${CYCLONEDX_GOMOD_VERSION}"
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 "$RUNNER_TEMP/bin/cyclonedx-gomod" \
+            app -json -licenses -std -main cmd/ha2fabric -output "dist/go-ha2fabric-${VERSION}.cdx.json" .
+      - name: Attest build provenance of the archives
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: dist/*.tar.gz
+      - name: Attest the SBOM of the archives
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: dist/*.tar.gz
+          sbom-path: dist/go-ha2fabric-${{ env.VERSION }}.cdx.json
       # Releases open with the one-line sponsoring note in
       # .github/SPONSORING.md (as in homematicip_local).
       - name: Prepend sponsoring note
@@ -57,7 +95,7 @@ jobs:
           { cat .github/SPONSORING.md; cat dist/RELEASE_NOTES.md; } > notes.tmp
           mv notes.tmp dist/RELEASE_NOTES.md
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3  # v3
+        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
         with:
           tag_name: ${{ env.TAG_NAME }}
           name: ${{ env.TAG_NAME }}
@@ -66,6 +104,7 @@ jobs:
           prerelease: false
           files: |
             dist/*.tar.gz
+            dist/*.cdx.json
             dist/SHA256SUMS
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
