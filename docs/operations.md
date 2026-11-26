@@ -494,8 +494,8 @@ by the source address of the Ingress proxy, `172.30.32.2`, alone: the
 groups header and the Supervisor's version describe a request the
 Supervisor really sent, and nothing the Supervisor forwards is a secret
 the add-on could verify (the header is a plain value; the Ingress session
-is Home Assistant's to validate, Supervisor `supervisor/api/ingress.py:47-64`
-at `fe91b8db`). Every other add-on on the same Home Assistant runs on the
+is the Supervisor's to check, and the add-on has no call that checks it,
+Supervisor `supervisor/api/ingress.py:181-183` at `fe91b8db`). Every other add-on on the same Home Assistant runs on the
 same Supervisor network (`hassio`, `172.30.32.0/23`), sharing its layer 2
 with the proxy, and the Supervisor leaves add-ons the `NET_RAW`
 capability unless a feature flag that is off by default drops it
@@ -510,8 +510,8 @@ log — and the daemon cannot tell its requests from the proxy's. The bind
 to the Supervisor's address (Ports and addresses) takes the listener off
 the LAN's addresses; it does not stop an add-on on the Supervisor network.
 What the operator can do: install only add-ons trusted as much as a Home
-Assistant administrator (one with `homeassistant_api` or `hassio_api`
-reaches Home Assistant itself without this), and check the Fabrics page for a controller
+Assistant administrator (one with `homeassistant_api`, or `hassio_api`
+with a role above `default`, reaches Home Assistant itself without this), and check the Fabrics page for a controller
 nobody paired — removing it ends that controller's access.
 
 `WEB_ADMIN=true` on a `WEB_LISTEN` that is not a loopback address

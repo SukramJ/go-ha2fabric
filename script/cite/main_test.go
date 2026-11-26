@@ -173,6 +173,9 @@ func TestRepository(t *testing.T) {
 	}
 	mods, err := loadModules(t.Context())
 	if err != nil {
+		if os.Getenv("CI") != "" {
+			t.Fatal("module cache:", err)
+		}
 		t.Skip("module cache:", err)
 	}
 	root := filepath.Join("..", "..")

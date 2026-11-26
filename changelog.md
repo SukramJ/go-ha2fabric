@@ -28,6 +28,9 @@ All notable changes to this project are documented here. The format follows
   read at start; when it cannot be read, every interface as before, with
   the warning `ha2fabric.web_listen`. The client filter is unchanged
   (HR-P0-cfg-27).
+- Add-on: the `label` option is `str(1,32)` in the schema, so the
+  Supervisor's options form refuses an empty or a longer label
+  (HR-P3-cfg-68).
 - Base images are pinned by digest: the add-on's Home Assistant base
   `3.24-2026.11.1` instead of `latest`; a local add-on build takes
   `BUILD_ARCH`, not `BUILD_FROM` (HR-P3-sup-34).
@@ -45,6 +48,8 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- A Home Assistant reply that is not a result with `success` fails its
+  command instead of passing as a success (HR-P3-ha-09).
 - Docs: the add-on's "Mapped today" lists what go-hamapping v0.8.0 maps
   (scenes, media players, an air conditioner's fan modes and more were
   listed as not mapped); `THIRD-PARTY-NOTICES.md` names `go.mod`'s

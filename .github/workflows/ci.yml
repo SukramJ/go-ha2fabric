@@ -56,6 +56,8 @@ jobs:
           golangci-lint run --timeout=5m ./...
       - name: go.mod tidiness
         run: make tidy-check
+      - name: citations at go.mod's versions
+        run: make cite
       - name: actions by full SHA, base images by digest
         run: |
           bad=$(grep -nE '^[[:space:]]*(- )?uses:' .github/workflows/*.yml |
