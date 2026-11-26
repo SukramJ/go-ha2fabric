@@ -21,6 +21,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"thingfabric.dev/go-fabric/node"
 
@@ -483,6 +484,10 @@ func allowedHost(h string) string {
 		return "has a path; name the host only"
 	case strings.Contains(h, "*"):
 		return "has a wildcard; name each host"
+	case strings.ContainsFunc(h, unicode.IsSpace):
+		// White space the list does not split on (\v, \r, U+00A0, …)
+		// (HR-P4-cfg-05).
+		return "has white space"
 	}
 	return ""
 }
