@@ -564,6 +564,9 @@ type fleet struct {
 	mu      sync.RWMutex
 	members []*member
 	closed  bool
+	// orphans are nodes a Create started and could not record nor stop
+	// (decision 77, HR-P4-err-93): Close stops them; op guards them.
+	orphans []*served
 }
 
 // newFleet starts every node of reg on base; a node that does not start
@@ -681,8 +684,16 @@ func (f *fleet) Create(ctx context.Context, spec fabricui.NodeSpec) (fabricui.No
 		rctx, cancel := rollbackContext(ctx)
 		cerr := s.close(rctx)
 		cancel()
+		if cerr != nil {
+			// The node runs on: its files stay with it, and the daemon's
+			// stop stops it again (decision 77).
+			f.orphans = append(f.orphans, s)
+			f.log.Warn("ha2fabric.node_stop", slog.String("node", rec.Key), slog.String("error", cerr.Error()),
+				slog.String("hint", "the node did not stop after its record failed; the daemon's stop stops it, its files stay"))
+			return fabricui.NodeEntry{}, errors.Join(err, cerr)
+		}
 		_ = f.reg.RemoveFiles(&rec)
-		return fabricui.NodeEntry{}, errors.Join(err, cerr)
+		return fabricui.NodeEntry{}, err
 	}
 	m := &member{rec: rec, s: s}
 	f.mu.Lock()
@@ -881,6 +892,13 @@ func (f *fleet) Close(ctx context.Context) {
 		wg.Go(func() {
 			if err := m.s.close(ctx); err != nil {
 				f.log.Warn("ha2fabric.node_stop", slog.String("node", m.rec.Key), slog.String("error", err.Error()))
+			}
+		})
+	}
+	for _, s := range f.orphans {
+		wg.Go(func() {
+			if err := s.close(ctx); err != nil {
+				f.log.Warn("ha2fabric.node_stop", slog.String("error", err.Error()))
 			}
 		})
 	}

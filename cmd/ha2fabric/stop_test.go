@@ -355,14 +355,53 @@ func TestEraseStopsAnEarlierStaleNode(t *testing.T) {
 	}
 }
 
-// TestCreateRollbackBounded (HR-P4-conc-65): a Create whose record
-// cannot be written stops the started node within a bound, not with the
-// request's context without a deadline.
-func TestCreateRollbackBounded(t *testing.T) {
-	ctx, cancel := rollbackContext(context.Background())
-	defer cancel()
-	dl, ok := ctx.Deadline()
-	if !ok || time.Until(dl) > stopBudget {
-		t.Fatalf("the rollback's context: deadline %v (%v)", dl, ok)
+// TestCreateRollbackStopFails (HR-P4-conc-65, decision 77, HR-P4-err-93):
+// a Create whose record cannot be written stops the started node within
+// the stop budget, not with the request's context without a deadline;
+// when that stop fails, Create answers the error, the node's files stay
+// and the daemon's stop stops the node.
+func TestCreateRollbackStopFails(t *testing.T) {
+	restoreSeams(t)
+	env, web := eraseEnv(t)
+	d := startDaemon(t, env, web)
+	storePath, _ := env("STORE_PATH")
+	dir := filepath.Dir(storePath)
+	if err := os.Mkdir(filepath.Join(dir, "nodes.json"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	var (
+		mu       sync.Mutex
+		first    *node.Node
+		deadline time.Duration
+		stops    = map[*node.Node]int{}
+	)
+	stopNode = func(n *node.Node, ctx context.Context) error {
+		mu.Lock()
+		stops[n]++
+		if first == nil {
+			first = n
+			dl, ok := ctx.Deadline()
+			deadline = time.Hour
+			if ok {
+				deadline = time.Until(dl)
+			}
+			mu.Unlock()
+			return errors.New("the sentinel's stop failed")
+		}
+		mu.Unlock()
+		return n.Stop(ctx)
+	}
+	d.want(http.MethodPost, "/api/v1/nodes", `{"label":"Alexa"}`, http.StatusInternalServerError)
+	if deadline > stopBudget {
+		t.Fatalf("the rollback's stop had %v (or no deadline), want at most %v", deadline, stopBudget)
+	}
+	if m, _ := filepath.Glob(filepath.Join(dir, "*alexa*")); len(m) == 0 {
+		t.Fatal("the files of a node that did not stop were removed")
+	}
+	d.stop()
+	mu.Lock()
+	defer mu.Unlock()
+	if stops[first] != 2 {
+		t.Fatalf("the unstopped node was stopped %d times, want again at the daemon's stop", stops[first])
 	}
 }
