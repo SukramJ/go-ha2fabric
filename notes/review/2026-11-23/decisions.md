@@ -153,3 +153,16 @@ Baseline of phase 3: origin/main `0a47095` (phase 2 `d16f3ab`, the move to
 | 65 | The image workflows' manual rebuild of an existing release tag | **Dropped**: a published image is never rebuilt; a base update ships as a patch release |
 | 66 | A required reviewer on the `ghcr` environment | **No**: `v*` tags and `main` only, and only an admin creates a `v*` tag |
 | 67 | HR-P3-test-15's test seam `buildPlan` in `internal/bridge`; `docs/roadmap.md` in `make cite` | **The seam goes**: a real fixture go-hamapping refuses whole (a shape of go-hamapping #45), else test-15 accepted as a note; the roadmap stays out of `make cite` as history, like `docs/reports/` |
+
+## 2026-11-26, phase 4 start
+
+All roles this plan gives Fable still run on Opus (owner, 2026-11-24).
+Baseline of phase 4 run 1: origin/main `c3a9770` (phase 3, #82); the delta
+`d16f3ab..c3a9770` is read first (`notes/reads/read-review-p4-delta.md`).
+
+| # | Subject | Decision |
+| --- | --- | --- |
+| 68 | The cut of phase 4's runs | **The security unit split upfront** (go-fabric-ui's phase 4 lesson: one security unit covered only part of its scope): S-web, S-ha, P (plan side), D (daemon side), each a full cut with the delta first, and one verifier — five agents, all Opus |
+| 69 | go-fabric v0.27.0 (released 2026-11-26; `make apidiff` clean against v0.26.0, five deprecations, none used here) | **Lifted in phase 4's fix wave**: the reviewers read the code at `c3a9770` (v0.26.0) and name what v0.27.0's *Changed* rows touch here; no deprecated identifier (SA1019); the pre-merge read reads the lift as delta |
+| 70 | The fix wave's scope | **Run 1's rows and the carried test-helper row** (`cmd/ha2fabric/nodes_test.go` `daemon.call` drops the client's error and answers status 0; phase 3's Windows flake); issues #71, #72, #73 stay outside, each its own wave after the review |
+| 71 | A release after phase 4 | **No tag**: phase 4's pull request lands untagged; the owner decides 0.7.1 / 0.8.0 after convergence (the bind's live check and the first attest and SBOM run come with that tag) |
