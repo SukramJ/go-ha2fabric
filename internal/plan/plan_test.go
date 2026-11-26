@@ -113,6 +113,11 @@ func TestCameraOff(t *testing.T) {
 	if !got.Exposed || got.State != "unmappable" || !strings.Contains(got.Reason, "CAMERA") || got.Row != "" {
 		t.Fatalf("camera off %+v", got)
 	}
+	// The full verdict, which the web UI reads, carries the reason too
+	// (HR-P4-err-41).
+	if got.Full.State.String() != "unmappable" || got.Full.Reason != got.Reason {
+		t.Fatalf("camera off, full verdict %+v", got.Full)
+	}
 	if got := byID(plan.Dry(s, plan.Input{Rule: expose.Rule{Include: []string{"camera.porch"}}, Cameras: true, Ports: camera.DryPorts}))["camera.porch"]; strings.Contains(got.Reason, "CAMERA") {
 		t.Fatalf("camera on %+v", got)
 	}
@@ -322,6 +327,9 @@ func TestOversizedUnmappable(t *testing.T) {
 			found++
 			if !v.Exposed || v.State != "unmappable" || v.DeviceType != 0 || !strings.HasPrefix(v.Reason, "state over 256 KiB") || !strings.Contains(v.Reason, "307200 bytes") {
 				t.Errorf("%s: exposed=%v %s dt=%#x %q", v.EntityID, v.Exposed, v.State, v.DeviceType, v.Reason)
+			}
+			if v.Full.State.String() != "unmappable" || v.Full.Reason != v.Reason {
+				t.Errorf("%s: full verdict %+v (HR-P4-err-41)", v.EntityID, v.Full)
 			}
 		}
 		if found != len(hollow) {

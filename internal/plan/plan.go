@@ -198,7 +198,7 @@ func Assess(s *ha.Snapshot, in Input) ([]Verdict, []*Group) {
 			continue
 		}
 		if !in.Cameras && isCamera(id) {
-			v.State, v.Reason = eligibility.StateUnmappable.String(), CameraOff
+			v.unmappable(CameraOff)
 			verdicts = append(verdicts, v)
 			continue
 		}
@@ -206,7 +206,7 @@ func Assess(s *ha.Snapshot, in Input) ([]Verdict, []*Group) {
 		// description is read from: mapped, it would be another device
 		// type (HR-P2-bound-90, decision 52).
 		if st.Oversized > 0 {
-			v.State, v.Reason = eligibility.StateUnmappable.String(), OversizedReason(st.Oversized)
+			v.unmappable(OversizedReason(st.Oversized))
 			verdicts = append(verdicts, v)
 			continue
 		}
@@ -250,6 +250,14 @@ func Assess(s *ha.Snapshot, in Input) ([]Verdict, []*Group) {
 		out = append(out, g)
 	}
 	return verdicts, out
+}
+
+// unmappable makes v unmappable before go-hamapping for reason: the
+// summary and the full verdict, which the web UI reads, both carry it
+// (HR-P4-err-41, decision 52).
+func (v *Verdict) unmappable(reason string) {
+	v.State, v.Reason = eligibility.StateUnmappable.String(), reason
+	v.Full = eligibility.Verdict{State: eligibility.StateUnmappable, Reason: reason}
 }
 
 // Describe is an entity's description as a comparable string: a change
