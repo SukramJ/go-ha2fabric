@@ -129,7 +129,12 @@ const MaxSessionCandidates = 256
 // a type and a few extensions (RFC 8839 section 5.1) — a real one is
 // under 300 bytes — and a media id is a short token. A longer one of Home
 // Assistant's is refused and logged, the session stays; a controller's
-// is refused with CONSTRAINT_ERROR.
+// is refused with CONSTRAINT_ERROR (decision 78). The bound is the
+// host's own, not the specification's: ICECandidateStruct bounds the
+// line not at all and SdpMid only below ("min 1", go-fabric
+// cluster/spec/webrtctransportprovider/definition_gen.go:256-257, 282 at
+// v0.27.0); CONSTRAINT_ERROR is the status of a field out of a server's
+// range, as chip answers one.
 const MaxCandidateBytes = 1024
 
 // MaxSessions bounds a camera's WebRTC sessions. Each is a session of
