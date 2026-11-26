@@ -85,9 +85,6 @@ linters:
           - noctx
           - unparam
         path: _test\.go
-      - linters:
-          - gosec
-        path: cmd/
     paths:
       - third_party$
       - builtin$
