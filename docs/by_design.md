@@ -151,7 +151,7 @@ and its relay keeps every session in an unbounded map
 go-ha2fabric holds a camera to 8 sessions, each one a Home Assistant
 WebRTC session and a relay, and a fabric to 4 of them; at either bound a
 new offer ends only its own fabric's session idle for a minute, else it
-is answered RESOURCE_EXHAUSTED (decisions 23, 72). One controller
+is answered RESOURCE_EXHAUSTED. One controller
 ecosystem can neither exhaust Home Assistant's provider nor end another
 ecosystem's live view.
 
