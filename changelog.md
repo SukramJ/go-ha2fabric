@@ -124,10 +124,14 @@ All notable changes to this project are documented here. The format follows
   go-fabric refused in part or whose reassembly failed, so the web UI's
   "not in effect" notice stays until a sync applied everything; the change
   is owed and published by the first sync whose batch returned nil, also
-  when that sync's own diff is empty.
+  when that sync's own diff is empty. While every sync fails — an endpoint
+  go-fabric keeps refusing, a store that keeps failing — the notice stays,
+  as an apply through the page answers; the status page shows
+  `sync_error`.
 - A Forget whose erasure go-fabric skipped (its typed batch error names the
-  call) is made again at the next sync instead of being taken as done, so
-  the entity, created again, does not get its old endpoint number back.
+  call) is made again at the next sync instead of being taken as done;
+  until its erasure ran, go-fabric keeps what it stored for the key, the
+  endpoint number included.
 - Add-on: the daemon gets the stop signal itself
   (`S6_CMD_RECEIVE_SIGNALS=1`), so a stop has the daemon's 25 s budget —
   an erase finishes, the nodes and camera sessions end in order — instead

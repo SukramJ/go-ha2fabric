@@ -74,8 +74,8 @@ type Options struct {
 	// OnChange, when set, is called on the worker after a sync that
 	// changed the exposure (the entity ids whose decision moved) or that
 	// owes the endpoints' change (endpoints true): owed from the first
-	// sync whose diff added, replaced or removed a device, and handed on
-	// by the first sync after it whose batch returned nil, once. A host
+	// sync whose diff added, replaced or removed a device, and handed on,
+	// once, by the first sync from then on whose batch returned nil. A host
 	// that rebuilds on its own publishes endpoints_changed after its
 	// rebuild returned nil (go-fabric-ui docs/embedding.md:152-154 at
 	// v0.16.0), and the web UI clears its "not in effect" notice on that
@@ -716,7 +716,7 @@ func (b *Bridge) syncConnected(ctx context.Context, since time.Time) error {
 	// (batchCallErrors), and what applied is read from the node's set after
 	// the batch (settle): a call that returned nil succeeded unless Calls
 	// names it or a later call of the batch on the same key superseded or
-	// dropped it (:51-54). The errors are for the log and a Forget's own
+	// dropped it (:50-54). The errors are for the log and a Forget's own
 	// failure.
 	opErrs := make([]error, len(ch.Ops))
 	ran := false
@@ -895,7 +895,12 @@ var batchKinds = map[node.BatchOp]plan.OpKind{
 // node still serves the topology before; the next batch, an empty one
 // too, reassembles (go-fabric node/batch_error.go:71-82,
 // node/aggregator.go:612-622 at v0.28.0). So a healing sync with an empty
-// diff hands on what an earlier one owed. Worker-owned.
+// diff hands on what an earlier one owed. A batch that keeps returning an
+// error — an Add go-fabric refuses at every sync, an erasure skipped each
+// time — keeps the change owed and the notice up, also when its
+// reassembly succeeded: the event says the stored selection is in effect,
+// and the page's own reassemble is this sync and answers with the same
+// error (Resync). Worker-owned.
 func (b *Bridge) endpointsDone(changed bool, err error) bool {
 	b.endpointsOwed = b.endpointsOwed || changed
 	if err != nil || !b.endpointsOwed {

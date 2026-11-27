@@ -317,7 +317,7 @@ The lines to know:
 | `selection.missing` | warn | `selection.json` was missing beside its last-good copy; `restored` names the copy read and written back, empty when it could not be read (Files); also on the web UI's status page. |
 | `selection.restore_failed` | warn | The last-good copy read at start could not be written back as `selection.json` (`error`); the next start reads the copy again. |
 | `bridge.camera_disabled` | info | Once per start: exposed cameras skipped because `CAMERA` is off (`skipped`). |
-| `camera.session` / `camera.session_ended` | info | A controller opened or ended a camera session (`entity_id`, `session`; `reason` on the end, OutOfResources when go-fabric ended it at the bounds, see Cameras). |
+| `camera.session` / `camera.session_ended` | info | A controller opened or ended a camera session (`entity_id`, `session`; `reason` on the end, the end reason's number: 8, OutOfResources, when go-fabric ended it at the bounds, see Cameras). |
 | `camera.ha_error` | warn | Home Assistant reported an error for a session (`code`, `message`, each cut to 512 bytes, e.g. `go2rtc_webrtc_offer_failed`); the session ends. |
 | `camera.candidates_exceeded` | warn | Home Assistant signalled more than 256 candidates in one session (`session`, `max`); the session ends. |
 | `camera.candidate_refused` | warn | A candidate of Home Assistant's that cannot be carried: over 1 KiB (`bytes`, `max`) or an `sdpMLineIndex` out of range; the session stays. |
@@ -433,7 +433,11 @@ this derivation is wrong for the installation.
 Limits:
 
 - `SolicitOffer` is refused: Home Assistant takes the client's offer only
-  (`camera/webrtc.py:252-258`); the answer is INVALID_IN_STATE.
+  (`camera/webrtc.py:252-258`); the answer is INVALID_IN_STATE. At a
+  session bound with no session to end, go-fabric's camera kit answers
+  instead, before the daemon is asked: a session id without a deferred
+  offer, then `End` with OutOfResources to the controller, or
+  RESOURCE_EXHAUSTED when that `End` cannot be queued.
 - The controller's ICE servers are not relayed; Home Assistant's provider
   uses its own (`camera/__init__.py:708-718`).
 - The stream declaration is nominal: Home Assistant names no codec,
@@ -631,7 +635,11 @@ own route beside go-fabric-ui's.
 `ok` while the daemon's connection to Home Assistant is authenticated, `503`
 with `unavailable` otherwise (a refused token included). Another client, or
 another method than `GET` and `HEAD`, gets the web UI's answer as before:
-`WEB_ALLOW`'s 403, or go-fabric-ui's.
+`WEB_ALLOW`'s 403, or go-fabric-ui's. The request's Host must be
+`localhost` or a loopback address too. A reverse proxy on the same host
+that rewrites the Host reaches the route for its clients, whatever
+`WEB_ALLOW` says: it gives away only whether Home Assistant is connected,
+and the proxy can refuse `/healthz`.
 
 `ha2fabric --health` asks that route and exits `0` on `200`, `1` otherwise.
 It reads `WEB_LISTEN` (flag over environment) and needs no `HA_URL` or
@@ -652,7 +660,11 @@ container is `unhealthy` while Home Assistant is away, although restarting
 the daemon does not bring Home Assistant back: restart on Home Assistant's
 side, not on `unhealthy`. Where the probe cannot reach the daemon — the web
 UI off, or `WEB_LISTEN` on a specific non-loopback address — run the
-container with `--no-healthcheck`. The add-on has no watchdog yet (#72).
+container with `--no-healthcheck`. The image's probe gets the container's
+environment, not the daemon's flags: set the listener with `WEB_LISTEN`,
+since a `--web-listen` on the container's command does not reach the
+probe, which then asks the default port. The add-on has no watchdog yet
+(#72).
 
 ## Pairing
 

@@ -476,7 +476,7 @@ func (h *Host) ProvideAnswer(context.Context, uint16, string) error { return Err
 // it asks this port.
 //
 // go-fabric runs one command of a camera's provider at a time
-// (cluster/camera/provider.go:253-259 and cluster/camera/state.go:13-28
+// (cluster/camera/provider.go:253-259 and cluster/camera/state.go:13-26
 // at v0.28.0), so a slow Home Assistant holds the camera's other commands
 // (EndSession, ProvideIceCandidates) until this offer returns (a replaced
 // session's unsubscribe, within SignalTimeout, and the offer's call,

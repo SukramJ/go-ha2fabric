@@ -11,7 +11,7 @@
 // decision 2026-10-25): /api/v1/node/status and /api/v1/node/exposure
 // replace them. GET /healthz (owner, 2026-11-27, #71) is the daemon's
 // own, ahead of the client filter and go-fabric-ui's handler, and answers
-// a loopback client only: 200 "ok" while Home Assistant is connected, 503
+// a loopback client under a loopback Host only: 200 "ok" while Home Assistant is connected, 503
 // "unavailable" otherwise — what --health probes. The UI's URLs are relative, so it
 // works under Ingress's path prefix (go-fabric-ui docs/embedding.md,
 // "Behind an Ingress", at v0.16.0). Since go-fabric-ui v0.10 the handler checks every
@@ -119,8 +119,8 @@ func (s *Server) filter(next http.Handler) http.Handler {
 // HealthPath is the route [Options.Healthy] answers.
 const HealthPath = "/healthz"
 
-// health answers GET and HEAD of HealthPath from a loopback client with
-// Healthy; every other request, and every request when Healthy is nil,
+// health answers GET and HEAD of HealthPath from a loopback client under
+// a loopback Host (localhost or a loopback IP literal) with Healthy; every other request, and every request when Healthy is nil,
 // goes to next unchanged. It stands ahead of the client filter: a probe
 // inside the container or on the host comes from loopback, which WEB_ALLOW
 // need not name.
@@ -129,7 +129,7 @@ func (s *Server) health(next http.Handler) http.Handler {
 		return next
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != HealthPath || r.Method != http.MethodGet && r.Method != http.MethodHead || !loopbackClient(r) {
+		if r.URL.Path != HealthPath || r.Method != http.MethodGet && r.Method != http.MethodHead || !loopbackClient(r) || !loopbackHost(r.Host) {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -150,6 +150,21 @@ func loopbackClient(r *http.Request) bool {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	ip := net.ParseIP(host)
 	return err == nil && ip != nil && ip.IsLoopback()
+}
+
+// loopbackHost reports whether host, its port stripped, is localhost or
+// a loopback IP literal (an IPv6 one in brackets).
+func loopbackHost(host string) bool {
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		host = h
+	} else if strings.HasPrefix(host, "[") && strings.HasSuffix(host, "]") {
+		host = host[1 : len(host)-1]
+	}
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 // Run serves until ctx ends.

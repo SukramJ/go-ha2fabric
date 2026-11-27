@@ -228,17 +228,26 @@ func TestRunLoopback(t *testing.T) {
 }
 
 // TestHealthz (#71): GET /healthz answers a loopback client ahead of the
-// client filter — also when WEB_ALLOW lacks loopback — with 200 "ok" or
-// 503 "unavailable"; another client gets the filter's answer, and
-// without Healthy there is no such route.
+// client filter — also when WEB_ALLOW lacks loopback — under a loopback
+// Host, with 200 "ok" or 503 "unavailable"; another client, another Host
+// or another method gets the web UI's answer, and without Healthy there
+// is no such route.
 func TestHealthz(t *testing.T) {
 	quiet := slog.New(slog.DiscardHandler)
 	up := true
 	s := mustNew(t, Options{Allow: []string{"192.0.2.10"}, Healthy: func() bool { return up }, Logger: quiet, UI: fabricui.Options{Logger: quiet}})
-	for _, remote := range []string{"127.0.0.1:4000", "[::1]:4000"} {
+	for _, remote := range []string{"127.0.0.1:4000", "[::1]:4000", "[::ffff:127.0.0.1]:4000"} {
 		if code, body := get(t, s.Handler(), HealthPath, remote); code != http.StatusOK || string(body) != "ok\n" {
 			t.Fatalf("%s: %d %q", remote, code, body)
 		}
+	}
+	for _, host := range []string{"localhost:8099", "[::1]:8099", "127.0.0.1"} {
+		if code, _ := getHost(t, s.Handler(), HealthPath, "127.0.0.1:4000", host); code != http.StatusOK {
+			t.Fatalf("Host %s: %d", host, code)
+		}
+	}
+	if code, body := getHost(t, s.Handler(), HealthPath, "127.0.0.1:4000", "evil.example"); code == http.StatusOK || string(body) == "ok\n" {
+		t.Fatalf("a non-loopback Host from loopback got the health answer: %d %q", code, body)
 	}
 	up = false
 	if code, body := get(t, s.Handler(), HealthPath, "127.0.0.1:4000"); code != http.StatusServiceUnavailable || string(body) != "unavailable\n" {
@@ -251,7 +260,7 @@ func TestHealthz(t *testing.T) {
 		t.Fatalf("an allowed non-loopback client got the health answer: %d %q", code, body)
 	}
 	req := httptest.NewRequest(http.MethodPost, HealthPath, http.NoBody)
-	req.RemoteAddr = "127.0.0.1:4000"
+	req.RemoteAddr, req.Host = "127.0.0.1:4000", "127.0.0.1:8099"
 	rec := httptest.NewRecorder()
 	s.Handler().ServeHTTP(rec, req)
 	if rec.Code == http.StatusServiceUnavailable || rec.Body.String() == "unavailable\n" {
