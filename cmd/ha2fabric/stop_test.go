@@ -36,7 +36,7 @@ func restoreSeams(t *testing.T) {
 
 // TestEraseResetFailedKeepsNode (HR-P1-err-61, HR-P1-test-70): a reset
 // that returns without stopping the node — go-fabric's FactoryReset can
-// (node/factory_reset.go:51-55 at v0.27.0) — does not orphan it: the
+// (node/factory_reset.go:51-55 at v0.28.0) — does not orphan it: the
 // daemon stops it before the come-back, so the node comes back on its
 // port. The erase answers the reset's error.
 func TestEraseResetFailedKeepsNode(t *testing.T) {

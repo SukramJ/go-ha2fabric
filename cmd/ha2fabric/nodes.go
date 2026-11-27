@@ -35,7 +35,7 @@ import (
 // (fabricui.NodeSwitch, go-fabric-ui v0.7.1). The run is the go-fabric
 // node and its bridge on the one Home Assistant connection; an erase
 // ends it and starts a new one (a Go node is single-use, go-fabric
-// node/node.go:42-46 at v0.27.0), so the web UI's handler, which keeps
+// node/node.go:42-46 at v0.28.0), so the web UI's handler, which keeps
 // the values it was given, follows the new node through the switch.
 type served struct {
 	base   context.Context
@@ -134,7 +134,7 @@ func (s *served) start(base context.Context) error {
 }
 
 // launch runs a node and its bridge in the cookbook's order (go-fabric
-// docs/guides/embed-in-a-daemon.md §6 at v0.27.0): node.New and Start, the fabrics
+// docs/guides/embed-in-a-daemon.md §6 at v0.28.0): node.New and Start, the fabrics
 // and the pairing codes to the log, the bridge on the node and its worker
 // on base. It touches none of s's run, so it needs no lock.
 func (s *served) launch(base context.Context) (nodeRun, error) {
@@ -179,7 +179,7 @@ func (s *served) install(r nodeRun) {
 	s.live.Store(true)
 	s.fan.Add(r.br)
 	// Set only after the new node started, never on a failed one
-	// (go-fabric-ui fabricui/nodeswitch.go:69-73 at v0.14.1).
+	// (go-fabric-ui fabricui/nodeswitch.go:69-73 at v0.16.0).
 	if s.sw == nil {
 		s.sw = fabricui.NewNodeSwitch(r.n)
 	} else {
@@ -289,7 +289,7 @@ func (s *served) Warnings(ctx context.Context) []fabricui.Warning {
 // configuration on the erased store. Without a run — a come-back that
 // failed — it only starts, after resetting a node an earlier reset did
 // not stop (stale). A reset that fails may leave the node running
-// (go-fabric node/factory_reset.go:51-55 at v0.27.0: "the node is not
+// (go-fabric node/factory_reset.go:51-55 at v0.28.0: "the node is not
 // stopped and keeps its store"): it is stopped before the come-back, and
 // kept as stale when that fails too. A come-back that fails leaves s
 // without a run and the switch on the stopped node; the daemon keeps
@@ -456,7 +456,7 @@ func logMDNSInterfaces(n *node.Node, names []string, logger *slog.Logger) {
 // the administrator's pairing page (decision 16 of the 2026-11-23 review).
 // The log is also the ring behind go-fabric-ui's Operations port, which
 // states that nothing it returns carries a passcode (fabricui/
-// operations.go:25-26 at v0.14.1): the codes reach it only before the
+// operations.go:25-26 at v0.16.0): the codes reach it only before the
 // first pairing.
 func logPairing(n *node.Node, fabrics int, logger *slog.Logger) {
 	if fabrics != 0 {
@@ -590,7 +590,7 @@ func newFleet(base context.Context, cfg *config.Config, client *ha.Client, fan *
 }
 
 // nodeLabel is a registry label as the node's NodeLabel: at most 32 bytes
-// (go-fabric cluster/core/basic_information.go:651 at v0.27.0, as config's
+// (go-fabric cluster/core/basic_information.go:651 at v0.28.0, as config's
 // LABEL), cut
 // at a character boundary.
 func nodeLabel(label string) string {
@@ -643,7 +643,7 @@ func (f *fleet) entry(m *member) fabricui.NodeEntry {
 	if s := m.s; s != nil {
 		// The switch, the provider and the events are the owner's, the
 		// same values across an erase, so the node keeps its handler
-		// (go-fabric-ui fabricui/registry.go:172-199 at v0.14.1). Without
+		// (go-fabric-ui fabricui/registry.go:172-199 at v0.16.0). Without
 		// a run Source is nil: listed not enabled, its routes answer as
 		// without a node.
 		if s.running() {
@@ -715,7 +715,7 @@ func (f *fleet) find(key string) *member {
 
 // Rename implements [fabricui.NodeRegistry]: the label in the registry
 // and the selector, then the running node's own NodeLabel
-// (Node.SetNodeLabel, go-fabric node/node_label.go:39 at v0.27.0: a host
+// (Node.SetNodeLabel, go-fabric node/node_label.go:39 at v0.28.0: a host
 // write, persisted, reported to the controllers' subscriptions), cut as
 // at start (nodeLabel). The node's error is logged and leaves the
 // registry's rename standing; a node without a run takes the label from
@@ -821,7 +821,7 @@ func (f *fleet) Erase(ctx context.Context, key string) error {
 
 // Warnings are every registry node's findings, each message under its
 // key: a registry node's handler reports the default's Warnings
-// (go-fabric-ui fabricui/handler.go:601-610 at v0.14.1), so every status page
+// (go-fabric-ui fabricui/handler.go:601-610 at v0.16.0), so every status page
 // shows them.
 func (f *fleet) Warnings(ctx context.Context) []fabricui.Warning {
 	f.mu.RLock()

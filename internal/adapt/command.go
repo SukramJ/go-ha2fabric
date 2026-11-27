@@ -220,7 +220,7 @@ func Service(cmd model.Command, cur *ha.State) (ha.ServiceCall, error) {
 		// media_player/services.py:182-192 volume_set, volume_level 0 to 1
 		// (cv.small_float): the level 0 to 254 over LevelControl's range,
 		// level / 254 as go-fabric's UnitFromLevel (cluster/spec/
-		// levelcontrol/values.go:21,41-44 at v0.27.0), to two places.
+		// levelcontrol/values.go:21,41-44 at v0.28.0), to two places.
 		if f, ok := number(payload); ok {
 			level := min(max(math.Round(f), 0), float64(levelcontroldef.LevelMax))
 			v := math.Round(level/float64(levelcontroldef.LevelMax)*100) / 100
@@ -280,7 +280,7 @@ func waterHeaterMode(id, payload string, attrs map[string]any) (ha.ServiceCall, 
 
 // mediaKey is row media_player/video_player's SendKey with the CEC key
 // codes it lets through (go-fabric
-// cluster/spec/keypadinput/definition_gen.go:91-94 at v0.27.0): volume up and down (media_player/
+// cluster/spec/keypadinput/definition_gen.go:91-94 at v0.28.0): volume up and down (media_player/
 // services.py:137-148 volume_up, volume_down), mute as the opposite of
 // the current is_volume_muted (:193-203 volume_mute) and power as toggle
 // (:131-136).

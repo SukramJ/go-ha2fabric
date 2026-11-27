@@ -32,7 +32,7 @@ import (
 const module = "thingfabric.dev/go-ha2fabric/"
 
 // staleFloorSlack is how far a measurement may sit above its floor, as
-// go-fabric's script/coverfloor/main.go:73-81 at v0.27.0
+// go-fabric's script/coverfloor/main.go:73-81 at v0.28.0
 // (staleFloorSlack; review HR-P3-test-01): beyond it a regression of that many
 // points passes. Three points hold the run-to-run spread (0.3-0.6 points
 // measured here, internal/ha's 1.8: HR-P4-test-62) of a floor at the

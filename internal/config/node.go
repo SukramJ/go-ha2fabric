@@ -25,7 +25,7 @@ const (
 // window each draw a fresh 32-byte salt when they open, as matter.js
 // (go-fabric CHANGELOG 0.23.0, review II decision 251; node.Commissioning
 // Salt's godoc at v0.25.0). node.Config.Validate still checks it — a salt
-// outside the bounds fails (node/config.go:960-969 at v0.27.0) — so it
+// outside the bounds fails (node/config.go:960-969 at v0.28.0) — so it
 // stays.
 var spake2Salt = []byte("go-ha2fabric-spake2p-salt")
 
@@ -42,7 +42,7 @@ const spake2Iterations = 1000
 // over TCP: a camera's signals carry an SDP, which rarely fits one UDP
 // message, and the node sends them over the controller's TCP session
 // (go-fabric docs/guides/camera.md:137-144, bridge/tcp_listen.go:18-31 at
-// v0.27.0). The configured node and every registry node get theirs here.
+// v0.28.0). The configured node and every registry node get theirs here.
 func (c *Config) Node(logger *slog.Logger) node.Config {
 	return node.Config{
 		Network: node.Network{

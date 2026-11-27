@@ -47,7 +47,7 @@ type Options struct {
 }
 
 // Provider is the web UI's selection over one node's bridge
-// (go-fabric-ui docs/provider.md at v0.14.1). The handler calls the
+// (go-fabric-ui docs/provider.md at v0.16.0). The handler calls the
 // bridge's Resync (fabricui.Options.Reassemble) after every apply, so the
 // endpoints follow before the response.
 type Provider struct {
