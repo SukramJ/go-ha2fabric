@@ -59,6 +59,8 @@ All notable changes to this project are documented here. The format follows
   controller.
 - `github.com/oapi-codegen/runtime` `v1.9.0` → `v1.9.1` (indirect, with
   go-fabric-ui).
+- Development tools: golangci-lint `v2.14.0` → `v2.15.0`, govulncheck
+  `v1.8.0` → `v1.10.0`.
 - Cameras: one fabric holds at most 4 of a camera's 8 WebRTC sessions, and
   an offer at either bound ends only an idle session of its own fabric,
   else it is answered RESOURCE_EXHAUSTED; another ecosystem's live view is
