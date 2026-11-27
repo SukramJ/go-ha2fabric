@@ -181,7 +181,7 @@ func description(domain string, attrs map[string]any) map[string]any {
 	ex := map[string]any{}
 	if v, ok := toInt(attrs["supported_features"]); ok {
 		// helpers/entity.py:1176; go-hamapping decodes the mask with
-		// go-ha-catalog data/features.json (binding.go features at v0.9.0).
+		// go-ha-catalog data/features.json (binding.go features at v0.10.0).
 		ex["supported_features"] = v
 	}
 	switch domain {

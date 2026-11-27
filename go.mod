@@ -5,7 +5,7 @@ go 1.27.4
 require (
 	github.com/coder/websocket v1.8.15
 	sukramj.dev/go-ha-catalog v0.4.0
-	sukramj.dev/go-hamapping v0.9.0
+	sukramj.dev/go-hamapping v0.10.0
 	sukramj.dev/go-hamqtt v0.41.0
 	thingfabric.dev/go-fabric v0.28.0
 	thingfabric.dev/go-fabric-ui v0.16.0

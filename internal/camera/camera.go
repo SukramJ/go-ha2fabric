@@ -143,7 +143,7 @@ const MaxCandidateBytes = 1024
 // (ProviderConfig.MaxSessions and MaxSessionsPerFabric,
 // cluster/camera/provider.go:70-91 at v0.28.0), and go-hamapping's camera
 // row passes them from a host that implements its WebRTCSessionBounds
-// (go-hamapping ports.go:56-88 at v0.9.0). This host does not: the kit
+// (go-hamapping ports.go:57-72, :93-112 at v0.10.0). This host does not: the kit
 // refuses an offer at its bound before the port is asked (go-fabric
 // cluster/camera/provider.go:613-617, :724-728 at v0.28.0) and evicts nothing,
 // so passing them would take away [MaxSessionsPerFabric]'s eviction; the
@@ -305,7 +305,7 @@ var dryHost = New("", nil, Options{})
 // DryPorts is go-hamapping's Options.Ports for a plan without a node
 // (--dump-plan, the web UI's previews): a camera entity gets a host that
 // serves nothing, every other entity none. go-hamapping decides a camera
-// row on the ports' interfaces (go-hamapping plan.go:171-179 at v0.9.0),
+// row on the ports' interfaces (go-hamapping plan.go:171-179 at v0.10.0),
 // so the stand-in is a real *Host; the bridge's live hosts take its place
 // when it builds.
 func DryPorts(e model.Entity) any {

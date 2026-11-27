@@ -189,7 +189,7 @@ func TestSelect256Options(t *testing.T) {
 // secondBattery gives the climate sensor's device (dev-zha-1) a second
 // battery: sensor.outdoor joins it as one. Both batteries ride on the
 // temperature sensor's endpoint and go-fabric refuses the second
-// (go-hamapping plan_build_test.go TestBuildErrorOwner at v0.9.0), a
+// (go-hamapping plan_build_test.go TestBuildErrorOwner at v0.10.0), a
 // shape go-hamapping's Map calls mappable. It returns the battery
 // go-fabric refused and the one it kept.
 func (e *env) secondBattery() (refused, kept plan.Verdict) {

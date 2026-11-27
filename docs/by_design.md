@@ -165,7 +165,7 @@ answer and candidates go back through go-fabric's `camera.Provider`
 signals, and the controller's peer connection is with Home Assistant's
 provider itself (`camera/webrtc.py:264-273`). The stream declaration is
 therefore nominal — one video, audio and snapshot stream, the values of
-go-hamapping's camera row and its caveat (`rows/camera.yaml` at v0.9.0) —
+go-hamapping's camera row and its caveat (`rows/camera.yaml` at v0.10.0) —
 since Home Assistant names no codec, resolution or frame rate
 (`camera/__init__.py:742-755`). A relay without a media stack needs no
 codec of its own and adds no hop to the stream.
