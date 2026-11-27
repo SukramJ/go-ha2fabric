@@ -9,10 +9,15 @@ import (
 	"slices"
 	"sync"
 	"testing"
+	"time"
 
 	hamapping "sukramj.dev/go-hamapping"
 	"sukramj.dev/go-hamqtt/model"
 )
+
+// SetCameraEvictIdle sets the idle time after which go-fabric's kit may
+// evict a camera's session at its bounds (camera.Options.EvictIdle).
+func SetCameraEvictIdle(o *Options, d time.Duration) { o.cameraEvictIdle = d }
 
 // HeldStates is how many states the bridge holds beside its last
 // snapshot (HR-P2-bound-38).

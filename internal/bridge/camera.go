@@ -32,7 +32,7 @@ func (b *Bridge) ports(e model.Entity) any {
 	if b.hosts == nil {
 		b.hosts = map[string]*camera.Host{}
 	}
-	h := camera.New(e.Key(), b.opts.CameraUpstream, camera.Options{Logger: b.log})
+	h := camera.New(e.Key(), b.opts.CameraUpstream, camera.Options{Logger: b.log, EvictIdle: b.opts.cameraEvictIdle})
 	b.hosts[e.Key()] = h
 	return h
 }

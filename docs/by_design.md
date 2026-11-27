@@ -149,11 +149,14 @@ per fabric (`backend/src/plugins/builtin/camera/webrtc-provider-server.ts:25-34,
 and its relay keeps every session in an unbounded map
 (`webrtc-bridge.ts:90, 141, 216`); nothing is evicted or refused.
 go-ha2fabric holds a camera to 8 sessions, each one a Home Assistant
-WebRTC session and a relay, and a fabric to 4 of them; at either bound a
-new offer ends only its own fabric's session idle for a minute, else it
-is answered RESOURCE_EXHAUSTED. One controller
-ecosystem can neither exhaust Home Assistant's provider nor end another
-ecosystem's live view.
+WebRTC session and a relay, and a fabric to 4 of them, through go-fabric's
+camera kit: a fabric keeps `8 / fabrics holding sessions` of them, at most
+4; at a bound a new offer ends the offering fabric's own session without
+signalling for a minute, or — when the camera is full and the offering
+fabric is under its share — such a session of a fabric over its share;
+otherwise it is answered RESOURCE_EXHAUSTED. One controller ecosystem can
+neither exhaust Home Assistant's provider nor take another ecosystem's
+sessions within that ecosystem's share.
 
 ## Signalling only
 

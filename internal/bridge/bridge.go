@@ -89,6 +89,11 @@ type Options struct {
 	// (camera.HA of the client). Without it a camera has no host ports
 	// and go-hamapping skips its row.
 	CameraUpstream camera.Upstream
+
+	// cameraEvictIdle is the camera hosts' camera.Options.EvictIdle; 0 is
+	// camera.DefaultEvictIdle. A test's seam (SetCameraEvictIdle), no
+	// setting.
+	cameraEvictIdle time.Duration
 }
 
 // Status is the bridge's state for the web UI and the health endpoint.

@@ -8,14 +8,19 @@ import (
 	"errors"
 	"image"
 	"image/jpeg"
+	"slices"
 	"testing"
+	"time"
 
 	"thingfabric.dev/go-fabric/cluster/spec"
 	csdef "thingfabric.dev/go-fabric/cluster/spec/cameraavstreammanagement"
 	wpdef "thingfabric.dev/go-fabric/cluster/spec/webrtctransportprovider"
+	"thingfabric.dev/go-fabric/contract"
 	"thingfabric.dev/go-fabric/controller/client"
 	"thingfabric.dev/go-fabric/fabrictest"
 
+	"thingfabric.dev/go-ha2fabric/internal/bridge"
+	"thingfabric.dev/go-ha2fabric/internal/camera"
 	"thingfabric.dev/go-ha2fabric/internal/expose"
 	"thingfabric.dev/go-ha2fabric/internal/ha/hatest"
 	"thingfabric.dev/go-ha2fabric/internal/plan"
@@ -208,5 +213,116 @@ func TestCameraOfferRefusedEndToEnd(t *testing.T) {
 	}
 	if o := e.ha.Offers(); len(o) != 0 {
 		t.Fatalf("the refused offer was taken: %+v", o)
+	}
+}
+
+// cameraSession opens a live view of the camera on ep through the
+// controller: a video stream, then ProvideOffer; Home Assistant names its
+// session and answers nothing, so the view stands without signalling.
+// It returns the session's id and the command's error.
+func (e *env) cameraSession(ep, video uint16) (uint16, error) {
+	e.t.Helper()
+	usage, origin := wpdef.StreamUsageLiveView, uint16(1)
+	res, err := fabrictest.Invoke(e.ctx, e.pair, client.CommandAt(ep, wpdef.ClusterID, wpdef.CmdProvideOffer), wpdef.ProvideOfferRequest{
+		WebRtcSessionId: spec.NullOf[uint16](), Sdp: "v=0\r\no=- 1 1 IN IP4 192.0.2.1\r\ns=controller\r\n", StreamUsage: &usage, OriginatingEndpointId: &origin,
+		VideoStreams: &[]uint16{video},
+	})
+	if err != nil {
+		return 0, err
+	}
+	var po wpdef.ProvideOfferResponse
+	if err := po.DecodeTLV(res.Fields); err != nil {
+		e.t.Fatal(err)
+	}
+	return po.WebRtcSessionId, nil
+}
+
+// cameraVideo allocates the camera's live view stream on ep.
+func (e *env) cameraVideo(ep uint16) uint16 {
+	e.t.Helper()
+	res, err := fabrictest.Invoke(e.ctx, e.pair, client.CommandAt(ep, csdef.ClusterID, csdef.CmdVideoStreamAllocate), csdef.VideoStreamAllocateRequest{
+		StreamUsage: csdef.StreamUsageLiveView, VideoCodec: csdef.VideoCodecH264, MinFrameRate: 15, MaxFrameRate: 30,
+		MinResolution: csdef.VideoResolutionStruct{Width: 640, Height: 480}, MaxResolution: csdef.VideoResolutionStruct{Width: 1920, Height: 1080},
+		MinBitRate: 10000, MaxBitRate: 2000000, KeyFrameInterval: 4000,
+	})
+	var video csdef.VideoStreamAllocateResponse
+	if err != nil || video.DecodeTLV(res.Fields) != nil {
+		e.t.Fatalf("VideoStreamAllocate: %v", err)
+	}
+	return video.VideoStreamId
+}
+
+// TestCameraFabricBoundEndToEnd (#83): the kit holds the bounds the host
+// declares. One controller fills its fabric's MaxSessionsPerFabric; its
+// next offer, with no session idle for EvictIdle (a minute), is refused
+// with RESOURCE_EXHAUSTED before Home Assistant is asked.
+func TestCameraFabricBoundEndToEnd(t *testing.T) {
+	e := newEnv(t, expose.Rule{Assist: true}, func(o *setup) { o.camera = true })
+	e.commission()
+	cam := e.mustEndpoint("camera.front_door")
+	video := e.cameraVideo(cam)
+	e.ha.SetWebRTCScript(func(o hatest.Offer) []map[string]any { return []map[string]any{hatest.SessionEvent(o.SessionID)} })
+	for range camera.MaxSessionsPerFabric {
+		if _, err := e.cameraSession(cam, video); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, err := e.cameraSession(cam, video)
+	var se *fabrictest.StatusError
+	if !errors.As(err, &se) || se.Status != contract.StatusResourceExhausted {
+		t.Fatalf("an offer beyond the fabric's bound answered %v, want RESOURCE_EXHAUSTED", err)
+	}
+	if o := e.ha.Offers(); len(o) != camera.MaxSessionsPerFabric {
+		t.Fatalf("Home Assistant saw %d offers", len(o))
+	}
+	if s := e.sessions(cam); len(s) != camera.MaxSessionsPerFabric {
+		t.Fatalf("CurrentSessions %d", len(s))
+	}
+}
+
+// TestCameraEvictionEndToEnd (#83): with a short EvictIdle, an offer at
+// the fabric's bound ends the fabric's session idle longest — Home
+// Assistant's session is closed — and is served in its place.
+func TestCameraEvictionEndToEnd(t *testing.T) {
+	const idle = 300 * time.Millisecond
+	e := newEnv(t, expose.Rule{Assist: true}, func(o *setup) {
+		o.camera = true
+		bridge.SetCameraEvictIdle(&o.Options, idle)
+	})
+	e.commission()
+	cam := e.mustEndpoint("camera.front_door")
+	video := e.cameraVideo(cam)
+	e.ha.SetWebRTCScript(func(o hatest.Offer) []map[string]any { return []map[string]any{hatest.SessionEvent(o.SessionID)} })
+	var ids []uint16
+	for range camera.MaxSessionsPerFabric {
+		id, err := e.cameraSession(cam, video)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, id)
+	}
+	time.Sleep(2 * idle)
+	id, err := e.cameraSession(cam, video)
+	if err != nil {
+		t.Fatalf("an offer at the bound with idle sessions: %v", err)
+	}
+	if o := e.ha.Offers(); len(o) != camera.MaxSessionsPerFabric+1 {
+		t.Fatalf("Home Assistant saw %d offers", len(o))
+	}
+	e.eventually("the evicted session's unsubscribe", func() bool { return len(e.ha.Unsubscribed()) == 1 })
+	if u := e.ha.Unsubscribed(); u[0] != e.ha.Offers()[0].ID {
+		t.Fatalf("unsubscribed %v, want the first offer's %d", u, e.ha.Offers()[0].ID)
+	}
+	// The first offer's session is the idlest: each session's activity
+	// is its commit, and no session signalled after.
+	var cur []uint16
+	for _, ss := range e.sessions(cam) {
+		cur = append(cur, ss.Id)
+	}
+	slices.Sort(cur)
+	want := append(slices.Clone(ids[1:]), id)
+	slices.Sort(want)
+	if !slices.Equal(cur, want) {
+		t.Fatalf("CurrentSessions %v, want %v (the first, %d, evicted)", cur, want, ids[0])
 	}
 }
