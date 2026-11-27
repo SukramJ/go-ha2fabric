@@ -370,3 +370,51 @@ func TestEvictedSessionEndsQuietly(t *testing.T) {
 		t.Fatalf("the relay sent an End of its own: %q", e)
 	}
 }
+
+// TestFailedReofferTellsWhomItCan: a re-offer whose new Home Assistant
+// session fails closes the old one also when no signaller is attached
+// yet, and when the controller's End fails, which is logged only.
+func TestFailedReofferTellsWhomItCan(t *testing.T) {
+	ctx := context.Background()
+	for _, sig := range []*signaller{nil, {endErr: errors.New("controller gone")}} {
+		up := &upstream{}
+		h := boundedHost(t, up, camera.Options{})
+		if sig != nil {
+			h.Attach(sig)
+		}
+		if _, err := h.ProvideOffer(ctx, offer(1)); err != nil {
+			t.Fatal(err)
+		}
+		up.mu.Lock()
+		up.offerErr = errors.New("webrtc_offer_failed")
+		up.mu.Unlock()
+		if _, err := h.ProvideOffer(ctx, offer(1)); err == nil {
+			t.Fatal("a failed re-offer answered nil")
+		}
+		if up.stream(0).unsubscribed() != 1 {
+			t.Fatal("the old Home Assistant session is open")
+		}
+		if sig != nil && !slices.Contains(sig.seen(), fmt.Sprintf("end 1 %d", camera.ReasonICEFailed)) {
+			t.Fatalf("signals %q", sig.seen())
+		}
+	}
+}
+
+// TestHACandidateWithoutMidIsRelayed: MaxCandidateBytes counts the line
+// alone of Home Assistant's candidate without an sdpMid, which goes to
+// the controller with a null sdpMid.
+func TestHACandidateWithoutMidIsRelayed(t *testing.T) {
+	up := &upstream{script: func(s *stream) {
+		s.push(session("ha"))
+		s.push(map[string]any{"type": "candidate", "candidate": map[string]any{"candidate": "candidate:nomid", "sdpMLineIndex": 0}})
+	}}
+	h := boundedHost(t, up, camera.Options{})
+	sig := &signaller{}
+	h.Attach(sig)
+	if _, err := h.ProvideOffer(context.Background(), offer(1)); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the relayed candidate", func() bool {
+		return slices.Contains(sig.seen(), "candidate 1 candidate:nomid mid=true/ idx=false/0")
+	})
+}

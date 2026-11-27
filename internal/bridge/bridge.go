@@ -710,7 +710,7 @@ func (b *Bridge) syncConnected(ctx context.Context, since time.Time) error {
 	// node/batch_error.go:57-83 at v0.28.0) whose Calls name each call
 	// that failed after fn by its kind and own key, in call order, one
 	// entry per call and no call index (node/batch_error.go:60-64,
-	// :113-136); a call refused at the call returns its error there and is
+	// :113-136 at v0.28.0); a call refused at the call returns its error there and is
 	// not among them (:113-114). So the calls' errors are kept by index,
 	// the entries of Calls are joined in by kind and key
 	// (batchCallErrors), and what applied is read from the node's set after

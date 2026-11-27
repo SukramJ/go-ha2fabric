@@ -402,7 +402,7 @@ func cites(file string, b []line, mods map[string]*module, local []string) []cit
 		if missing {
 			// Only a pin of this path: lines, and no other module named
 			// between the path and the version ("… (rows/camera.yaml at
-			// v0.9.0)" after a go-hamapping mention is not this path's).
+			// v0.10.0)" after a go-hamapping mention is not this path's).
 			tail := s[m[1]:min(len(s), m[1]+versionReach)]
 			before, _, _ := strings.Cut(tail, version)
 			if len(spans) == 0 || mention.MatchString(before) {
