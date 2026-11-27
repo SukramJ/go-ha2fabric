@@ -876,7 +876,7 @@ func batchCallErrors(ops []plan.Op[*device.Device], errs []error, err error) {
 		}
 		for i, op := range ops {
 			if op.Kind == kind && op.Key != nil && op.Key.String() == c.Key.String() {
-				errs[i] = errors.Join(errs[i], c)
+				errs[i] = errors.Join(errs[i], c) //nolint:gosec // G602: errs has one entry per operation (the sync's opErrs)
 			}
 		}
 	}
@@ -957,7 +957,7 @@ func (b *Bridge) settle(ops []plan.Op[*device.Device], errs []error, next map[st
 				refused[op.Key.String()] = op.Kind
 			}
 		case plan.Forget:
-			if errs[i] == nil && !served[op.Key.String()] {
+			if errs[i] == nil && !served[op.Key.String()] { //nolint:gosec // G602: errs has one entry per operation (the sync's opErrs)
 				continue
 			}
 			b.mu.Lock()

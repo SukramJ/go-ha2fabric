@@ -44,6 +44,7 @@ func health(ctx context.Context, cfg *config.Config, stderr io.Writer) int {
 	}
 	ctx, cancel := context.WithTimeout(ctx, healthTimeout)
 	defer cancel()
+	//nolint:gosec // G704: the target is WEB_LISTEN's port on loopback (healthTarget), the operator's own configuration
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+target+web.HealthPath, http.NoBody)
 	if err != nil {
 		_, _ = fmt.Fprintln(stderr, healthBadListen)
@@ -54,7 +55,7 @@ func health(ctx context.Context, cfg *config.Config, stderr io.Writer) int {
 		// A redirect is not the daemon's answer.
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}
-	res, err := cl.Do(req)
+	res, err := cl.Do(req) //nolint:gosec // G704: as above, a loopback address of the daemon's own listener
 	if err != nil {
 		_, _ = fmt.Fprintln(stderr, healthUnreached)
 		return 1

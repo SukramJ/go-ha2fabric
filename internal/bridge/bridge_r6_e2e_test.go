@@ -293,7 +293,7 @@ func TestCameraEvictionEndToEnd(t *testing.T) {
 	cam := e.mustEndpoint("camera.front_door")
 	video := e.cameraVideo(cam)
 	e.ha.SetWebRTCScript(func(o hatest.Offer) []map[string]any { return []map[string]any{hatest.SessionEvent(o.SessionID)} })
-	var ids []uint16
+	ids := make([]uint16, 0, camera.MaxSessionsPerFabric)
 	for range camera.MaxSessionsPerFabric {
 		id, err := e.cameraSession(cam, video)
 		if err != nil {
@@ -315,8 +315,9 @@ func TestCameraEvictionEndToEnd(t *testing.T) {
 	}
 	// The first offer's session is the idlest: each session's activity
 	// is its commit, and no session signalled after.
-	var cur []uint16
-	for _, ss := range e.sessions(cam) {
+	sessions := e.sessions(cam)
+	cur := make([]uint16, 0, len(sessions))
+	for _, ss := range sessions {
 		cur = append(cur, ss.Id)
 	}
 	slices.Sort(cur)
