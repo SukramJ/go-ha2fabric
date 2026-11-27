@@ -5,7 +5,9 @@ package bridge_test
 
 import (
 	"context"
+	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -71,6 +73,98 @@ func TestFailedBatchOperationIsRetried(t *testing.T) {
 	}
 	if s := e.br.Status(); s.SyncError != "" {
 		t.Fatalf("status %+v", s)
+	}
+}
+
+// change is one call of Options.OnChange.
+type change struct {
+	exposure  []string
+	endpoints bool
+}
+
+// changes records Options.OnChange's calls.
+type changes struct {
+	mu    sync.Mutex
+	calls []change
+}
+
+func (c *changes) record(exposure []string, endpoints bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.calls = append(c.calls, change{slices.Clone(exposure), endpoints})
+}
+
+func (c *changes) since(mark int) []change {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return slices.Clone(c.calls[mark:])
+}
+
+func (c *changes) len() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return len(c.calls)
+}
+
+// endpointsCalls counts the calls among cs that handed endpoints on.
+func endpointsCalls(cs []change) int {
+	n := 0
+	for _, c := range cs {
+		if c.endpoints {
+			n++
+		}
+	}
+	return n
+}
+
+// TestEndpointsChangedAfterAppliedBatch (follow-up 2a): a sync whose
+// batch the node refused in part reports the moved entity but not the
+// endpoints' change; the sync whose batch returned nil reports it once,
+// and a later sync without changes does not.
+func TestEndpointsChangedAfterAppliedBatch(t *testing.T) {
+	rec := &changes{}
+	e := newEnv(t, expose.Rule{Assist: true}, func(s *setup) { s.OnChange = rec.record })
+	key := "ha:dev-hue-1/" + e.regID("light.kitchen")
+	e.ha.SetExposed("light.kitchen", false)
+	e.eventually("the light left", func() bool { return e.served(key) == nil })
+
+	plug, err := device.NewOnOffPlugInUnit(device.Options{StableKey: device.StringKey(key), Name: "foreign"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.dev.Act(func(n *node.Node) error { return n.Aggregator().Add(e.ctx, plug) }); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.br.Resync(e.ctx); err != nil {
+		t.Fatal(err)
+	}
+	mark := rec.len()
+	e.ha.SetExposed("light.kitchen", true)
+	if err := e.br.Resync(e.ctx); err == nil {
+		t.Fatal("Resync with the key held answered nil")
+	}
+	failed := rec.since(mark)
+	if n := endpointsCalls(failed); n != 0 {
+		t.Fatalf("%d endpoints changes after a batch refused in part: %+v", n, failed)
+	}
+	if !slices.ContainsFunc(failed, func(c change) bool { return slices.Contains(c.exposure, "light.kitchen") }) {
+		t.Fatalf("the light's moved decision not reported: %+v", failed)
+	}
+
+	if err := e.dev.Act(func(n *node.Node) error { return n.Aggregator().Remove(e.ctx, device.StringKey(key)) }); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.br.Resync(e.ctx); err != nil {
+		t.Fatalf("Resync after the key is free: %v", err)
+	}
+	if n := endpointsCalls(rec.since(mark)); n != 1 {
+		t.Fatalf("%d endpoints changes after the healing sync, want 1: %+v", n, rec.since(mark))
+	}
+	if err := e.br.Resync(e.ctx); err != nil {
+		t.Fatal(err)
+	}
+	if n := endpointsCalls(rec.since(mark)); n != 1 {
+		t.Fatalf("a sync without changes reported the endpoints: %+v", rec.since(mark))
 	}
 }
 

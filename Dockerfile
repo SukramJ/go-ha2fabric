@@ -14,6 +14,12 @@
 #
 #   -e WEB_LISTEN=0.0.0.0:8099 -e WEB_ALLOW=192.0.2.10
 #
+# The HEALTHCHECK runs `/ha2fabric --health`, which asks the daemon's
+# GET /healthz on WEB_LISTEN's port from loopback: healthy while Home
+# Assistant is connected. With WEB_LISTEN on a specific non-loopback
+# address, or the web UI off, it cannot probe: run with --no-healthcheck
+# (docs/operations.md, Health).
+#
 # Base images by tag and digest; Dependabot (docker ecosystem) keeps both
 # current (decision 62, HR-P3-sup-34). The licence texts of everything linked
 # are in /usr/share/doc/go-ha2fabric/ (decision 59, HR-P3-sup-37).
@@ -48,5 +54,6 @@ EXPOSE 5540/udp 5540/tcp 8099/tcp
 LABEL \
   org.opencontainers.image.source="https://github.com/thingfabric/go-ha2fabric" \
   org.opencontainers.image.licenses="Apache-2.0"
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 CMD ["/ha2fabric", "--health"]
 USER nonroot:nonroot
 ENTRYPOINT ["/ha2fabric"]

@@ -72,8 +72,15 @@ type Options struct {
 	// Logger is the bridge's logger; nil is slog.Default().
 	Logger *slog.Logger
 	// OnChange, when set, is called on the worker after a sync that
-	// changed the exposure (the entity ids whose decision moved) or the
-	// endpoints (added, replaced or removed devices).
+	// changed the exposure (the entity ids whose decision moved) or that
+	// owes the endpoints' change (endpoints true): owed from the first
+	// sync whose diff added, replaced or removed a device, and handed on,
+	// once, by the first sync from then on whose batch returned nil. A host
+	// that rebuilds on its own publishes endpoints_changed after its
+	// rebuild returned nil (go-fabric-ui docs/embedding.md:152-154 at
+	// v0.16.0), and the web UI clears its "not in effect" notice on that
+	// event only (go-fabric-ui ui/src/lib/store.svelte.ts:480-490 at
+	// v0.16.0).
 	OnChange func(exposure []string, endpoints bool)
 	// Retry is the first wait before a sync that failed while Home
 	// Assistant stays connected is tried again; it doubles with each
@@ -89,6 +96,11 @@ type Options struct {
 	// (camera.HA of the client). Without it a camera has no host ports
 	// and go-hamapping skips its row.
 	CameraUpstream camera.Upstream
+
+	// cameraEvictIdle is the camera hosts' camera.Options.EvictIdle; 0 is
+	// camera.DefaultEvictIdle. A test's seam (SetCameraEvictIdle), no
+	// setting.
+	cameraEvictIdle time.Duration
 }
 
 // Status is the bridge's state for the web UI and the health endpoint.
@@ -206,6 +218,10 @@ type Bridge struct {
 	// retry is the wait before the next retry of a failed sync, 0 after a
 	// sync that succeeded.
 	retry time.Duration
+	// endpointsOwed is set by a sync whose diff changed the endpoints and
+	// cleared by the sync whose batch returned nil, which hands
+	// endpoints true to Options.OnChange.
+	endpointsOwed bool
 
 	mu sync.Mutex
 	// states are the served entities' current states: the snapshot's,
@@ -687,12 +703,21 @@ func (b *Bridge) syncConnected(ctx context.Context, since time.Time) error {
 	ch := plan.Diff(served, planned, forget)
 	b.keepStaleForgets(forget, removedAt, readFrom, ch.Forgotten)
 	// A batch is not a transaction (node.Partition.Batch): each operation
-	// applies or fails on its own. Since go-fabric v0.26.0 a call the
-	// batch holds (a key another endpoint serves at the call) answers nil
-	// and is judged at the commit, its refusal joined into Batch's error
-	// without saying which call it was; so what applied is read from the
-	// node's set after the batch (settle), and the calls' errors, kept by
-	// index, are for the log and a Forget's own failure.
+	// applies or fails on its own. A call the batch holds (a key another
+	// endpoint serves at the call) answers nil and is judged after fn.
+	// Batch returns nil, fn's error as it is, node.ErrStopped, or a
+	// *node.BatchError (go-fabric node/aggregator.go:589-592,
+	// node/batch_error.go:57-83 at v0.28.0) whose Calls name each call
+	// that failed after fn by its kind and own key, in call order, one
+	// entry per call and no call index (node/batch_error.go:60-64,
+	// :113-136 at v0.28.0); a call refused at the call returns its error there and is
+	// not among them (:113-114). So the calls' errors are kept by index,
+	// the entries of Calls are joined in by kind and key
+	// (batchCallErrors), and what applied is read from the node's set after
+	// the batch (settle): a call that returned nil succeeded unless Calls
+	// names it or a later call of the batch on the same key superseded or
+	// dropped it (:50-54). The errors are for the log and a Forget's own
+	// failure.
 	opErrs := make([]error, len(ch.Ops))
 	ran := false
 	err = b.n.Aggregator().Batch(ctx, func(bt *node.Batch) error {
@@ -703,13 +728,12 @@ func (b *Bridge) syncConnected(ctx context.Context, since time.Time) error {
 			case plan.Remove:
 				e = bt.Remove(op.Key)
 			case plan.Forget:
-				// A Forget whose reservation go-fabric cannot read answers
-				// nil here and erases nothing for the key; the commit joins
-				// "the erasure of … is skipped" into Batch's error
-				// (go-fabric node/reserve.go:668-689 at v0.28.0). settle
-				// then takes it as applied, so the entity, created again,
-				// gets its old number. Typing that error so it can be
-				// recorded again is go-fabric #616's scope.
+				// A Forget whose reservation go-fabric cannot read after
+				// fn answers nil here and erases nothing for the key; it
+				// is its call's entry of Calls, applied, and "the Forget
+				// can be made again" (go-fabric node/reserve.go:668-672,
+				// :687-693 at v0.28.0). batchCallErrors puts the entry at
+				// this operation, so settle records the Forget again.
 				e = bt.Forget(op.Key)
 			case plan.Replace:
 				e = bt.Replace(op.Key, op.Endpoint)
@@ -725,7 +749,9 @@ func (b *Bridge) syncConnected(ctx context.Context, since time.Time) error {
 	if err != nil {
 		b.log.Error("bridge.batch", slog.String("error", err.Error()))
 	}
-	if !ran {
+	if ran {
+		batchCallErrors(ch.Ops, opErrs, err)
+	} else {
 		// Refused before fn ran (a stopped node, node.ErrStopped): no
 		// call was made, so every operation failed with the batch.
 		for i := range opErrs {
@@ -821,11 +847,67 @@ func (b *Bridge) syncConnected(ctx context.Context, since time.Time) error {
 	b.mu.Unlock()
 	b.log.Info("bridge.synced", slog.Int("candidates", len(verdicts)), slog.Int("devices", len(next)), slog.Int("endpoints", endpoints),
 		slog.Int("added", len(ch.Added)), slog.Int("replaced", len(ch.Replaced)), slog.Int("removed", len(ch.Removed)))
-	changed := len(ch.Added)+len(ch.Replaced)+len(ch.Removed) > 0
-	if b.opts.OnChange != nil && (len(moved) > 0 || changed) {
-		b.opts.OnChange(moved, changed)
+	endpointsDone := b.endpointsDone(len(ch.Added)+len(ch.Replaced)+len(ch.Removed) > 0, err)
+	if b.opts.OnChange != nil && (len(moved) > 0 || endpointsDone) {
+		b.opts.OnChange(moved, endpointsDone)
 	}
 	return err
+}
+
+// batchCallErrors joins each entry of err's *node.BatchError Calls into
+// errs at every operation of ops of the entry's kind and key. Calls
+// carries no call index (go-fabric node/batch_error.go:60-64, :113-136 at
+// v0.28.0), and that no two operations of a diff share kind and key is
+// not established, so an entry marks each such operation, never the n-th.
+// An entry no operation matches, and an err that is no *node.BatchError,
+// change nothing.
+func batchCallErrors(ops []plan.Op[*device.Device], errs []error, err error) {
+	be, ok := errors.AsType[*node.BatchError](err)
+	if !ok {
+		return
+	}
+	for _, c := range be.Calls {
+		if c == nil || c.Key == nil {
+			continue
+		}
+		kind, ok := batchKinds[c.Op]
+		if !ok {
+			continue
+		}
+		for i, op := range ops {
+			if op.Kind == kind && op.Key != nil && op.Key.String() == c.Key.String() {
+				errs[i] = errors.Join(errs[i], c) //nolint:gosec // G602: errs has one entry per operation (the sync's opErrs)
+			}
+		}
+	}
+}
+
+// batchKinds are the plan's operations by go-fabric's batch call.
+var batchKinds = map[node.BatchOp]plan.OpKind{
+	node.BatchAdd: plan.Add, node.BatchReplace: plan.Replace, node.BatchRemove: plan.Remove, node.BatchForget: plan.Forget,
+}
+
+// endpointsDone records a sync's change of the endpoints (changed, from
+// its diff) as owed and reports whether this sync hands the owed change
+// on: only when its batch returned nil (err), and then once. After a
+// batch refused in part the node serves only some of the change, and
+// after a failed reassembly the set holds the batch's changes while the
+// node still serves the topology before; the next batch, an empty one
+// too, reassembles (go-fabric node/batch_error.go:71-82,
+// node/aggregator.go:612-622 at v0.28.0). So a healing sync with an empty
+// diff hands on what an earlier one owed. A batch that keeps returning an
+// error — an Add go-fabric refuses at every sync, an erasure skipped each
+// time — keeps the change owed and the notice up, also when its
+// reassembly succeeded: the event says the stored selection is in effect,
+// and the page's own reassemble is this sync and answers with the same
+// error (Resync). Worker-owned.
+func (b *Bridge) endpointsDone(changed bool, err error) bool {
+	b.endpointsOwed = b.endpointsOwed || changed
+	if err != nil || !b.endpointsOwed {
+		return false
+	}
+	b.endpointsOwed = false
+	return true
 }
 
 // settle takes back what the batch did not apply (HR-P1-err-31), so the
@@ -838,10 +920,11 @@ func (b *Bridge) syncConnected(ctx context.Context, since time.Time) error {
 // refused Add or Replace keeps no signature, so the next sync rebuilds it
 // and plan.Diff adds or replaces its keys again; until then a refused
 // Replace's entities stay on the plan whose device the node still serves
-// (keepStale, decision 73). A Forget applied unless
-// its call failed or an endpoint still serves its key, itself or as a
-// part (the node's refusal); a Forget not applied is recorded again for
-// the next sync. A failed Remove needs nothing: the node refuses it for a
+// (keepStale, decision 73). A Forget applied unless its call failed — at
+// the call, or after fn as an entry of the batch's *node.BatchError
+// (batchCallErrors), a skipped erasure among them — or an endpoint still
+// serves its key, itself or as a part (the node's refusal); a Forget not
+// applied is recorded again for the next sync. A failed Remove needs nothing: the node refuses it for a
 // key it does not serve.
 //
 // The set is the default partition's: go-fabric judges a key against
@@ -879,7 +962,7 @@ func (b *Bridge) settle(ops []plan.Op[*device.Device], errs []error, next map[st
 				refused[op.Key.String()] = op.Kind
 			}
 		case plan.Forget:
-			if errs[i] == nil && !served[op.Key.String()] {
+			if errs[i] == nil && !served[op.Key.String()] { //nolint:gosec // G602: errs has one entry per operation (the sync's opErrs)
 				continue
 			}
 			b.mu.Lock()

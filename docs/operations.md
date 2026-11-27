@@ -317,7 +317,7 @@ The lines to know:
 | `selection.missing` | warn | `selection.json` was missing beside its last-good copy; `restored` names the copy read and written back, empty when it could not be read (Files); also on the web UI's status page. |
 | `selection.restore_failed` | warn | The last-good copy read at start could not be written back as `selection.json` (`error`); the next start reads the copy again. |
 | `bridge.camera_disabled` | info | Once per start: exposed cameras skipped because `CAMERA` is off (`skipped`). |
-| `camera.session` / `camera.session_ended` | info | A controller opened or ended a camera session (`entity_id`, `session`). |
+| `camera.session` / `camera.session_ended` | info | A controller opened or ended a camera session (`entity_id`, `session`; `reason` on the end, the end reason's number: 8, OutOfResources, when go-fabric ended it at the bounds, see Cameras). |
 | `camera.ha_error` | warn | Home Assistant reported an error for a session (`code`, `message`, each cut to 512 bytes, e.g. `go2rtc_webrtc_offer_failed`); the session ends. |
 | `camera.candidates_exceeded` | warn | Home Assistant signalled more than 256 candidates in one session (`session`, `max`); the session ends. |
 | `camera.candidate_refused` | warn | A candidate of Home Assistant's that cannot be carried: over 1 KiB (`bytes`, `max`) or an `sdpMLineIndex` out of range; the session stays. |
@@ -326,7 +326,6 @@ The lines to know:
 | `camera.signal_failed` | warn | A signal did not reach the controller (`command`, `error`); the session ends. |
 | `camera.snapshot_failed` | warn | A controller's snapshot failed at the camera proxy (`error`: off, refused, too large). |
 | `camera.session_lost` | info | The Home Assistant connection dropped; its camera sessions ended with it. |
-| `camera.session_evicted` | info | A session ended to make room for a new offer of its fabric at the camera's 8 or the fabric's 4 (`session`, `for`, `fabric`; Cameras). |
 | `camera.answer_empty` | warn | Home Assistant's answer carried no SDP; the session ends. |
 
 ## Labels
@@ -434,7 +433,11 @@ this derivation is wrong for the installation.
 Limits:
 
 - `SolicitOffer` is refused: Home Assistant takes the client's offer only
-  (`camera/webrtc.py:252-258`); the answer is INVALID_IN_STATE.
+  (`camera/webrtc.py:252-258`); the answer is INVALID_IN_STATE. At a
+  session bound with no session to end, go-fabric's camera kit answers
+  instead, before the daemon is asked: a session id without a deferred
+  offer, then `End` with OutOfResources to the controller, or
+  RESOURCE_EXHAUSTED when that `End` cannot be queued.
 - The controller's ICE servers are not relayed; Home Assistant's provider
   uses its own (`camera/__init__.py:708-718`).
 - The stream declaration is nominal: Home Assistant names no codec,
@@ -446,18 +449,31 @@ Limits:
   (`camera/img_util.py:18-36`): a controller that asks for a large
   resolution of a large camera may get no snapshot.
 - A camera holds at most 8 WebRTC sessions, and one fabric (one
-  ecosystem's controllers) at most 4 of them. An offer beyond either
-  bound ends the offering fabric's own session idle longest — no command
-  and no Home Assistant event for a minute — with `End` (reason 12) to its
-  controller (`camera.session_evicted`), or, when that fabric has none so
-  idle, is answered RESOURCE_EXHAUSTED; another fabric's session is never
-  ended for it. A session has no idle end of its own: a
-  live view signals nothing once it stands, and it stays open as long as
-  the controller keeps it. The sessions of a controller go-fabric's node
-  proved lost — an exchange the node opened to it went unanswered and no
-  session with it is left — end through the node (`camera.session_ended`,
-  and Home Assistant's session closes); a controller still on Matter
-  that abandoned its view ends only by its own fabric's eviction above.
+  ecosystem's controllers) at most 4 of them; the bounds and their
+  eviction are go-fabric's camera kit's, which the daemon hands them. A
+  fabric keeps `8 / fabrics holding sessions` of them, at most 4. At a
+  bound a new offer ends the offering fabric's own session without
+  signalling for a minute, or — when the camera is full and the offering
+  fabric is under its share — such a session of a fabric over its share;
+  otherwise it is answered RESOURCE_EXHAUSTED before Home Assistant is
+  asked. Two ecosystems at 4 each never end each other's sessions; a
+  third one's offers bring the camera to 3, 3 and 2. The ended session's
+  controller gets `End` with OutOfResources, Home Assistant's session
+  closes, and the log says `camera.session_ended` with its `reason`.
+  Idle is signalling in either direction — the offer, the controller's
+  accepted candidates, Home Assistant's answer and candidates — and a
+  live view signals nothing once it stands, so the session ended can be
+  a view someone is watching: one of the offering fabric's own, or one
+  beyond another fabric's share. A controller's SolicitOffer, which the
+  daemon does not serve, passes the same bound before the daemon refuses
+  it, so at a bound it can cost a view as an offer does; an ecosystem
+  sending it has not been observed. Below a bound a session has no idle
+  end: it stays open as long as the controller keeps it. The sessions of
+  a controller go-fabric's node proved lost — an exchange the node opened
+  to it went unanswered and no session with it is left — end through the
+  node (`camera.session_ended`, and Home Assistant's session closes); a
+  controller still on Matter that abandoned its view ends only by the
+  eviction above.
 - A controller's `ProvideIceCandidates` carries at most 64 candidates and
   a session at most 256; beyond, the call is answered RESOURCE_EXHAUSTED.
   Before Home Assistant names its session at most 64 wait. Home
@@ -466,8 +482,8 @@ Limits:
   candidate, its line and its `sdpMid` together, is at most 1 KiB — the
   daemon's own bound, not the specification's: Home Assistant's longer
   one is refused (`camera.candidate_refused`), the session stays; a
-  controller's is answered CONSTRAINT_ERROR. Only a signal
-  the daemon relays counts as activity for the eviction.
+  controller's is answered CONSTRAINT_ERROR. A candidate refused on
+  either side is no activity for the eviction.
 - One camera proxy request runs per camera at a time: snapshots that
   arrive meanwhile share its still, and a still younger than a second is
   handed to a further snapshot of the same size.
@@ -611,7 +627,44 @@ word, its labels, the deciding layer and go-hamapping's verdict, the same
 as `--dump-plan` prints, and stays empty until Home Assistant has been read
 once. The Home Assistant connection is in the log (`ha.connected`,
 `ha.disconnected`, `bridge.synced`). 0.1.0's `GET /api/health` and `GET
-/api/plan` are gone since 0.2.0.
+/api/plan` are gone since 0.2.0; `GET /healthz`, below, is the daemon's
+own route beside go-fabric-ui's.
+
+`GET /healthz` answers a loopback client only (`127.0.0.1`, `::1`), ahead of
+`WEB_ALLOW`, so a probe on the same host needs no entry there: `200` with
+`ok` while the daemon's connection to Home Assistant is authenticated, `503`
+with `unavailable` otherwise (a refused token included). Another client, or
+another method than `GET` and `HEAD`, gets the web UI's answer as before:
+`WEB_ALLOW`'s 403, or go-fabric-ui's. The request's Host must be
+`localhost` or a loopback address too. A reverse proxy on the same host
+that rewrites the Host reaches the route for its clients, whatever
+`WEB_ALLOW` says: it gives away only whether Home Assistant is connected,
+and the proxy can refuse `/healthz`.
+
+`ha2fabric --health` asks that route and exits `0` on `200`, `1` otherwise.
+It reads `WEB_LISTEN` (flag over environment) and needs no `HA_URL` or
+token: an empty or unspecified host (`:8099`, `0.0.0.0`, `::`) is asked on
+loopback (`127.0.0.1`, `::1`), a loopback host or `localhost` as given, the
+same port, within 3 s, without a proxy and without following a redirect.
+It prints nothing on stdout and one fixed line on stderr per failure — the
+web UI not reachable, not connected to Home Assistant, an unexpected answer
+— never the address or a configuration value. It is not performable, and
+exits `1` with its line, when the web UI is off (`--web-listen=`), when
+`WEB_LISTEN` names a specific non-loopback address (the probe would not
+come from loopback), and in the add-on (its listener's address comes from
+the Supervisor at start).
+
+The plain image's `HEALTHCHECK` runs `/ha2fabric --health` (exec form)
+every 30 s with a 5 s timeout, a 30 s start period and 3 retries. The
+container is `unhealthy` while Home Assistant is away, although restarting
+the daemon does not bring Home Assistant back: restart on Home Assistant's
+side, not on `unhealthy`. Where the probe cannot reach the daemon — the web
+UI off, or `WEB_LISTEN` on a specific non-loopback address — run the
+container with `--no-healthcheck`. The image's probe gets the container's
+environment, not the daemon's flags: set the listener with `WEB_LISTEN`,
+since a `--web-listen` on the container's command does not reach the
+probe, which then asks the default port. The add-on has no watchdog yet
+(#72).
 
 ## Pairing
 

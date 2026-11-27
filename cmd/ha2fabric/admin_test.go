@@ -79,7 +79,7 @@ func TestAdminTable(t *testing.T) {
 		return cfg
 	}
 	handler := func(cfg *config.Config, gate *supervisorGate) http.Handler {
-		s, err := web.New(webOptions(cfg, gate, quiet, fabricui.Options{Logger: quiet}))
+		s, err := web.New(webOptions(cfg, gate, quiet, nil, fabricui.Options{Logger: quiet}))
 		if err != nil {
 			t.Fatal(err)
 		}

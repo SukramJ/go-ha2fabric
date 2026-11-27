@@ -48,7 +48,7 @@ See go-fabric's README, section "Not certified".
 
 - **One bridge for every exposed entity.** Each Home Assistant device
   becomes bridged endpoints of one go-fabric node; go-hamapping decides the
-  device types and clusters ([go-hamapping v0.9.0](https://github.com/SukramJ/go-hamapping/blob/v0.9.0/docs/rows.md)): lights (on/off, dimmable, colour
+  device types and clusters ([go-hamapping v0.10.0](https://github.com/SukramJ/go-hamapping/blob/v0.10.0/docs/rows.md)): lights (on/off, dimmable, colour
   temperature, extended colour), switches, scenes, scripts, automations
   and buttons, sensors (temperature, humidity, pressure, illuminance,
   power, voltage, current, energy, air quality and more, with a device's
@@ -142,7 +142,11 @@ licence texts of everything linked (`licenses/`, in the images
 The image's web UI listens on loopback (`127.0.0.1:8099`); to reach it from
 another machine add `-e WEB_LISTEN=0.0.0.0:8099`, and with `WEB_ADMIN=true`
 also `-e WEB_ALLOW=<the administrators' addresses>`
-([`docs/operations.md`](docs/operations.md), The web UI).
+([`docs/operations.md`](docs/operations.md), The web UI). The image's
+`HEALTHCHECK` runs `ha2fabric --health` against the web UI's port from
+loopback and reports `unhealthy` while Home Assistant is not connected;
+with `WEB_LISTEN` on a specific non-loopback address, or the web UI off,
+add `--no-healthcheck` ([`docs/operations.md`](docs/operations.md), Health).
 
 `ws://` sends the token unencrypted to that host; use `wss://` where Home
 Assistant has TLS (the daemon warns about `ws://` to another host,

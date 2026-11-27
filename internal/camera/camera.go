@@ -36,6 +36,7 @@ import (
 	"sync"
 	"time"
 
+	hamapping "sukramj.dev/go-hamapping"
 	"sukramj.dev/go-hamqtt/model"
 	gfcamera "thingfabric.dev/go-fabric/cluster/camera"
 	csdef "thingfabric.dev/go-fabric/cluster/spec/cameraavstreammanagement"
@@ -94,10 +95,6 @@ var (
 	// ErrCandidateTooLong refuses a controller's ICE candidate over
 	// MaxCandidateBytes; it travels with CONSTRAINT_ERROR.
 	ErrCandidateTooLong = errors.New("camera: an ICE candidate over MaxCandidateBytes")
-	// ErrTooManySessions refuses an offer beyond MaxSessions or its
-	// fabric's MaxSessionsPerFabric while none of that fabric's sessions
-	// is idle; it travels with RESOURCE_EXHAUSTED.
-	ErrTooManySessions = errors.New("camera: too many WebRTC sessions of the camera")
 )
 
 // MaxPendingCandidates bounds the controller's ICE candidates a session
@@ -139,31 +136,50 @@ const MaxCandidateBytes = 1024
 
 // MaxSessions bounds a camera's WebRTC sessions. Each is a session of
 // Home Assistant's WebRTC provider (a go2rtc consumer, a peer connection)
-// and a relay here. go-fabric's kit has bounds of its own
-// (ProviderConfig.MaxSessions and MaxSessionsPerFabric,
-// cluster/camera/provider.go:70-91 at v0.28.0), and go-hamapping's camera
-// row passes them from a host that implements its WebRTCSessionBounds
-// (go-hamapping ports.go:56-88 at v0.9.0). This host does not: the kit
-// refuses an offer at its bound before the port is asked (go-fabric
-// cluster/camera/provider.go:613-617, :724-728 at v0.28.0) and evicts nothing,
-// so passing them would take away [MaxSessionsPerFabric]'s eviction; the
-// host's bounds are the ones in force until the kit can evict
-// (thingfabric/go-fabric#634). A controller ecosystem
-// opens one live view per viewer, and eight viewers of one camera is
-// beyond any household.
+// and a relay here. The bound is go-fabric's kit's
+// (ProviderConfig.MaxSessions, cluster/camera/provider.go:70-91 at
+// v0.28.0): go-hamapping's camera row passes it, with
+// MaxSessionsPerFabric, from a host that implements its
+// WebRTCSessionBounds (go-hamapping ports.go:57-112 at v0.10.0), as this
+// one does ([Host.WebRTCSessionBounds]). A controller ecosystem opens one
+// live view per viewer, and eight viewers of one camera is beyond any
+// household.
 const MaxSessions = 8
 
-// MaxSessionsPerFabric is one fabric's share of MaxSessions (decision
-// 72), so one ecosystem cannot take every session of the camera. A new
-// session of a fabric at its share, or at MaxSessions, takes the place of
-// that fabric's own session idle longest when it has been idle for
-// EvictIdle (a controller that abandoned its view but stays on Matter
-// never ends its session; one the node proved lost go-fabric ends through
-// [Host.EndSession]); otherwise the offer is refused with
-// RESOURCE_EXHAUSTED before Home Assistant is asked. Another fabric's
-// session is never evicted. It moves to the kit, through go-hamapping's
-// WebRTCSessionBounds, once the kit evicts as this does
-// (thingfabric/go-fabric#634).
+// MaxSessionsPerFabric is one fabric's bound (decision 72), so one
+// ecosystem cannot take every session of the camera. The kit holds it
+// beside MaxSessions and evicts at both with what
+// [Host.WebRTCSessionEviction] hands it (go-fabric
+// cluster/camera/provider.go:92-143 at v0.28.0); eviction is on only with
+// EvictIdle above zero beside a bound (cluster/camera/provider_cap.go:53-55
+// at v0.28.0). At a bound a new offer takes, only at MaxSessions and with
+// EvictAcrossFabrics, the longest-idle session of a fabric over its share
+// for a fabric under its share, else the offering fabric's own
+// longest-idle session; only one idle for EvictIdle; otherwise the kit
+// refuses the offer before the port is asked (provider_cap.go:97-139,
+// provider.go:723-728 at v0.28.0). A fabric's share is
+// max(1, MaxSessions / n), at most MaxSessionsPerFabric, where n is the
+// fabrics holding a session plus the offering one when it holds none
+// (provider_cap.go:178-188 at v0.28.0): with 8 and 4 two fabrics never
+// cross, and a third brings the table to 3, 3 and 2
+// (docs/guides/camera.md:462-464 at v0.28.0). Fabrics cross by decision
+// 80, which supersedes decision 72's eviction within the offering fabric.
+//
+// The evicted session leaves CurrentSessions, the kit ends it through
+// [Host.EndSession] with OutOfResources, which unsubscribes Home
+// Assistant's session, and then sends its controller End with
+// OutOfResources (provider_cap.go:243-258 at v0.28.0; the End's send as
+// the comment at :234-242 states it). Idle is signalling-idle: the commit,
+// an accepted re-offer, ProvideAnswer, an accepted ProvideICECandidates
+// and the camera's Offer, Answer and IceCandidates are activity
+// (provider.go:92-122, provider_peer.go:195-197 at v0.28.0); a view
+// someone watches signals nothing, so a session beyond a share may be a
+// watched view (provider.go:131-134 at v0.28.0). A SolicitOffer is
+// admitted, and so evicts, before the port is asked (provider.go:612-618,
+// the port's refusal :628-631 at v0.28.0); this host serves none
+// ([Host.SolicitOffer]), so a solicit at a bound costs a view, and a
+// spent claim holds for EvictIdle (provider_cap.go:145-172 at v0.28.0).
+// An ecosystem sending SolicitOffer has not been observed.
 const MaxSessionsPerFabric = MaxSessions / 2
 
 // Defaults of [Options].
@@ -234,9 +250,11 @@ type Options struct {
 	// SignalTimeout bounds one signal and one Home Assistant command; 0
 	// is 10 s.
 	SignalTimeout time.Duration
-	// EvictIdle is how long a session must have been idle to make room
-	// for a new offer of its fabric at MaxSessions or
-	// MaxSessionsPerFabric; 0 is DefaultEvictIdle.
+	// EvictIdle is the kit's eviction idle time,
+	// [Host.WebRTCSessionEviction]'s first value: a session without
+	// signalling for that long can make room for a new offer at
+	// MaxSessions or MaxSessionsPerFabric ([MaxSessionsPerFabric]); 0 is
+	// DefaultEvictIdle.
 	EvictIdle time.Duration
 }
 
@@ -264,9 +282,7 @@ type Host struct {
 
 // session is one WebRTC session: the controller's id and Home Assistant's.
 type session struct {
-	id uint16
-	// fabric is the controller's fabric index, which the bounds count by.
-	fabric uint8
+	id     uint16
 	stream Stream
 	// haID is Home Assistant's session id, from its session event;
 	// pending holds the controller's candidates until it arrived, at most
@@ -278,13 +294,6 @@ type session struct {
 	sent int
 	// got counts Home Assistant's candidates against MaxSessionCandidates.
 	got int
-	// last is the time of the last controller command or Home Assistant
-	// event the relay acts on: the eviction at the bounds takes the
-	// offering fabric's session whose last is oldest. A session has no idle end: once the
-	// peer connection stands a live view signals nothing, and go-fabric's
-	// node ends the sessions of a controller it proved lost through
-	// [Host.EndSession] (decision 31).
-	last time.Time
 }
 
 // still is one camera proxy request; its fields are set before done
@@ -305,7 +314,7 @@ var dryHost = New("", nil, Options{})
 // DryPorts is go-hamapping's Options.Ports for a plan without a node
 // (--dump-plan, the web UI's previews): a camera entity gets a host that
 // serves nothing, every other entity none. go-hamapping decides a camera
-// row on the ports' interfaces (go-hamapping plan.go:171-179 at v0.9.0),
+// row on the ports' interfaces (go-hamapping plan.go:171-179 at v0.10.0),
 // so the stand-in is a real *Host; the bridge's live hosts take its place
 // when it builds.
 func DryPorts(e model.Entity) any {
@@ -461,19 +470,17 @@ func (h *Host) ProvideAnswer(context.Context, uint16, string) error { return Err
 // to camera/webrtc/offer, and the session the kit stores is returned. A
 // re-offer of a session the host holds replaces its Home Assistant
 // session; when the new one fails, the session ends (the controller is
-// told, which takes it out of CurrentSessions). A new session beyond
-// MaxSessions or its fabric's MaxSessionsPerFabric evicts its fabric's
-// session idle longest, or is refused.
+// told, which takes it out of CurrentSessions). The session bounds and
+// their eviction are the kit's ([MaxSessionsPerFabric]): it admits the
+// offer, and ends an evicted session through [Host.EndSession], before
+// it asks this port.
 //
-// The cap check and the insert after Home Assistant's answer are not one
-// step under h.mu: the cap holds because go-fabric runs one command of a
-// camera's provider at a time (cluster/camera/provider.go:253-259 at
-// v0.28.0 and cluster/camera/state.go:13-28 at v0.28.0), so no second offer of this camera runs
-// between them (HR-P2-conc-69). The same lock means a slow Home Assistant
-// holds the camera's other commands (EndSession, ProvideIceCandidates)
-// until this offer returns (an evicted or replaced session's unsubscribe,
-// each within SignalTimeout, and the offer's call, within the request's
-// deadline).
+// go-fabric runs one command of a camera's provider at a time
+// (cluster/camera/provider.go:253-259 and cluster/camera/state.go:13-26
+// at v0.28.0), so a slow Home Assistant holds the camera's other commands
+// (EndSession, ProvideIceCandidates) until this offer returns (a replaced
+// session's unsubscribe, within SignalTimeout, and the offer's call,
+// within the request's deadline).
 func (h *Host) ProvideOffer(ctx context.Context, args wpdef.OfferArgs) (wpdef.WebRTCSessionStruct, error) {
 	h.mu.Lock()
 	if h.closed {
@@ -482,30 +489,7 @@ func (h *Host) ProvideOffer(ctx context.Context, args wpdef.OfferArgs) (wpdef.We
 	}
 	old := h.sessions[args.SessionID]
 	delete(h.sessions, args.SessionID)
-	var victim *session
-	if old == nil && (len(h.sessions) >= MaxSessions || h.held(args.FabricIndex) >= MaxSessionsPerFabric) {
-		victim = h.idlest(args.FabricIndex)
-		if victim == nil {
-			n, own := len(h.sessions), h.held(args.FabricIndex)
-			h.mu.Unlock()
-			return wpdef.WebRTCSessionStruct{}, fmt.Errorf("%w: %d held, %d of fabric %d, session %d: %w", ErrTooManySessions, n, own,
-				args.FabricIndex, args.SessionID, contract.StatusError{Status: contract.StatusResourceExhausted, Message: ErrTooManySessions.Error()})
-		}
-		delete(h.sessions, victim.id)
-		h.wg.Add(1)
-	}
 	h.mu.Unlock()
-	if victim != nil {
-		h.log.Info("camera.session_evicted", slog.Int("session", int(victim.id)), slog.Int("for", int(args.SessionID)),
-			slog.Int("fabric", int(victim.fabric)))
-		h.unsubscribe(ctx, victim)
-		// The controller that left it may be gone: its End must not hold
-		// the new offer.
-		go func() {
-			defer h.wg.Done()
-			h.tell(h.ctx, victim.id, ReasonUnknown) //nolint:contextcheck // outlives the request, bounded by the host
-		}()
-	}
 	if old != nil {
 		h.unsubscribe(ctx, old)
 	}
@@ -519,7 +503,7 @@ func (h *Host) ProvideOffer(ctx context.Context, args wpdef.OfferArgs) (wpdef.We
 		}
 		return wpdef.WebRTCSessionStruct{}, err
 	}
-	ss := &session{id: args.SessionID, fabric: args.FabricIndex, stream: stream, last: time.Now()}
+	ss := &session{id: args.SessionID, stream: stream}
 	h.mu.Lock()
 	if h.closed {
 		h.mu.Unlock()
@@ -541,39 +525,6 @@ func (h *Host) ProvideOffer(ctx context.Context, args wpdef.OfferArgs) (wpdef.We
 	}
 	h.log.Info("camera.session", slog.Int("session", int(ss.id)), slog.Uint64("peer_node", args.PeerNodeID))
 	return out, nil
-}
-
-// held is the number of sessions of fabric. h.mu is held.
-func (h *Host) held(fabric uint8) int {
-	n := 0
-	for _, ss := range h.sessions {
-		if ss.fabric == fabric {
-			n++
-		}
-	}
-	return n
-}
-
-// idlest is fabric's session idle longest when it has been idle for
-// EvictIdle, else nil. h.mu is held.
-func (h *Host) idlest(fabric uint8) *session {
-	var out *session
-	for _, ss := range h.sessions {
-		if ss.fabric == fabric && (out == nil || ss.last.Before(out.last)) {
-			out = ss
-		}
-	}
-	if out == nil || time.Since(out.last) < h.opts.EvictIdle {
-		return nil
-	}
-	return out
-}
-
-// touch records activity on ss.
-func (h *Host) touch(ss *session) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	ss.last = time.Now()
 }
 
 // streams is the session's stream list: the first stream of the
@@ -626,7 +577,6 @@ func (h *Host) ProvideIceCandidates(ctx context.Context, sessionID uint16, candi
 		return refuse("queued", queued)
 	}
 	ss.sent += len(candidates)
-	ss.last = time.Now()
 	out := make([]ha.ICECandidate, len(candidates))
 	for i, c := range candidates {
 		out[i] = toHA(c)
@@ -659,6 +609,25 @@ func (h *Host) EndSession(ctx context.Context, sessionID uint16, reason uint8) e
 	}
 	return nil
 }
+
+// WebRTCSessionBounds implements go-hamapping's WebRTCSessionBounds
+// (ports.go:57-72 at v0.10.0): the camera row declares MaxSessions and
+// MaxSessionsPerFabric as the kit's bounds.
+func (h *Host) WebRTCSessionBounds() (total, perFabric int) {
+	return MaxSessions, MaxSessionsPerFabric
+}
+
+// WebRTCSessionEviction implements go-hamapping's WebRTCSessionEviction
+// (ports.go:74-91 at v0.10.0): the kit evicts at the bounds after
+// Options.EvictIdle, across fabrics (decision 80; [MaxSessionsPerFabric]).
+func (h *Host) WebRTCSessionEviction() (idle time.Duration, acrossFabrics bool) {
+	return h.opts.EvictIdle, true
+}
+
+var (
+	_ hamapping.WebRTCSessionBounds   = (*Host)(nil)
+	_ hamapping.WebRTCSessionEviction = (*Host)(nil)
+)
 
 // candidateBytes is what MaxCandidateBytes counts of a candidate: its
 // line and its sdpMid.
@@ -738,13 +707,15 @@ func (h *Host) relay(ctx context.Context, ss *session) {
 	}
 }
 
-// event handles one event; false ends the relay. Only an event it acts
-// on is activity: one it ignores or refuses does not keep the session
-// from the eviction at the bounds (HR-P2-bound-40).
+// event handles one event; false ends the relay. The host signals the
+// controller only for an event it acts on, and the kit counts the
+// camera's signals as the session's activity (go-fabric
+// cluster/camera/provider_peer.go:195-197 at v0.28.0), so an event it
+// ignores or refuses does not keep the session from the eviction at the
+// bounds (HR-P2-bound-40).
 func (h *Host) event(ctx context.Context, ss *session, ev ha.WebRTCEvent) bool {
 	switch ev.Type {
 	case ha.WebRTCSession:
-		h.touch(ss)
 		h.mu.Lock()
 		ss.haID = ev.SessionID
 		pending := ss.pending
@@ -766,7 +737,6 @@ func (h *Host) event(ctx context.Context, ss *session, ev ha.WebRTCEvent) bool {
 			h.end(ctx, ss, ReasonICEFailed)
 			return false
 		}
-		h.touch(ss)
 		return h.signal(ctx, ss, "Answer", func(ctx context.Context, s Signaller) error { return s.Answer(ctx, ss.id, ev.Answer) })
 	case ha.WebRTCCandidate:
 		if ev.Candidate == nil || ev.Candidate.Candidate == "" {
@@ -795,7 +765,6 @@ func (h *Host) event(ctx context.Context, ss *session, ev ha.WebRTCEvent) bool {
 			h.log.Warn("camera.candidate_refused", slog.Int("session", int(ss.id)), slog.Int("sdp_mline_index", *ev.Candidate.SdpMLineIndex))
 			return true
 		}
-		h.touch(ss)
 		return h.signal(ctx, ss, "IceCandidates", func(ctx context.Context, s Signaller) error {
 			return s.IceCandidates(ctx, ss.id, []gfcamera.ProviderICECandidate{c})
 		})

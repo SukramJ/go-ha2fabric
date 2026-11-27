@@ -17,11 +17,23 @@ All notable changes to this project are documented here. The format follows
 - Release archives and both images carry a build provenance and an SBOM
   (CycloneDX) attestation, checkable with `gh attestation verify`; the
   archives' SBOM is also a release asset (HR-P3-sup-36).
+- `ha2fabric --health` and the plain image's `HEALTHCHECK`
+  (`--interval=30s --timeout=5s --start-period=30s --retries=3`, exec
+  form): the probe asks the daemon's new `GET /healthz` on `WEB_LISTEN`'s
+  port from loopback and exits 0 while Home Assistant is connected, 1
+  otherwise; it needs no `HA_URL` or token and prints no address or
+  configuration value. `GET /healthz` answers loopback clients only, ahead
+  of `WEB_ALLOW`: `200 ok` or `503 unavailable`. Not performable with the
+  web UI off, with `WEB_LISTEN` on a specific non-loopback address (run
+  the container with `--no-healthcheck`) and in the add-on (#71).
 - `SECURITY.md`: report a vulnerability privately through GitHub's
   private vulnerability reporting (HR-P3-sup-44).
 
 ### Changed
 
+- go-hamapping `v0.9.0` → `v0.10.0`: the camera row passes the host's
+  eviction at the session bounds (`WebRTCSessionEviction`, see Cameras
+  below); nothing else changes for a controller.
 - go-hamapping `v0.8.0` → `v0.9.0`. What a controller sees:
   - A cover without a position (no SET_POSITION) now reports its position
     from its state (closed 100 %, open 0 %) and serves GoToLiftPercentage
@@ -54,18 +66,30 @@ All notable changes to this project are documented here. The format follows
   next sync, and until then the endpoints before stay served.
 - go-fabric-ui `v0.14.1` → `v0.16.0`: the node page's "not in effect"
   notice clears only on `endpoints_changed`, which the bridge publishes
-  after a sync that changed the endpoints. The controller routes' status
+  once a sync whose batch go-fabric applied in full follows the syncs that
+  changed the endpoints (see Fixed). The controller routes' status
   changes of 0.15.0 and 0.16.0 do not reach this daemon, which serves no
   controller.
 - `github.com/oapi-codegen/runtime` `v1.9.0` → `v1.9.1` (indirect, with
   go-fabric-ui).
 - Development tools: golangci-lint `v2.14.0` → `v2.15.0`, govulncheck
   `v1.8.0` → `v1.10.0`.
-- Cameras: one fabric holds at most 4 of a camera's 8 WebRTC sessions, and
-  an offer at either bound ends only an idle session of its own fabric,
-  else it is answered RESOURCE_EXHAUSTED; another ecosystem's live view is
-  no longer ended for it (HR-P4-bound-20).
-- Dependencies moved to their vanity import paths: `sukramj.dev/go-ha-catalog` v0.4.0, `sukramj.dev/go-hamapping` v0.8.0 (now v0.9.0, above), `sukramj.dev/go-hamqtt` v0.41.0.
+- Cameras: the WebRTC session bounds and their eviction are go-fabric's
+  camera kit's, which the daemon hands them (#83, HR-P4-bound-20). A camera
+  holds at most 8 sessions and a fabric at most 4; a fabric keeps
+  `8 / fabrics holding sessions` of them, at most 4. At a bound a new offer
+  ends the offering fabric's own session without signalling for a minute,
+  or — when the camera is full and the offering fabric is under its share —
+  such a session of a fabric over its share; otherwise it is answered
+  RESOURCE_EXHAUSTED. Two ecosystems never end each other's sessions; **a
+  session beyond a fabric's share can be ended for another fabric**, so a
+  third ecosystem's offers bring the camera to 3, 3 and 2. Idle is
+  signalling in either direction. The ended session's controller gets `End`
+  with OutOfResources instead of reason 12, and the log line is
+  `camera.session_ended` with its reason; `camera.session_evicted` is no
+  longer logged. A controller's SolicitOffer, which the daemon does not
+  serve, can at a bound end a session as an offer does.
+- Dependencies moved to their vanity import paths: `sukramj.dev/go-ha-catalog` v0.4.0, `sukramj.dev/go-hamapping` v0.8.0 (now v0.10.0, above), `sukramj.dev/go-hamqtt` v0.41.0.
 - Add-on: the web UI binds to the address the Supervisor gives the add-on
   (the Supervisor network's gateway, where the Ingress proxy connects),
   read at start; when it cannot be read, every interface as before, with
@@ -96,6 +120,18 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- `endpoints_changed` is no longer published after a sync whose batch
+  go-fabric refused in part or whose reassembly failed, so the web UI's
+  "not in effect" notice stays until a sync applied everything; the change
+  is owed and published by the first sync whose batch returned nil, also
+  when that sync's own diff is empty. While every sync fails — an endpoint
+  go-fabric keeps refusing, a store that keeps failing — the notice stays,
+  as an apply through the page answers; the status page shows
+  `sync_error`.
+- A Forget whose erasure go-fabric skipped (its typed batch error names the
+  call) is made again at the next sync instead of being taken as done;
+  until its erasure ran, go-fabric keeps what it stored for the key, the
+  endpoint number included.
 - Add-on: the daemon gets the stop signal itself
   (`S6_CMD_RECEIVE_SIGNALS=1`), so a stop has the daemon's 25 s budget —
   an erase finishes, the nodes and camera sessions end in order — instead

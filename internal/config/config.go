@@ -153,6 +153,10 @@ type Config struct {
 	DumpPlan bool
 	// Version prints the version and exits.
 	Version bool
+	// Health probes the running daemon's web listener and exits
+	// (--health; cmd/ha2fabric's health). Like Version it returns from
+	// Load before any validation: it needs no Home Assistant URL or token.
+	Health bool
 }
 
 // Exposure is the configured exposure rule.
@@ -256,6 +260,7 @@ func Load(args []string, env Env, out io.Writer) (*Config, error) {
 	limit := str("node-limit", "NODE_LIMIT", strconv.Itoa(DefaultNodeLimit), "how many nodes the web UI may create beside the configured one")
 	dump := fs.Bool("dump-plan", false, "print every candidate entity's verdict and exit")
 	ver := fs.Bool("version", false, "print the version and exit")
+	health := fs.Bool("health", false, "probe the running daemon's web UI (WEB_LISTEN) and exit 0 when it answers and Home Assistant is connected, 1 otherwise")
 	if err := fs.Parse(args); err != nil {
 		return nil, err
 	}
@@ -266,7 +271,7 @@ func Load(args []string, env Env, out io.Writer) (*Config, error) {
 		*passcode = get("PASSCODE")
 	}
 
-	c := &Config{DumpPlan: *dump, Version: *ver}
+	c := &Config{DumpPlan: *dump, Version: *ver, Health: *health}
 	supervisor := get(SupervisorTokenEnv)
 	c.Addon = supervisor != ""
 	c.SupervisorToken = supervisor
@@ -303,7 +308,7 @@ func Load(args []string, env Env, out io.Writer) (*Config, error) {
 	}
 	c.WebAllowedHosts = expose.Split(*allowedHosts)
 
-	if c.Version {
+	if c.Version || c.Health {
 		return c, nil
 	}
 	if c.HAURL == "" {

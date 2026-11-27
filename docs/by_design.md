@@ -149,11 +149,14 @@ per fabric (`backend/src/plugins/builtin/camera/webrtc-provider-server.ts:25-34,
 and its relay keeps every session in an unbounded map
 (`webrtc-bridge.ts:90, 141, 216`); nothing is evicted or refused.
 go-ha2fabric holds a camera to 8 sessions, each one a Home Assistant
-WebRTC session and a relay, and a fabric to 4 of them; at either bound a
-new offer ends only its own fabric's session idle for a minute, else it
-is answered RESOURCE_EXHAUSTED. One controller
-ecosystem can neither exhaust Home Assistant's provider nor end another
-ecosystem's live view.
+WebRTC session and a relay, and a fabric to 4 of them, through go-fabric's
+camera kit: a fabric keeps `8 / fabrics holding sessions` of them, at most
+4; at a bound a new offer ends the offering fabric's own session without
+signalling for a minute, or — when the camera is full and the offering
+fabric is under its share — such a session of a fabric over its share;
+otherwise it is answered RESOURCE_EXHAUSTED. One controller ecosystem can
+neither exhaust Home Assistant's provider nor take another ecosystem's
+sessions within that ecosystem's share.
 
 ## Signalling only
 
@@ -165,7 +168,7 @@ answer and candidates go back through go-fabric's `camera.Provider`
 signals, and the controller's peer connection is with Home Assistant's
 provider itself (`camera/webrtc.py:264-273`). The stream declaration is
 therefore nominal — one video, audio and snapshot stream, the values of
-go-hamapping's camera row and its caveat (`rows/camera.yaml` at v0.9.0) —
+go-hamapping's camera row and its caveat (`rows/camera.yaml` at v0.10.0) —
 since Home Assistant names no codec, resolution or frame rate
 (`camera/__init__.py:742-755`). A relay without a media stack needs no
 codec of its own and adds no hop to the stream.

@@ -175,7 +175,7 @@ if the pre-merge read adds none.
 
 | # | Subject | Decision |
 | --- | --- | --- |
-| 72 | HR-P4-bound-20, the camera's eviction at the session cap crosses fabrics | **Fabric-scoped eviction plus a per-fabric share** in the host (half the cap, 4 of 8), otherwise RESOURCE_EXHAUSTED; a go-hamapping issue to pass go-fabric's `MaxSessionsPerFabric` through the camera row, after which the host's share goes; supersedes decision 23's eviction rule |
+| 72 | HR-P4-bound-20, the camera's eviction at the session cap crosses fabrics | **Fabric-scoped eviction plus a per-fabric share** in the host (half the cap, 4 of 8), otherwise RESOURCE_EXHAUSTED; a go-hamapping issue to pass go-fabric's `MaxSessionsPerFabric` through the camera row, after which the host's share goes; supersedes decision 23's eviction rule — *superseded by 80* (eviction within the offering fabric only) |
 | 73 | HR-P4-err-40, a refused Replace leaves the served endpoint without a live plan | **A stale plan for exactly the refused keys**, live until a later batch applies them; completes HR-P1-err-31 |
 | 74 | HR-P4-err-64, a Delete whose stop fails | **Refused** with 500, the record and files kept, a second Delete retries |
 | 75 | Every other row of run 1 | **As the verifier recommends**: cfg-01 `S6_CMD_RECEIVE_SIGNALS=1` with a guard test and the comments and docs (cfg-02's docs line with it); sup-03 the `# syntax=` line dropped and the lint grep extended; sup-04 a lint check that holds the Go version in its four places; test-62 floor 94 and the floors header; sup-70 `gosec` on `cmd/` with one reasoned `nolint`; P's `ErrNoStableKey` probe as a standing guard; adpt-42 a go-fabric issue beside #616, outside the fix wave; every other low and note fixed in phase 4's pull request |
@@ -184,7 +184,7 @@ if the pre-merge read adds none.
 
 | # | Subject | Decision |
 | --- | --- | --- |
-| 76 | Decision 72's share and a third fabric (two ecosystems at 4 each can lock a third out until go-fabric proves their controllers lost) | **4 of 8 kept**; the lock-out goes into go-hamapping #50 (a total that follows the share times the fabrics, or a fair-share eviction) |
+| 76 | Decision 72's share and a third fabric (two ecosystems at 4 each can lock a third out until go-fabric proves their controllers lost) | **4 of 8 kept**; the lock-out goes into go-hamapping #50 (a total that follows the share times the fabrics, or a fair-share eviction) — *closed by 80* |
 | 77 | HR-P4-err-93, Create's rollback stop fails | **Fixed**: the unstopped node goes to the fleet's close list, its files stay, Create answers the error |
 | 78 | HR-P4-bound-98, a controller's ICE candidate over 1024 bytes | **CONSTRAINT_ERROR kept**; the comment and docs say it is the host's own bound |
 
@@ -193,3 +193,9 @@ if the pre-merge read adds none.
 | # | Subject | Decision |
 | --- | --- | --- |
 | 79 | HR-P4-conc-69's fix (`began.After(since)`) failed `TestSnapshotsShared` on CI's Windows runner: there every read of one trigger begins in the trigger's clock tick, so no read was shared (HR-P2-bound-62's purpose) | **Reverted, conc-69 accepted**: a read of the trigger's tick is shared again; an event missed within that tick is corrected by the next trigger; the comment and `TestSnapshotsSameTickIsReused` say so. A sequence mark instead of time was the alternative, not taken |
+
+## 2026-11-27, wave 83/71 (#83)
+
+| # | Subject | Decision |
+| --- | --- | --- |
+| 80 | The camera's session bounds and eviction once go-fabric v0.28.0's kit evicts and go-hamapping v0.10.0 passes the eviction (`WebRTCSessionEviction`) | **Bounds and eviction through the kit**: the host declares 8 and 4 (`WebRTCSessionBounds`) and `EvictIdle` one minute with `EvictAcrossFabrics` **on** (`WebRTCSessionEviction`); the host's own share goes. Supersedes decision 72's "eviction only within the offering fabric" (a fabric keeps `8 / fabrics holding sessions`, at most 4; beyond its share a session idle for a minute can go, when the camera is full, to a fabric under its share) and closes decision 76's third-fabric lock-out. The evicted session's `End` carries OutOfResources and its log line is `camera.session_ended` (no line of its own); the SolicitOffer residual (admitted, and so evicting, before the host refuses it) is accepted and documented |

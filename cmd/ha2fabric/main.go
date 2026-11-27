@@ -82,6 +82,9 @@ func run(ctx context.Context, args []string, env config.Env, stdout, stderr io.W
 		_, _ = fmt.Fprintln(stdout, version.String())
 		return 0
 	}
+	if cfg.Health {
+		return health(ctx, cfg, stderr)
+	}
 	// LOG_LEVEL is the level at start; the web UI's Operation page moves
 	// it at run time (lvl gates the ring and stderr alike).
 	lvl := new(slog.LevelVar)
@@ -173,7 +176,7 @@ func run(ctx context.Context, args []string, env config.Env, stdout, stderr io.W
 				return addonAddress(ctx, sc, addonInfoURL, cfg.SupervisorToken)
 			}, addressPause, logger)
 		}
-		ws, err := web.New(webOptions(cfg, gate, logger, fabricui.Options{
+		ws, err := web.New(webOptions(cfg, gate, logger, client.Connected, fabricui.Options{
 			Node: def.sw, Exposure: def.prov, Reassemble: def.Resync, Events: def.events, Warnings: warnings(def, fl, hostWarnings(startup, gate, client.TokenRefused)), Counters: counters(def, fl), Erase: def.erase, Logger: logger,
 			Operations: web.NewOperations(ring, version.Version, started),
 			Registry:   fl, NodeConfig: nodeConfig(cfg),
@@ -302,13 +305,13 @@ func nodeConfig(cfg *config.Config) *fabricui.NodeConfigView {
 // administrator check (admin) and the Host check (WEB_ALLOWED_HOSTS,
 // allowHost). run and the admin table's test (TestAdminTable) build the
 // server through it.
-func webOptions(cfg *config.Config, gate *supervisorGate, logger *slog.Logger, ui fabricui.Options) web.Options {
+func webOptions(cfg *config.Config, gate *supervisorGate, logger *slog.Logger, healthy func() bool, ui fabricui.Options) web.Options {
 	ui.Admin = admin(cfg, gate)
 	ui.AllowedHosts, ui.AllowHost = cfg.WebAllowedHosts, allowHost(cfg)
 	// WEB_ADMIN without WEB_ALLOW was accepted for a loopback WEB_LISTEN
 	// by its text; the bound address must be loopback too.
 	loopback := cfg.WebAdmin && !cfg.Addon && len(cfg.WebAllow) == 0
-	return web.Options{Listen: cfg.WebListen, Allow: cfg.WebAllow, Loopback: loopback, Logger: logger, UI: ui}
+	return web.Options{Listen: cfg.WebListen, Allow: cfg.WebAllow, Loopback: loopback, Healthy: healthy, Logger: logger, UI: ui}
 }
 
 // admin is the web UI's administrator check. In the add-on: a request of

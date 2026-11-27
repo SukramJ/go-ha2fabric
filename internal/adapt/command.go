@@ -359,7 +359,7 @@ func light(id string, payload []byte) (ha.ServiceCall, error) {
 
 // catalogPayload is the payload the row rendered for a catalog key: the
 // entity's Extra[key], else the catalog's default for the platform
-// (go-hamapping value.go extra/catalogDefault at v0.9.0).
+// (go-hamapping value.go extra/catalogDefault at v0.10.0).
 func catalogPayload(e model.Entity, key string) (string, bool) {
 	if v, ok := e.Desc().Extra[key].(string); ok {
 		return v, true
@@ -395,9 +395,9 @@ func integer(s string, lo, hi int) (int, bool) {
 
 // kelvinMin and kelvinMax bound color_temp_kelvin to what go-hamapping
 // renders: 1e6 / ColorTemperatureMireds (go-hamapping rows_gen.go:2412 at
-// v0.9.0, "reciprocal" with scale 1e6) with the mireds 1 to 65279 (the
+// v0.10.0, "reciprocal" with scale 1e6) with the mireds 1 to 65279 (the
 // row's bounds on the same line, Matter's 0xFEFF; 0 is refused by
-// "reciprocal", value.go:282-285 at v0.9.0), so 15 (1e6/65279, rounded) to
+// "reciprocal", value.go:282-285 at v0.10.0), so 15 (1e6/65279, rounded) to
 // 1000000. Home Assistant takes any int from 0 (light/const.py:173,
 // cv.positive_int at helpers/config_validation.py:185, 2026.10.3); both
 // bounds fit an int32.

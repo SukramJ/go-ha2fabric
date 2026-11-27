@@ -150,6 +150,7 @@ type signaller struct {
 	calls     []string
 	answerErr func(n int) error
 	candErr   error
+	endErr    error
 	answers   int
 }
 
@@ -182,7 +183,7 @@ func (s *signaller) End(_ context.Context, id uint16, reason uint8) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.calls = append(s.calls, fmt.Sprintf("end %d %d", id, reason))
-	return nil
+	return s.endErr
 }
 
 func (s *signaller) seen() []string {
