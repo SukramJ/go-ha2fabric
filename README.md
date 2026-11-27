@@ -33,7 +33,7 @@ device, is reserved to Alliance members and certified products under the
 *Connectivity Standards Alliance Trademark and Logo Usage Guidelines and
 Terms* (<https://csa-iot.org/resources/governing-documents/>; the terms are
 restated in go-fabric's
-[`licenses/NOTICE-matter.js.txt`](https://github.com/thingfabric/go-fabric/blob/v0.27.0/licenses/NOTICE-matter.js.txt)
+[`licenses/NOTICE-matter.js.txt`](https://github.com/thingfabric/go-fabric/blob/v0.28.0/licenses/NOTICE-matter.js.txt)
 at v0.27.0, shipped in this project's `licenses/` tree:
 "Only the Alliance and its members may use Alliance trademarks and logos,
 including, without limitation, the Matter trademarks and logos"). This

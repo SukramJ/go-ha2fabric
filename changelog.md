@@ -47,6 +47,20 @@ All notable changes to this project are documented here. The format follows
     and the other riders stay. `bridge.build_refused` names it as
     `entity` and the endpoint as `endpoint` (was `riders`).
 - go-fabric `v0.26.0` → `v0.27.0`.
+- go-fabric `v0.27.0` → `v0.28.0` (go-fabric's changelog 0.28.0): an
+  attribute value, event or command response whose encoding fails is
+  answered FAILURE for its own path instead of failing the whole read or
+  subscription; a reassembly that failed after a sync is redone by the
+  next sync, and until then the endpoints before stay served.
+- go-fabric-ui `v0.14.1` → `v0.16.0`: the node page's "not in effect"
+  notice clears only on `endpoints_changed`, which the bridge publishes
+  after a sync that changed the endpoints. The controller routes' status
+  changes of 0.15.0 and 0.16.0 do not reach this daemon, which serves no
+  controller.
+- `github.com/oapi-codegen/runtime` `v1.9.0` → `v1.9.1` (indirect, with
+  go-fabric-ui).
+- Development tools: golangci-lint `v2.14.0` → `v2.15.0`, govulncheck
+  `v1.8.0` → `v1.10.0`.
 - Cameras: one fabric holds at most 4 of a camera's 8 WebRTC sessions, and
   an offer at either bound ends only an idle session of its own fabric,
   else it is answered RESOURCE_EXHAUSTED; another ecosystem's live view is

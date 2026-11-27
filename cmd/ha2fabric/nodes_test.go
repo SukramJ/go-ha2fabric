@@ -520,7 +520,7 @@ func TestNodeEraseFailed(t *testing.T) {
 	fail()
 	d.want(http.MethodPost, "/api/v1/node/maintenance/erase", eraseBody, http.StatusInternalServerError)
 	// The switch keeps the stopped node (go-fabric-ui fabricui/nodeswitch.go:
-	// 69-73 at v0.14.1: Set panics on nil), so the status is the stopped node's.
+	// 69-73 at v0.16.0: Set panics on nil), so the status is the stopped node's.
 	st := d.status("/api/v1/node/status")
 	if !st.warned("node_erase_failed", "the node did not come back after the erase: node: "+sentinel.Error()) {
 		t.Fatalf("no node_erase_failed: %+v", st)

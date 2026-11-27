@@ -7,8 +7,8 @@ require (
 	sukramj.dev/go-ha-catalog v0.4.0
 	sukramj.dev/go-hamapping v0.9.0
 	sukramj.dev/go-hamqtt v0.41.0
-	thingfabric.dev/go-fabric v0.27.0
-	thingfabric.dev/go-fabric-ui v0.14.1
+	thingfabric.dev/go-fabric v0.28.0
+	thingfabric.dev/go-fabric-ui v0.16.0
 )
 
 require (
@@ -19,7 +19,7 @@ require (
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/miekg/dns v1.1.73 // indirect
 	github.com/ncruces/go-strftime v1.1.0 // indirect
-	github.com/oapi-codegen/runtime v1.9.0 // indirect
+	github.com/oapi-codegen/runtime v1.9.1 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	golang.org/x/net v0.62.0 // indirect
 	golang.org/x/sys v0.49.0 // indirect

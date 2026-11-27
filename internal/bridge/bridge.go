@@ -12,7 +12,7 @@
 // (internal/exposure).
 //
 // It follows go-fabric's cookbook "Embed in a daemon"
-// (docs/guides/embed-in-a-daemon.md at v0.27.0): one aggregator batch for
+// (docs/guides/embed-in-a-daemon.md at v0.28.0): one aggregator batch for
 // the whole exposed set at start and on every registry change (§4),
 // states to attributes through the plan's typed Sets (§5), reachability
 // from each entity's availability and from the Home Assistant connection
@@ -706,7 +706,7 @@ func (b *Bridge) syncConnected(ctx context.Context, since time.Time) error {
 				// A Forget whose reservation go-fabric cannot read answers
 				// nil here and erases nothing for the key; the commit joins
 				// "the erasure of … is skipped" into Batch's error
-				// (go-fabric node/reserve.go:615-631 at v0.27.0). settle
+				// (go-fabric node/reserve.go:668-689 at v0.28.0). settle
 				// then takes it as applied, so the entity, created again,
 				// gets its old number. Typing that error so it can be
 				// recorded again is go-fabric #616's scope.

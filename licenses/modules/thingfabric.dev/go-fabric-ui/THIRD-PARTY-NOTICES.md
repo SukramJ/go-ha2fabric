@@ -19,13 +19,13 @@ licence texts are under `licenses/npm/`.
 
 | Package | Version | Licence | Text |
 | --- | --- | --- | --- |
-| `@lucide/svelte` | 1.74.0 | ISC | [`licenses/npm/lucide-svelte.txt`](./licenses/npm/lucide-svelte.txt) |
+| `@lucide/svelte` | 1.82.0 | ISC | [`licenses/npm/lucide-svelte.txt`](./licenses/npm/lucide-svelte.txt) |
 | `clsx` | 2.1.1 | MIT | [`licenses/npm/clsx.txt`](./licenses/npm/clsx.txt) |
 | `dijkstrajs` | 1.0.3 | MIT | [`licenses/npm/dijkstrajs.txt`](./licenses/npm/dijkstrajs.txt) |
 | `jsqr` | 1.4.0 | Apache-2.0 | [`licenses/npm/jsqr.txt`](./licenses/npm/jsqr.txt) |
 | `qrcode` | 1.5.4 | MIT | [`licenses/npm/qrcode.txt`](./licenses/npm/qrcode.txt) |
-| `svelte` | 5.57.3 | MIT | [`licenses/npm/svelte.txt`](./licenses/npm/svelte.txt) |
-| `tailwind-merge` | 3.7.0 | MIT | [`licenses/npm/tailwind-merge.txt`](./licenses/npm/tailwind-merge.txt) |
+| `svelte` | 5.59.2 | MIT | [`licenses/npm/svelte.txt`](./licenses/npm/svelte.txt) |
+| `tailwind-merge` | 3.7.1 | MIT | [`licenses/npm/tailwind-merge.txt`](./licenses/npm/tailwind-merge.txt) |
 | `tailwindcss` | 4.3.5 | MIT | [`licenses/npm/tailwindcss.txt`](./licenses/npm/tailwindcss.txt) |
 
 The npm package `@thingfabric/fabric-ui` itself ships sources, not this bundle;

@@ -11,7 +11,7 @@
 // decision 2026-10-25): /api/v1/node/status and /api/v1/node/exposure
 // replace them. The UI's URLs are relative, so it
 // works under Ingress's path prefix (go-fabric-ui docs/embedding.md,
-// "Behind an Ingress", at v0.14.1). Since go-fabric-ui v0.10 the handler checks every
+// "Behind an Ingress", at v0.16.0). Since go-fabric-ui v0.10 the handler checks every
 // request's Host: loopback names and IP addresses pass, a DNS name only
 // when it is in UI.AllowedHosts (WEB_ALLOWED_HOSTS) or UI.AllowHost admits
 // the request — in the add-on the Ingress proxy's source address, since

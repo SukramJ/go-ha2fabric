@@ -29,7 +29,7 @@ The Matter side: the `node` facade, the device kit (`device`), `contract`,
 `eligibility` and the generated `<cluster>def` packages; in tests its
 in-process controller (`fabrictest`).
 
-- Source: <https://github.com/thingfabric/go-fabric>, module `thingfabric.dev/go-fabric`, pinned `v0.27.0`.
+- Source: <https://github.com/thingfabric/go-fabric>, module `thingfabric.dev/go-fabric`, pinned `v0.28.0`.
 - Copyright (C) 2026 SukramJ. Apache License 2.0. Its `NOTICE` (go-fabric
   is a semantic port of matter.js, Copyright matter.js contributors,
   Apache License 2.0) and matter.js's `NOTICE`, with its own
@@ -53,7 +53,7 @@ The web interface: the `fabricui` handlers and the built bundle embedded in
 the module (Svelte 5 pages compiled at go-fabric-ui's release; no Node.js
 in this build).
 
-- Source: <https://github.com/thingfabric/go-fabric-ui>, module `thingfabric.dev/go-fabric-ui`, pinned `v0.14.1`.
+- Source: <https://github.com/thingfabric/go-fabric-ui>, module `thingfabric.dev/go-fabric-ui`, pinned `v0.16.0`.
 - Copyright (C) 2026 SukramJ. Apache License 2.0; the bundle's npm
   licences and its `THIRD-PARTY-NOTICES.md` are in
   [`licenses/modules/thingfabric.dev/go-fabric-ui/`](licenses/modules/thingfabric.dev/go-fabric-ui/).
