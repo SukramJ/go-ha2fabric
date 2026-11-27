@@ -72,8 +72,15 @@ type Options struct {
 	// Logger is the bridge's logger; nil is slog.Default().
 	Logger *slog.Logger
 	// OnChange, when set, is called on the worker after a sync that
-	// changed the exposure (the entity ids whose decision moved) or the
-	// endpoints (added, replaced or removed devices).
+	// changed the exposure (the entity ids whose decision moved) or that
+	// owes the endpoints' change (endpoints true): owed from the first
+	// sync whose diff added, replaced or removed a device, and handed on
+	// by the first sync after it whose batch returned nil, once. A host
+	// that rebuilds on its own publishes endpoints_changed after its
+	// rebuild returned nil (go-fabric-ui docs/embedding.md:152-154 at
+	// v0.16.0), and the web UI clears its "not in effect" notice on that
+	// event only (go-fabric-ui ui/src/lib/store.svelte.ts:480-490 at
+	// v0.16.0).
 	OnChange func(exposure []string, endpoints bool)
 	// Retry is the first wait before a sync that failed while Home
 	// Assistant stays connected is tried again; it doubles with each
@@ -211,6 +218,10 @@ type Bridge struct {
 	// retry is the wait before the next retry of a failed sync, 0 after a
 	// sync that succeeded.
 	retry time.Duration
+	// endpointsOwed is set by a sync whose diff changed the endpoints and
+	// cleared by the sync whose batch returned nil, which hands
+	// endpoints true to Options.OnChange.
+	endpointsOwed bool
 
 	mu sync.Mutex
 	// states are the served entities' current states: the snapshot's,
@@ -826,11 +837,29 @@ func (b *Bridge) syncConnected(ctx context.Context, since time.Time) error {
 	b.mu.Unlock()
 	b.log.Info("bridge.synced", slog.Int("candidates", len(verdicts)), slog.Int("devices", len(next)), slog.Int("endpoints", endpoints),
 		slog.Int("added", len(ch.Added)), slog.Int("replaced", len(ch.Replaced)), slog.Int("removed", len(ch.Removed)))
-	changed := len(ch.Added)+len(ch.Replaced)+len(ch.Removed) > 0
-	if b.opts.OnChange != nil && (len(moved) > 0 || changed) {
-		b.opts.OnChange(moved, changed)
+	endpointsDone := b.endpointsDone(len(ch.Added)+len(ch.Replaced)+len(ch.Removed) > 0, err)
+	if b.opts.OnChange != nil && (len(moved) > 0 || endpointsDone) {
+		b.opts.OnChange(moved, endpointsDone)
 	}
 	return err
+}
+
+// endpointsDone records a sync's change of the endpoints (changed, from
+// its diff) as owed and reports whether this sync hands the owed change
+// on: only when its batch returned nil (err), and then once. After a
+// batch refused in part the node serves only some of the change, and
+// after a failed reassembly the set holds the batch's changes while the
+// node still serves the topology before; the next batch, an empty one
+// too, reassembles (go-fabric node/batch_error.go:71-82,
+// node/aggregator.go:612-622 at v0.28.0). So a healing sync with an empty
+// diff hands on what an earlier one owed. Worker-owned.
+func (b *Bridge) endpointsDone(changed bool, err error) bool {
+	b.endpointsOwed = b.endpointsOwed || changed
+	if err != nil || !b.endpointsOwed {
+		return false
+	}
+	b.endpointsOwed = false
+	return true
 }
 
 // settle takes back what the batch did not apply (HR-P1-err-31), so the
