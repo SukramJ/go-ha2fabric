@@ -17,7 +17,8 @@ import (
 // repository's Dockerfile (HR-P1-cfg-12, decision 27; HR-P1-sup-19): the
 // web UI is not given a listener beyond loopback — the binary's default
 // 127.0.0.1:8099 holds unless the operator sets WEB_LISTEN — the camera's
-// TCP port is declared, and a .dockerignore keeps the notes, the held
+// TCP port is declared, the HEALTHCHECK runs --health in exec form (#71),
+// and a .dockerignore keeps the notes, the held
 // files and the repository's history out of the build context.
 func TestImageDefaults(t *testing.T) {
 	b, err := os.ReadFile("../../Dockerfile")
@@ -37,6 +38,17 @@ func TestImageDefaults(t *testing.T) {
 		if !strings.Contains(strings.Join(expose, " "), p) {
 			t.Errorf("EXPOSE %v lacks %s", expose, p)
 		}
+	}
+	// #71: the image probes the daemon with --health, in exec form (the
+	// distroless image has no shell).
+	var check []string
+	for _, in := range instructions(string(b)) {
+		if f := strings.Fields(in); len(f) > 0 && strings.EqualFold(f[0], "HEALTHCHECK") {
+			check = append(check, in)
+		}
+	}
+	if len(check) != 1 || !strings.Contains(check[0], `CMD ["/ha2fabric", "--health"]`) {
+		t.Errorf("HEALTHCHECK %q, want one in exec form running /ha2fabric --health", check)
 	}
 	ig, err := os.ReadFile("../../.dockerignore")
 	if err != nil {

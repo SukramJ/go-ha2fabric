@@ -9,7 +9,10 @@
 // ([Operations]) — and their API under /api/v1), behind the client filter.
 // The 0.1.0 JSON routes GET /api/health and GET /api/plan are gone (owner
 // decision 2026-10-25): /api/v1/node/status and /api/v1/node/exposure
-// replace them. The UI's URLs are relative, so it
+// replace them. GET /healthz (owner, 2026-11-27, #71) is the daemon's
+// own, ahead of the client filter and go-fabric-ui's handler, and answers
+// a loopback client only: 200 "ok" while Home Assistant is connected, 503
+// "unavailable" otherwise — what --health probes. The UI's URLs are relative, so it
 // works under Ingress's path prefix (go-fabric-ui docs/embedding.md,
 // "Behind an Ingress", at v0.16.0). Since go-fabric-ui v0.10 the handler checks every
 // request's Host: loopback names and IP addresses pass, a DNS name only
@@ -23,6 +26,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -42,7 +46,11 @@ type Options struct {
 	// address: the configuration judged WEB_LISTEN loopback by its text
 	// ("localhost" by name), the bound address is what counts.
 	Loopback bool
-	Logger   *slog.Logger
+	// Healthy, when set, serves GET /healthz to a loopback client ahead of
+	// the client filter ([Server.Handler]): 200 "ok" while it reports
+	// true, 503 "unavailable" otherwise. nil serves no such route.
+	Healthy func() bool
+	Logger  *slog.Logger
 	// UI are go-fabric-ui's options (Node, Exposure, Admin, Reassemble,
 	// Events, Operations — [NewOperations] over [NewLogger]'s ring); their
 	// Logger defaults to Logger.
@@ -81,11 +89,12 @@ func New(opts Options) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("web: %w", err)
 	}
-	s.h = s.filter(h)
+	s.h = s.health(s.filter(h))
 	return s, nil
 }
 
-// Handler is go-fabric-ui's routes behind the client filter.
+// Handler is go-fabric-ui's routes behind the client filter, and
+// GET /healthz ahead of it.
 func (s *Server) Handler() http.Handler { return s.h }
 
 // filter refuses a client outside Allow: the add-on runs on the host's
@@ -105,6 +114,42 @@ func (s *Server) filter(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// HealthPath is the route [Options.Healthy] answers.
+const HealthPath = "/healthz"
+
+// health answers GET and HEAD of HealthPath from a loopback client with
+// Healthy; every other request, and every request when Healthy is nil,
+// goes to next unchanged. It stands ahead of the client filter: a probe
+// inside the container or on the host comes from loopback, which WEB_ALLOW
+// need not name.
+func (s *Server) health(next http.Handler) http.Handler {
+	if s.opts.Healthy == nil {
+		return next
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != HealthPath || r.Method != http.MethodGet && r.Method != http.MethodHead || !loopbackClient(r) {
+			next.ServeHTTP(w, r)
+			return
+		}
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		if s.opts.Healthy() {
+			w.WriteHeader(http.StatusOK)
+			_, _ = io.WriteString(w, "ok\n")
+			return
+		}
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = io.WriteString(w, "unavailable\n")
+	})
+}
+
+// loopbackClient reports whether r's client address is a loopback one.
+func loopbackClient(r *http.Request) bool {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	ip := net.ParseIP(host)
+	return err == nil && ip != nil && ip.IsLoopback()
 }
 
 // Run serves until ctx ends.

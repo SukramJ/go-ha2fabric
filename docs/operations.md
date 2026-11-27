@@ -623,7 +623,36 @@ word, its labels, the deciding layer and go-hamapping's verdict, the same
 as `--dump-plan` prints, and stays empty until Home Assistant has been read
 once. The Home Assistant connection is in the log (`ha.connected`,
 `ha.disconnected`, `bridge.synced`). 0.1.0's `GET /api/health` and `GET
-/api/plan` are gone since 0.2.0.
+/api/plan` are gone since 0.2.0; `GET /healthz`, below, is the daemon's
+own route beside go-fabric-ui's.
+
+`GET /healthz` answers a loopback client only (`127.0.0.1`, `::1`), ahead of
+`WEB_ALLOW`, so a probe on the same host needs no entry there: `200` with
+`ok` while the daemon's connection to Home Assistant is authenticated, `503`
+with `unavailable` otherwise (a refused token included). Another client, or
+another method than `GET` and `HEAD`, gets the web UI's answer as before:
+`WEB_ALLOW`'s 403, or go-fabric-ui's.
+
+`ha2fabric --health` asks that route and exits `0` on `200`, `1` otherwise.
+It reads `WEB_LISTEN` (flag over environment) and needs no `HA_URL` or
+token: an empty or unspecified host (`:8099`, `0.0.0.0`, `::`) is asked on
+loopback (`127.0.0.1`, `::1`), a loopback host or `localhost` as given, the
+same port, within 3 s, without a proxy and without following a redirect.
+It prints nothing on stdout and one fixed line on stderr per failure — the
+web UI not reachable, not connected to Home Assistant, an unexpected answer
+— never the address or a configuration value. It is not performable, and
+exits `1` with its line, when the web UI is off (`--web-listen=`), when
+`WEB_LISTEN` names a specific non-loopback address (the probe would not
+come from loopback), and in the add-on (its listener's address comes from
+the Supervisor at start).
+
+The plain image's `HEALTHCHECK` runs `/ha2fabric --health` (exec form)
+every 30 s with a 5 s timeout, a 30 s start period and 3 retries. The
+container is `unhealthy` while Home Assistant is away, although restarting
+the daemon does not bring Home Assistant back: restart on Home Assistant's
+side, not on `unhealthy`. Where the probe cannot reach the daemon — the web
+UI off, or `WEB_LISTEN` on a specific non-loopback address — run the
+container with `--no-healthcheck`. The add-on has no watchdog yet (#72).
 
 ## Pairing
 

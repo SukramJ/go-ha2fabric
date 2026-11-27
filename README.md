@@ -142,7 +142,11 @@ licence texts of everything linked (`licenses/`, in the images
 The image's web UI listens on loopback (`127.0.0.1:8099`); to reach it from
 another machine add `-e WEB_LISTEN=0.0.0.0:8099`, and with `WEB_ADMIN=true`
 also `-e WEB_ALLOW=<the administrators' addresses>`
-([`docs/operations.md`](docs/operations.md), The web UI).
+([`docs/operations.md`](docs/operations.md), The web UI). The image's
+`HEALTHCHECK` runs `ha2fabric --health` against the web UI's port from
+loopback and reports `unhealthy` while Home Assistant is not connected;
+with `WEB_LISTEN` on a specific non-loopback address, or the web UI off,
+add `--no-healthcheck` ([`docs/operations.md`](docs/operations.md), Health).
 
 `ws://` sends the token unencrypted to that host; use `wss://` where Home
 Assistant has TLS (the daemon warns about `ws://` to another host,

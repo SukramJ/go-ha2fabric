@@ -226,3 +226,40 @@ func TestRunLoopback(t *testing.T) {
 		t.Fatalf("a loopback listener: %v", err)
 	}
 }
+
+// TestHealthz (#71): GET /healthz answers a loopback client ahead of the
+// client filter — also when WEB_ALLOW lacks loopback — with 200 "ok" or
+// 503 "unavailable"; another client gets the filter's answer, and
+// without Healthy there is no such route.
+func TestHealthz(t *testing.T) {
+	quiet := slog.New(slog.DiscardHandler)
+	up := true
+	s := mustNew(t, Options{Allow: []string{"192.0.2.10"}, Healthy: func() bool { return up }, Logger: quiet, UI: fabricui.Options{Logger: quiet}})
+	for _, remote := range []string{"127.0.0.1:4000", "[::1]:4000"} {
+		if code, body := get(t, s.Handler(), HealthPath, remote); code != http.StatusOK || string(body) != "ok\n" {
+			t.Fatalf("%s: %d %q", remote, code, body)
+		}
+	}
+	up = false
+	if code, body := get(t, s.Handler(), HealthPath, "127.0.0.1:4000"); code != http.StatusServiceUnavailable || string(body) != "unavailable\n" {
+		t.Fatalf("Home Assistant away: %d %q", code, body)
+	}
+	if code, _ := get(t, s.Handler(), HealthPath, "192.0.2.20:4000"); code != http.StatusForbidden {
+		t.Fatalf("a client outside WEB_ALLOW: %d", code)
+	}
+	if code, body := get(t, s.Handler(), HealthPath, "192.0.2.10:4000"); code == http.StatusServiceUnavailable || string(body) == "unavailable\n" {
+		t.Fatalf("an allowed non-loopback client got the health answer: %d %q", code, body)
+	}
+	req := httptest.NewRequest(http.MethodPost, HealthPath, http.NoBody)
+	req.RemoteAddr = "127.0.0.1:4000"
+	rec := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rec, req)
+	if rec.Code == http.StatusServiceUnavailable || rec.Body.String() == "unavailable\n" {
+		t.Fatalf("POST got the health answer: %d", rec.Code)
+	}
+
+	none := mustNew(t, Options{Allow: []string{"192.0.2.10"}, Logger: quiet, UI: fabricui.Options{Logger: quiet}})
+	if code, _ := get(t, none.Handler(), HealthPath, "127.0.0.1:4000"); code != http.StatusForbidden {
+		t.Fatalf("without Healthy a loopback client outside WEB_ALLOW: %d", code)
+	}
+}
